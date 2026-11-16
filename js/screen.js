@@ -90,6 +90,22 @@
   }
   const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
+  // 줄 높이 1인 글자 상자에서 기준선이 위에서 몇 % 지점에 있는지 (글꼴에서 직접 잽니다)
+  let baseCache = 0;
+  function baselineRatio() {
+    if (baseCache) return baseCache;
+    let ratio = 0.845; // Pretendard 기준 근삿값 (측정이 안 될 때)
+    try {
+      const ctx = document.createElement("canvas").getContext("2d");
+      ctx.font = '700 100px "' + FONT + '"';
+      const m = ctx.measureText("가Ag");
+      const asc = m.fontBoundingBoxAscent, desc = m.fontBoundingBoxDescent;
+      if (asc > 0 && desc >= 0) ratio = ((100 - (asc + desc)) / 2 + asc) / 100;
+    } catch (e) { /* 근삿값 사용 */ }
+    if (document.fonts.check('700 100px "' + FONT + '"', "가")) baseCache = ratio;
+    return ratio;
+  }
+
   function runCloud(items, scale, size) {
     return new Promise((resolve) => {
       window.d3.layout.cloud()
@@ -140,10 +156,14 @@
     for (let scale = startScale, tries = 0; tries <= LAST; tries++, scale *= 0.9) {
       const out = await runCloud(items, scale, size);
       if (run !== layoutRun) return;
+      const base = baselineRatio();
       placed = out.map((d) => {
-        const x = cx + d.x + (d.x0 + d.x1) / 2;
-        const y = cy + d.y + (d.y0 + d.y1) / 2;
-        const box = [cx + d.x + d.x0, cy + d.y + d.y0, cx + d.x + d.x1, cy + d.y + d.y1];
+        // d3-cloud의 y는 글자의 기준선(baseline)입니다. 화면 요소는 가운데 기준으로 놓으므로
+        // 기준선이 정확히 그 자리에 오도록 글자 크기에 비례해 올려 줍니다. (안 하면 큰 글자일수록 아래로 밀려 겹칩니다)
+        const x = cx + d.x;
+        const y = cy + d.y + (0.5 - base) * d.size;
+        const half = (d.x1 - d.x0) / 2;
+        const box = [x - half, cy + d.y - 0.9 * d.size, x + half, cy + d.y + 0.3 * d.size];
         return { key: d.key, text: d.text, count: d.count, weight: d.weight, size: d.size, x, y, box };
       });
       const clash = placed.some((p) => blocked.some((b) => hit(p.box, b)));
