@@ -111,7 +111,7 @@
       window.d3.layout.cloud()
         .size(size)
         .words(items.map((d) => ({ key: d.key, text: d.text, count: d.count, weight: d.weight, size: Math.round(d.base * scale) })))
-        .padding((d) => 5 + d.size * 0.07)
+        .padding((d) => 8 + d.size * 0.08) // 둥실 떠다니는 폭(7px)보다 넉넉하게
         .rotate(0)
         .font(FONT)
         .fontWeight((d) => d.weight)

@@ -224,7 +224,7 @@ body.screen { overflow: hidden; }
 .word .pop { display: block; transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1); }
 .word .pop.bounce { animation: bounce 0.75s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-@keyframes drift { from { transform: translate3d(0, 6px, 0); } to { transform: translate3d(0, -8px, 0); } }
+@keyframes drift { from { transform: translate3d(0, 3px, 0); } to { transform: translate3d(0, -4px, 0); } }
 @keyframes bounce { 0% { transform: scale(1); } 40% { transform: scale(1.16); } 100% { transform: scale(1); } }
 @keyframes twinkle { from { transform: scale(0.8) rotate(0deg); opacity: 0.55; } to { transform: scale(1.15) rotate(45deg); opacity: 1; } }
 @keyframes bob { from { transform: translate3d(0, 4px, 0); } to { transform: translate3d(0, -8px, 0); } }
