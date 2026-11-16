@@ -35,7 +35,7 @@
     return rows;
   }
 
-  // 정규화 기준으로 같은 단어를 합칩니다. 화면에 보이는 글자는 처음 들어온 표기를 씁니다.
+  // 정규화 기준으로 같은 단어를 합칩니다. 화면에 보이는 글자는 가장 많이 쓰인 표기입니다.
   function aggregate(rows) {
     const map = new Map();
     const people = new Set();
@@ -43,10 +43,14 @@
     for (const r of rows) {
       let item = map.get(r.normalized);
       if (!item) {
-        item = { key: r.normalized, text: r.word, count: 0, hidden: false };
+        item = { key: r.normalized, text: r.word, count: 0, hidden: false, forms: new Map() };
         map.set(r.normalized, item);
       }
       item.count++;
+      // 화면에는 가장 많이 쓰인 표기를 보여 줍니다('연 결'보다 '연결').
+      const n = (item.forms.get(r.word) || 0) + 1;
+      item.forms.set(r.word, n);
+      if (n > (item.forms.get(item.text) || 0)) item.text = r.word;
       if (r.hidden) item.hidden = true;
       else {
         total++;

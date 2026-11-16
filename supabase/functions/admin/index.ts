@@ -4,17 +4,16 @@
 // 필요한 secrets (대시보드 > Edge Functions > Secrets):
 //   ADMIN_PASSWORD   관리자 비밀번호 (필수)
 //   GEMINI_API_KEY   Gemini API 키 (AI 정리에 필수)
-//   GEMINI_MODEL     잘 묶는 쪽 모델 이름 (선택, 기본값은 아래 SMART_MODEL)
+//   GEMINI_MODEL     먼저 쓸 모델 이름 (선택, 기본값은 아래 FAST_MODEL)
 // SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY 는 Supabase가 자동으로 넣어 줍니다.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-// SMART: 비슷한 표현을 잘 묶지만 느릴 수 있음 (GEMINI_MODEL secret으로 바꿀 수 있음)
-// FAST : 몇 초 안에 끝나지만 덜 묶음. SMART가 늦을 때 대신 씁니다.
+// FAST : 먼저 쓰는 모델. 약 6초 (GEMINI_MODEL secret으로 바꿀 수 있음)
+// SMART: FAST가 실패했을 때 쓰는 모델. 더 느림
 const SMART_MODEL = "gemini-3.8-flash";
 const FAST_MODEL = "gemini-3.5-flash-lite";
 const LAST_MODEL = "gemini-flash-latest"; // 둘 다 실패했을 때만
-const SMART_WAIT_MS = 15000; // SMART를 기다려 주는 시간
 const CALL_TIMEOUT_MS = 20000; // Gemini 호출 한 번이 기다리는 최대 시간
 const TOTAL_BUDGET_MS = 50000; // AI 정리 전체가 쓰는 최대 시간 (넘으면 실패로 끝냄)
 const MAX_WORDS_FOR_AI = 300;
@@ -259,9 +258,9 @@ Deno.serve(async (req) => {
             JSON.stringify(list),
           ].join("\n");
 
-          // 잘 묶는 모델(SMART)과 빠른 모델(FAST)을 동시에 부릅니다.
-          // SMART가 SMART_WAIT_MS 안에 오면 그 결과를, 늦으면 이미 와 있는 FAST 결과를 씁니다.
-          const smartModel = Deno.env.get("GEMINI_MODEL") || SMART_MODEL;
+          // 빠른 모델을 먼저 쓰고, 실패했을 때만 다른 모델로 넘어갑니다.
+          // (실측: 빠른 모델 약 6초에 60개 → 21개로 묶음. 느린 모델은 15초 안에 답하지 못함)
+          const firstModel = Deno.env.get("GEMINI_MODEL") || FAST_MODEL;
           // deno-lint-ignore no-explicit-any
           type Answer = { model: string; raw: any[] };
           const failures: string[] = [];
@@ -273,14 +272,11 @@ Deno.serve(async (req) => {
                 failures.push(e instanceof Error ? e.message : String(e));
                 return null;
               });
-          const smart = ask(smartModel);
-          const fast = smartModel === FAST_MODEL ? smart : ask(FAST_MODEL);
-          const wait = new Promise<null>((r) => setTimeout(() => r(null), SMART_WAIT_MS));
-
-          let answer = await Promise.race([smart, wait]);
-          if (!answer) answer = await fast;
-          if (!answer) answer = await smart; // FAST가 실패했으면 SMART를 끝까지 기다림
-          if (!answer && Date.now() - startedAt < TOTAL_BUDGET_MS - CALL_TIMEOUT_MS) answer = await ask(LAST_MODEL);
+          let answer = await ask(firstModel);
+          for (const model of [FAST_MODEL, SMART_MODEL, LAST_MODEL]) {
+            if (answer || Date.now() - startedAt > TOTAL_BUDGET_MS - CALL_TIMEOUT_MS) break;
+            if (model !== firstModel) answer = await ask(model);
+          }
           if (!answer) throw new Error("Gemini 호출 실패 — " + failures.join(" | ").slice(0, 600));
           const raw = answer.raw;
           const usedModel = answer.model;
