@@ -52,6 +52,7 @@
       <button type="button" class="tab" data-tab="wordcloud" aria-pressed="false">워드클라우드</button>
       <button type="button" class="tab" data-tab="roster" aria-pressed="false">명단 · 조</button>
       <button type="button" class="tab" data-tab="dinner" aria-pressed="false">석식 투표</button>
+      <button type="button" class="tab" data-tab="teamvote" aria-pressed="false">우수팀 투표</button>
     </nav>
 
     <div class="err" id="platform-msg" role="alert" hidden></div>
@@ -66,6 +67,7 @@
             <button type="button" class="program" data-program="lobby" aria-pressed="false"><b>대기</b><span>입장하고 우리 조를 확인</span></button>
             <button type="button" class="program" data-program="wordcloud" aria-pressed="false"><b>워드클라우드</b><span>질문에 답변 보내기</span></button>
             <button type="button" class="program" data-program="dinner" aria-pressed="false"><b>석식 투표</b><span>참석 / 미참석</span></button>
+            <button type="button" class="program" data-program="teamvote" aria-pressed="false"><b>우수팀 투표</b><span>발표가 좋았던 조 고르기</span></button>
             <button type="button" class="program" data-program="end" aria-pressed="false"><b>마무리</b><span>끝인사 화면</span></button>
           </div>
         </section>
@@ -162,6 +164,45 @@
             <div><h2>미참석 <span class="sub" id="d-no-n"></span></h2><div id="d-no-list" class="namelist"></div></div>
             <div><h2>미응답 <span class="sub" id="d-none-n"></span></h2><div id="d-none-list" class="namelist"></div></div>
           </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ───────── 발표 우수팀 투표 ───────── -->
+    <div class="tabpane" id="tab-teamvote" hidden>
+      <div class="cols">
+        <div class="left" style="flex:1 1 320px">
+          <section class="glass">
+            <h2>발표 우수팀 투표</h2>
+            <div class="stats">
+              <div>투표<b id="v-done">0명</b></div>
+              <div>미투표<b id="v-none">0명</b></div>
+            </div>
+            <div class="between">
+              <span class="sub" id="v-lead"></span>
+              <button type="button" class="btn ghost" id="v-refresh">새로고침</button>
+            </div>
+            <div class="sub">참여자에게는 본인 조와 후보에서 뺀 조가 보이지 않습니다. 메인 관제에서 "우수팀 투표"를 누르면 모든 참여자 화면이 투표로 넘어갑니다.</div>
+          </section>
+          <section class="glass">
+            <div class="between">
+              <div>
+                <div class="h">투표 초기화</div>
+                <div class="sub" style="margin-top:4px">우수팀 투표를 모두 지웁니다. 되돌릴 수 없어요.</div>
+              </div>
+              <button type="button" class="btn danger" id="v-reset">모두 지우기</button>
+            </div>
+          </section>
+        </div>
+
+        <section class="glass right">
+          <div class="between">
+            <h2>조별 득표</h2>
+            <div class="sub">많이 받은 순</div>
+          </div>
+          <div id="v-list" class="votelist"></div>
+          <div class="sub" id="v-out-label" hidden style="margin-top:8px">후보에서 뺀 조 (누르면 다시 후보에 넣습니다)</div>
+          <div id="v-out" style="display:flex;flex-wrap:wrap;gap:8px"></div>
         </section>
       </div>
     </div>

@@ -445,6 +445,15 @@ body.screen { overflow: hidden; }
 .admin .teambox.c3 { --team: #2E9E6B; --team-bg: #D6EFE3; }
 .admin .teambox.c4 { --team: #C98A1B; --team-bg: #F6E8CC; }
 .admin .teambox.none { border-style: dashed; }
+.admin .votelist { display: flex; flex-direction: column; gap: 8px; }
+.admin .voterow { display: grid; grid-template-columns: 110px minmax(0, 1fr) 52px 108px; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 16px; background: rgba(255, 255, 255, 0.6); }
+.admin .voterow b { font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin .voterow .n { font-size: 18px; font-weight: 700; text-align: right; white-space: nowrap; }
+.admin .voterow .bar { height: 14px; border-radius: 999px; background: rgba(31, 37, 64, 0.08); overflow: hidden; }
+.admin .voterow .bar i { display: block; height: 100%; border-radius: 999px; background: var(--blue, #5B7FD6); transition: width 0.4s ease; }
+.admin .voterow.top .bar i { background: var(--coral, #F4775C); }
+.admin .voterow .btn { height: 36px; padding: 0 10px; font-size: 13px; }
+.join #tv-choices .choice { height: 64px; font-size: 18px; }
 .admin .tr.addrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 68px; background: var(--team-bg, rgba(31, 37, 64, 0.05)); }
 .admin .tr.addrow .sel { width: 100%; min-width: 0; }
 .admin .tr.addrow .btn { padding: 0; width: 100%; justify-content: center; }

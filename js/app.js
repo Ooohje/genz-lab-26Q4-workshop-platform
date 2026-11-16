@@ -7,7 +7,7 @@
 (function () {
   const { db, getSession, subscribe, toast } = window.WC;
   const $ = (id) => document.getElementById(id);
-  const PROGRAMS = ["lobby", "wordcloud", "dinner", "end"];
+  const PROGRAMS = ["lobby", "wordcloud", "dinner", "teamvote", "end"];
   const KEY = "wc-knox-id";
   const params = new URLSearchParams(location.search);
   // ?p=dinner 처럼 열면 진행 중인 프로그램과 상관없이 그 화면을 보여 줍니다(석식 투표 링크를 따로 돌릴 때).
@@ -96,7 +96,69 @@
         $("dinner-confirm").textContent = busy ? "저장하는 중…" : "확인";
       }
     }
+
+    if (view === "teamvote" && me) {
+      const done = !!(tv && tv.vote != null) && !tvEditing;
+      $("tv-ask").hidden = done;
+      $("tv-done").hidden = !done;
+      if (done) {
+        $("tv-done-title").textContent = (tv.vote_name || tv.vote + "조") + "에 투표했어요";
+      } else {
+        const picked = tvPick != null ? tvPick : tv ? tv.vote : null;
+        const box = $("tv-choices");
+        box.innerHTML = "";
+        ((tv && tv.candidates) || []).forEach((t) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "choice";
+          b.textContent = t.name;
+          b.setAttribute("aria-pressed", String(picked === t.team_no));
+          b.disabled = busy;
+          b.addEventListener("click", () => { if (!busy) { tvPick = t.team_no; render(); } });
+          box.appendChild(b);
+        });
+        const chosen = ((tv && tv.candidates) || []).find((t) => t.team_no === picked);
+        $("tv-status").textContent = !tv ? "투표를 준비하고 있어요. 잠시만 기다려 주세요."
+          : !tv.candidates.length ? "투표할 조가 아직 없어요."
+          : chosen ? chosen.name + "을(를) 골랐어요. 확인을 누르면 저장돼요."
+          : "한 조를 고르고 확인을 눌러 주세요.";
+        $("tv-confirm").disabled = busy || !chosen;
+        $("tv-confirm").textContent = busy ? "저장하는 중…" : "확인";
+      }
+    }
   }
+
+  // ── 발표 우수팀 투표 ─────────────────────────────────────────────
+  let tv = null;          // { vote, vote_name, candidates: [{team_no, name}] } — 서버가 본인 조를 빼고 줍니다
+  let tvPick = null;      // 아직 저장하지 않은 선택
+  let tvEditing = false;  // "다시 바꾸기"를 눌러 고르는 화면으로 돌아온 상태
+  async function refreshTeamvote() {
+    if (!me) { tv = null; return; }
+    try {
+      tv = await rpc("wc_teamvote_state", { p_knox_id: me.knox_id });
+    } catch (e) { /* teamvote.sql 을 아직 실행하지 않았거나 잠깐 끊긴 경우: 있던 값을 그대로 둡니다 */ }
+  }
+  $("tv-confirm").addEventListener("click", async () => {
+    const choice = tvPick != null ? tvPick : tv && tv.vote;
+    if (!me || busy || choice == null) return;
+    busy = true;
+    render();
+    try {
+      tv = await rpc("wc_teamvote", { p_knox_id: me.knox_id, p_team_no: choice });
+      tvPick = null;
+      tvEditing = false;
+    } catch (err) {
+      toast(err.message || "저장하지 못했어요. 다시 눌러 주세요");
+      await refreshTeamvote();
+    }
+    busy = false;
+    render();
+  });
+  $("tv-change").addEventListener("click", () => {
+    tvEditing = true;
+    tvPick = null;
+    render();
+  });
 
   // ── 입장 ────────────────────────────────────────────────────────
   $("login-form").addEventListener("submit", async (e) => {
@@ -113,6 +175,7 @@
         me = out;
         needsName = false;
         save(me.knox_id);
+        await refreshTeamvote();
       } else {
         needsName = true;
       }
@@ -132,6 +195,9 @@
   });
   $("logout").addEventListener("click", () => {
     me = null;
+    tv = null;
+    tvPick = null;
+    tvEditing = false;
     needsName = false;
     save(null);
     $("login-knox").value = "";
@@ -177,6 +243,7 @@
       if (out.found) me = out;
       else { me = null; save(null); } // 명단에서 지워진 경우 다시 입장
     } catch (e) { /* 잠깐 끊겨도 화면은 그대로 둡니다 */ }
+    await refreshTeamvote(); // 조가 바뀌면 고를 수 있는 조도 달라집니다
   }
 
   async function start() {

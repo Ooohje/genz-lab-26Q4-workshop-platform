@@ -168,21 +168,27 @@ const normalize = (s: string) => s.replace(/\s+/g, "").toLowerCase();
 type Group = { label: string; count: number; members: string[] };
 
 // 메인 관제에서 고를 수 있는 프로그램 (platform.sql 의 check 목록, js/app.js 의 PROGRAMS 와 같아야 합니다)
-const PROGRAMS = ["lobby", "wordcloud", "dinner", "end"];
+const PROGRAMS = ["lobby", "wordcloud", "dinner", "teamvote", "end"];
 
 // 명단·조·석식 선택을 읽어 옵니다.
 // deno-lint-ignore no-explicit-any
 async function loadRoster(db: any) {
-  const [teams, people, dinner] = await Promise.all([
-    db.from("teams").select("team_no, name").order("team_no"),
+  const [teams, people, dinner, votes] = await Promise.all([
+    db.from("teams").select("*").order("team_no"),
     db.from("participants").select("knox_id, name, team_no, is_preregistered, joined_at, last_seen").order("name"),
     db.from("dinner_rsvp").select("knox_id, choice, updated_at"),
+    db.from("team_votes").select("knox_id, team_no"),
   ]);
   for (const r of [teams, people, dinner]) if (r.error) throw new Error(r.error.message);
   const choice = new Map<string, string>((dinner.data ?? []).map((d: { knox_id: string; choice: string }) => [d.knox_id, d.choice]));
+  // teamvote.sql 을 아직 실행하지 않았으면 team_votes 가 없어 오류가 나는데, 그때는 표가 없는 것으로 봅니다.
+  const vote = new Map<string, number>((votes.data ?? []).map((d: { knox_id: string; team_no: number }) => [d.knox_id, d.team_no]));
   return {
     teams: teams.data ?? [],
-    participants: (people.data ?? []).map((p: { knox_id: string }) => ({ ...p, dinner: choice.get(p.knox_id) ?? null })),
+    participants: (people.data ?? []).map((p: { knox_id: string }) => ({
+      ...p, dinner: choice.get(p.knox_id) ?? null, vote: vote.get(p.knox_id) ?? null,
+    })),
+    teamvote_ready: !votes.error,
   };
 }
 
@@ -366,6 +372,30 @@ Deno.serve(async (req) => {
       case "dinner_reset": {
         const { error } = await db.from("dinner_rsvp").delete().neq("knox_id", "");
         if (error) throw new Error(error.message);
+        const next = await update({ roster_rev: (session.roster_rev ?? 0) + 1 });
+        return json({ ok: true, session: next, ...(await loadRoster(db)) });
+      }
+
+      // ───────────── 플랫폼: 발표 우수팀 투표 ─────────────
+
+      case "teamvote_reset": {
+        const { error } = await db.from("team_votes").delete().neq("knox_id", "");
+        if (error) throw new Error(error.message);
+        const next = await update({ roster_rev: (session.roster_rev ?? 0) + 1 });
+        return json({ ok: true, session: next, ...(await loadRoster(db)) });
+      }
+
+      // 조를 투표 후보에 넣거나 뺍니다. 뺄 때는 그 조가 받은 표도 지웁니다.
+      case "team_votable": {
+        const team_no = Number.parseInt(String(body.team_no), 10);
+        if (!Number.isInteger(team_no)) return json({ error: "조 번호를 확인해 주세요" }, 400);
+        const votable = body.votable === true;
+        const { error } = await db.from("teams").update({ votable }).eq("team_no", team_no);
+        if (error) throw new Error(error.message);
+        if (!votable) {
+          const cleared = await db.from("team_votes").delete().eq("team_no", team_no);
+          if (cleared.error) throw new Error(cleared.error.message);
+        }
         const next = await update({ roster_rev: (session.roster_rev ?? 0) + 1 });
         return json({ ok: true, session: next, ...(await loadRoster(db)) });
       }
