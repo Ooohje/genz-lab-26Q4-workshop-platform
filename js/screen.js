@@ -3,6 +3,7 @@
   const { getSession, getWords, aggregate, subscribe, joinUrl, qrSvg, toast } = window.WC;
   const W = 1920, H = 1080;
   const FONT = "Pretendard Variable";
+  const MIN_FONT = 24; // 프로젝터에서 읽을 수 있는 가장 작은 글자 크기
   const $ = (id) => document.getElementById(id);
   const stage = $("stage");
   const cloudEl = $("cloud");
@@ -110,7 +111,7 @@
     return new Promise((resolve) => {
       window.d3.layout.cloud()
         .size(size)
-        .words(items.map((d) => ({ key: d.key, text: d.text, count: d.count, weight: d.weight, size: Math.round(d.base * scale) })))
+        .words(items.map((d) => ({ key: d.key, text: d.text, count: d.count, weight: d.weight, size: Math.max(MIN_FONT, Math.round(d.base * scale)) })))
         .padding((d) => 8 + d.size * 0.08) // 둥실 떠다니는 폭(7px)보다 넉넉하게
         .rotate(0)
         .font(FONT)
