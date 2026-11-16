@@ -427,3 +427,18 @@ body.screen { overflow: hidden; }
 .admin .namelist > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid rgba(31, 37, 64, 0.08); }
 .admin .namelist b { font-size: 16px; font-weight: 600; }
 .admin .namelist span { overflow-wrap: anywhere; }
+
+/* 명단: 조마다 박스 하나, 조마다 다른 색 */
+.admin #roster-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 16px; align-items: start; }
+.admin .teambox { border-radius: 20px; overflow: hidden; background: rgba(255, 255, 255, 0.72); border: 1.5px solid var(--team, rgba(31, 37, 64, 0.2)); }
+.admin .teambox-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--team-bg, rgba(31, 37, 64, 0.08)); }
+.admin .teambox-head b { font-size: 18px; font-weight: 700; }
+.admin .teambox-head span { font-size: 14px; }
+.admin .teambox .tr:first-of-type { border-top: none; }
+.admin .teambox .empty { padding: 16px; }
+.admin .teambox.c0 { --team: #5B7FD6; --team-bg: #DCE5F8; }
+.admin .teambox.c1 { --team: #E0694E; --team-bg: #FBE0D9; }
+.admin .teambox.c2 { --team: #8A63D2; --team-bg: #E7DEF7; }
+.admin .teambox.c3 { --team: #2E9E6B; --team-bg: #D6EFE3; }
+.admin .teambox.c4 { --team: #C98A1B; --team-bg: #F6E8CC; }
+.admin .teambox.none { border-style: dashed; }

@@ -95,19 +95,45 @@
     });
     if (!roster.teams.length) chips.textContent = "아직 조가 없어요. 명단을 올리면 자동으로 만들어집니다.";
 
-    // 참가자 목록 (조 번호 → 이름 순)
+    // 참가자 목록: 조마다 박스 하나 (조 번호 순, 미배정은 맨 끝). 박스 안은 이름 순.
     $("roster-note").textContent = "전체 " + people.length + "명 · 입장 " + joined + "명";
     const list = $("roster-list");
     list.innerHTML = "";
-    const sorted = people.slice().sort((a, b) =>
-      (a.team_no == null ? 999 : a.team_no) - (b.team_no == null ? 999 : b.team_no) || a.name.localeCompare(b.name, "ko"));
-    if (!sorted.length) {
+    if (!people.length) {
       const empty = document.createElement("div");
       empty.className = "empty";
       empty.textContent = "아직 명단이 없어요. 왼쪽에서 명단을 올려 주세요.";
       list.appendChild(empty);
     }
-    sorted.forEach((p) => {
+    const boxes = roster.teams.map((t) => ({ no: t.team_no, title: t.name }));
+    if (people.some((p) => p.team_no == null)) boxes.push({ no: null, title: "미배정" });
+    boxes.forEach((box, index) => {
+      const members = people.filter((p) => p.team_no === box.no).sort((a, b) => a.name.localeCompare(b.name, "ko"));
+      const el = document.createElement("div");
+      el.className = "teambox " + (box.no == null ? "none" : "c" + (index % 5));
+      const head = document.createElement("div");
+      head.className = "teambox-head";
+      const title = document.createElement("b");
+      title.textContent = box.title;
+      const count = document.createElement("span");
+      count.textContent = members.length + "명 · 입장 " + members.filter((p) => p.joined_at).length + "명";
+      head.append(title, count);
+      el.appendChild(head);
+      if (!members.length) {
+        const none = document.createElement("div");
+        none.className = "empty";
+        none.textContent = "아직 아무도 없어요.";
+        el.appendChild(none);
+      }
+      members.forEach((p) => el.appendChild(personRow(p)));
+      list.appendChild(el);
+    });
+
+    renderDinner();
+  }
+
+  function personRow(p) {
+    {
       const tr = document.createElement("div");
       tr.className = "tr roster";
       const name = document.createElement("span");
@@ -141,9 +167,12 @@
         if (confirm(p.name + " (" + p.knox_id + ") 님을 명단에서 지울까요?")) call("participant_delete", { knox_id: p.knox_id }, del);
       });
       tr.append(name, knox, state, select, del);
-      list.appendChild(tr);
-    });
+      return tr;
+    }
+  }
 
+  function renderDinner() {
+    const people = roster.participants;
     // 석식 투표
     const groups = {
       yes: people.filter((p) => p.dinner === "yes"),
