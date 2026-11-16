@@ -303,6 +303,8 @@
       return;
     }
     lastAiAt = session.ai_updated_at; // 이미 있던 결과는 자동으로 띄우지 않고 버튼으로 봅니다
+    // screen.html?view=ai 로 열면 AI 정리 결과부터 보여 줍니다.
+    if (new URLSearchParams(location.search).get("view") === "ai" && session.ai_groups) view = "ai";
     await resync();
     subscribe(session.id, {
       onWord: (r) => {
