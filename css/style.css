@@ -352,7 +352,10 @@ body.screen { overflow: hidden; }
 .admin .switch span { width: 34px; height: 34px; border-radius: 17px; background: #fff; box-shadow: 0 2px 6px rgba(31, 37, 64, 0.18); }
 .admin .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .admin .stats > div { padding: 14px 16px; border-radius: 18px; background: rgba(255, 255, 255, 0.6); font-size: 14px; }
-.admin .stats b { display: block; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+.admin .stats b { display: block; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
+.admin .stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.admin .stats.three > div { padding: 12px 10px; font-size: 13px; white-space: nowrap; }
+.admin .stats.three b { font-size: 22px; }
 .admin .box { padding: 16px; border-radius: 18px; background: rgba(255, 255, 255, 0.6); display: flex; flex-direction: column; gap: 10px; }
 .admin .box .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .admin .box .chip { min-height: 34px; padding: 4px 14px; font-size: 15px; background: #fff; gap: 6px; }
@@ -442,3 +445,6 @@ body.screen { overflow: hidden; }
 .admin .teambox.c3 { --team: #2E9E6B; --team-bg: #D6EFE3; }
 .admin .teambox.c4 { --team: #C98A1B; --team-bg: #F6E8CC; }
 .admin .teambox.none { border-style: dashed; }
+.admin .tr.addrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 68px; background: var(--team-bg, rgba(31, 37, 64, 0.05)); }
+.admin .tr.addrow .sel { width: 100%; min-width: 0; }
+.admin .tr.addrow .btn { padding: 0; }

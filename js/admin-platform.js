@@ -98,6 +98,9 @@
     // 참가자 목록: 조마다 박스 하나 (조 번호 순, 미배정은 맨 끝). 박스 안은 이름 순.
     $("roster-note").textContent = "전체 " + people.length + "명 · 입장 " + joined + "명";
     const list = $("roster-list");
+    // 추가 칸에 적는 중이면 목록을 다시 그리지 않습니다(15초마다 새로 읽을 때 글자가 지워지지 않게).
+    const typing = document.activeElement;
+    if (typing && typing.tagName === "INPUT" && list.contains(typing)) return renderDinner();
     list.innerHTML = "";
     if (!people.length) {
       const empty = document.createElement("div");
@@ -126,10 +129,52 @@
         el.appendChild(none);
       }
       members.forEach((p) => el.appendChild(personRow(p)));
+      el.appendChild(addRow(box));
       list.appendChild(el);
     });
 
     renderDinner();
+  }
+
+  // 조 박스 맨 아래의 "이 조에 사람 추가" 줄. 적다 만 내용은 다시 그려도 남도록 drafts 에 둡니다.
+  const drafts = {};
+  function addRow(box) {
+    const key = String(box.no);
+    const draft = drafts[key] || (drafts[key] = { knox: "", name: "" });
+    const form = document.createElement("form");
+    form.className = "tr addrow";
+    const input = (field, placeholder, max) => {
+      const i = document.createElement("input");
+      i.className = "sel";
+      i.placeholder = placeholder;
+      i.maxLength = max;
+      i.autocomplete = "off";
+      i.spellcheck = false;
+      i.value = draft[field];
+      i.setAttribute("aria-label", box.title + "에 추가할 사람의 " + placeholder);
+      i.addEventListener("input", () => { draft[field] = i.value; });
+      return i;
+    };
+    const name = input("name", "이름", 30);
+    const knox = input("knox", "Knox ID", 40);
+    const add = document.createElement("button");
+    add.type = "submit";
+    add.className = "btn";
+    add.textContent = "추가";
+    form.append(name, knox, add);
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const row = { knox_id: knox.value.trim().toLowerCase(), name: name.value.trim(), team_no: box.no == null ? null : String(box.no) };
+      if (!row.name || !row.knox_id) return ctx.toast("이름과 Knox ID를 모두 적어 주세요");
+      const cur = roster.participants.find((p) => p.knox_id === row.knox_id);
+      if (cur && !confirm(row.knox_id + " 은(는) 이미 명단에 있어요 (" + cur.name + " · " + teamName(cur.team_no) + ").\n" + box.title + "(으)로 옮기고 이름을 " + row.name + "(으)로 바꿀까요?")) return;
+      drafts[key] = { knox: "", name: "" };
+      if (document.activeElement) document.activeElement.blur();
+      const out = await call("roster_import", { rows: [row], replace: false }, add);
+      if (out) ctx.toast(row.name + " 님을 " + box.title + "에 추가했어요");
+      else { drafts[key] = { knox: row.knox_id, name: row.name }; render(); }
+    });
+    return form;
   }
 
   function personRow(p) {
