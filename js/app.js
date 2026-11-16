@@ -76,14 +76,25 @@
     }
 
     if (view === "dinner" && me) {
-      ["yes", "no"].forEach((c) => {
-        const b = $("dinner-" + c);
-        b.setAttribute("aria-pressed", String(me.dinner === c));
-        b.disabled = busy;
-      });
-      $("dinner-status").textContent = me.dinner === "yes" ? "참석으로 받았어요. 바꾸려면 다시 눌러 주세요."
-        : me.dinner === "no" ? "미참석으로 받았어요. 바꾸려면 다시 눌러 주세요."
-        : "하나를 골라 주세요.";
+      // 이미 응답했으면 완료 화면, "다시 바꾸기"를 누르면 고르는 화면으로 돌아갑니다.
+      const done = !!me.dinner && !dinnerEditing;
+      $("dinner-ask").hidden = done;
+      $("dinner-done").hidden = !done;
+      const word = { yes: "참석", no: "미참석" };
+      if (done) {
+        $("dinner-done-badge").textContent = word[me.dinner];
+        $("dinner-done-title").textContent = me.name + "님, " + word[me.dinner] + "으로 받았어요";
+      } else {
+        const pick = dinnerPick || me.dinner;
+        ["yes", "no"].forEach((c) => {
+          const b = $("dinner-" + c);
+          b.setAttribute("aria-pressed", String(pick === c));
+          b.disabled = busy;
+        });
+        $("dinner-status").textContent = pick ? word[pick] + "을 골랐어요. 확인을 누르면 저장돼요." : "하나를 고르고 확인을 눌러 주세요.";
+        $("dinner-confirm").disabled = busy || !pick;
+        $("dinner-confirm").textContent = busy ? "저장하는 중…" : "확인";
+      }
     }
   }
 
@@ -129,21 +140,33 @@
   });
 
   // ── 석식 투표 ───────────────────────────────────────────────────
-  async function vote(choice) {
-    if (!me || busy) return;
+  // 참석/미참석을 누르면 고르기만 하고, "확인"을 눌러야 저장합니다.
+  let dinnerPick = null;      // 아직 저장하지 않은 선택
+  let dinnerEditing = false;  // "다시 바꾸기"를 눌러 고르는 화면으로 돌아온 상태
+  const pick = (choice) => { if (!busy) { dinnerPick = choice; render(); } };
+  $("dinner-yes").addEventListener("click", () => pick("yes"));
+  $("dinner-no").addEventListener("click", () => pick("no"));
+  $("dinner-confirm").addEventListener("click", async () => {
+    const choice = dinnerPick || (me && me.dinner);
+    if (!me || busy || !choice) return;
     busy = true;
     render();
     try {
       const out = await rpc("wc_dinner", { p_knox_id: me.knox_id, p_choice: choice });
       me.dinner = out.dinner;
+      dinnerPick = null;
+      dinnerEditing = false;
     } catch (err) {
       toast("저장하지 못했어요. 다시 눌러 주세요");
     }
     busy = false;
     render();
-  }
-  $("dinner-yes").addEventListener("click", () => vote("yes"));
-  $("dinner-no").addEventListener("click", () => vote("no"));
+  });
+  $("dinner-change").addEventListener("click", () => {
+    dinnerEditing = true;
+    dinnerPick = null;
+    render();
+  });
 
   // ── 내 정보 다시 읽기 (조가 바뀌었을 때 등) ───────────────────────
   async function refreshMe() {

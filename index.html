@@ -109,14 +109,29 @@
 
   <!-- 프로그램: 석식 참석 투표 -->
   <section id="view-dinner" class="view" hidden>
-    <h1>오늘 석식에<br>참석하시나요?</h1>
-    <div class="glass card with-mascot">
-      <img class="mascot" src="assets/glimming.png" alt="">
-      <div class="choice-row">
-        <button type="button" class="choice" id="dinner-yes" aria-pressed="false">참석</button>
-        <button type="button" class="choice" id="dinner-no" aria-pressed="false">미참석</button>
+    <!-- 고르기: 하나를 고르고 확인을 눌러야 저장됩니다 -->
+    <div id="dinner-ask" style="display:contents">
+      <h1>오늘 석식에<br>참석하시나요?</h1>
+      <div class="glass card with-mascot">
+        <img class="mascot" src="assets/glimming.png" alt="">
+        <div class="choice-row">
+          <button type="button" class="choice" id="dinner-yes" aria-pressed="false">참석</button>
+          <button type="button" class="choice" id="dinner-no" aria-pressed="false">미참석</button>
+        </div>
+        <p class="hint" id="dinner-status" style="text-align:left"></p>
+        <button type="button" class="btn-coral" id="dinner-confirm" style="height:56px">확인</button>
       </div>
-      <p class="hint" id="dinner-status" style="text-align:left"></p>
+    </div>
+    <!-- 저장 완료 -->
+    <div id="dinner-done" style="display:contents" hidden>
+      <h1>석식 응답을<br>받았어요</h1>
+      <div class="glass card closed">
+        <img src="assets/glimming.png" alt="">
+        <span class="badge" id="dinner-done-badge"></span>
+        <div class="title" id="dinner-done-title"></div>
+        <p class="desc">응답이 저장됐어요.<br>마음이 바뀌면 아래에서 다시 고를 수 있어요.</p>
+        <button type="button" class="linklike" id="dinner-change">다시 바꾸기</button>
+      </div>
     </div>
   </section>
 

@@ -447,4 +447,4 @@ body.screen { overflow: hidden; }
 .admin .teambox.none { border-style: dashed; }
 .admin .tr.addrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 68px; background: var(--team-bg, rgba(31, 37, 64, 0.05)); }
 .admin .tr.addrow .sel { width: 100%; min-width: 0; }
-.admin .tr.addrow .btn { padding: 0; }
+.admin .tr.addrow .btn { padding: 0; width: 100%; justify-content: center; }
