@@ -10,6 +10,7 @@
   let rows = [];
   let busy = false;
   let qDirty = false;
+  let aiRunning = false;
 
   // ── Edge Function 호출 ───────────────────────────────────────────
   async function api(action, extra) {
@@ -88,8 +89,9 @@
     $("open-hint").textContent = open ? "지금 참여자가 단어를 보낼 수 있어요." : "마감했어요. 새 단어를 받지 않습니다.";
     if (!qDirty) $("q").value = session.question;
 
-    const loading = session.ai_status === "loading";
-    $("ai-run").disabled = loading || busy;
+    // 이 화면에서 실행 중일 때만 잠급니다(서버 상태가 '정리 중'에 멈춰 있어도 다시 누를 수 있게).
+    const loading = aiRunning;
+    $("ai-run").disabled = busy;
     $("ai-run-label").textContent = loading ? "정리하는 중…" : "AI 정리 실행";
     const groups = session.ai_groups || [];
     $("ai-box").hidden = groups.length === 0;
@@ -183,12 +185,15 @@
     $("ai-err").hidden = true;
     if (busy) return;
     busy = true;
+    aiRunning = true;
     $("ai-run").disabled = true;
     $("ai-run-label").textContent = "정리하는 중…";
     try {
       const out = await api("ai_summary");
       session = out.session;
-      toast("AI 정리를 발표 화면에 보냈어요");
+      const took = out.ai ? " (" + out.ai.seconds + "초 · " + out.ai.model + ")" : "";
+      toast("AI 정리를 발표 화면에 보냈어요" + took);
+      if (out.ai && out.ai.skipped && out.ai.skipped.length) console.warn("건너뛴 모델:", out.ai.skipped);
     } catch (err) {
       $("ai-err").textContent = "AI 정리에 실패했어요: " + err.message;
       $("ai-err").hidden = false;
@@ -196,6 +201,7 @@
       if (fresh) session = fresh;
     }
     busy = false;
+    aiRunning = false;
     render();
   });
 

@@ -10,7 +10,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // 위에서부터 차례로 시도합니다. GEMINI_MODEL secret을 넣으면 그 모델을 가장 먼저 씁니다.
-const DEFAULT_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
+// 발표 중에 기다리는 시간이 짧아야 하므로 가장 빠른 모델을 먼저 씁니다.
+const DEFAULT_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
+const CALL_TIMEOUT_MS = 20000; // Gemini 호출 한 번이 기다리는 최대 시간
+const TOTAL_BUDGET_MS = 50000; // AI 정리 전체가 쓰는 최대 시간 (넘으면 실패로 끝냄)
 const MAX_WORDS_FOR_AI = 300;
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
@@ -25,7 +28,7 @@ async function askGemini(apiKey: string, model: string, prompt: string): Promise
     const res = await fetch(`${GEMINI_BASE}/interactions`, {
       method: "POST",
       headers: { ...headers, "Api-Revision": "2026-05-20" },
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       body: JSON.stringify({
         model,
         input: prompt,
@@ -64,7 +67,7 @@ async function askGemini(apiKey: string, model: string, prompt: string): Promise
     const res = await fetch(`${GEMINI_BASE}/models/${model}:generateContent`, {
       method: "POST",
       headers,
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: "application/json" },
@@ -256,9 +259,13 @@ Deno.serve(async (req) => {
           // deno-lint-ignore no-explicit-any
           let raw: any[] | null = null;
           const failures: string[] = [];
+          const startedAt = Date.now();
+          let usedModel = "";
           for (const model of models) {
+            if (Date.now() - startedAt > TOTAL_BUDGET_MS - CALL_TIMEOUT_MS) break; // 남은 시간이 모자라면 그만
             try {
               raw = parseGroups(await askGemini(apiKey, model, prompt));
+              usedModel = model;
               break;
             } catch (e) {
               failures.push(e instanceof Error ? e.message : String(e));
@@ -301,6 +308,7 @@ Deno.serve(async (req) => {
 
           return json({
             ok: true,
+            ai: { model: usedModel, seconds: Math.round((Date.now() - startedAt) / 100) / 10, skipped: failures },
             session: await update({
               ai_status: "done", ai_groups: result, ai_updated_at: new Date().toISOString(),
             }),

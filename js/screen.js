@@ -34,6 +34,7 @@
   let layoutTimer = null;
   let layoutRun = 0;
   let lastSig = "";
+  let loadingSince = 0;
   const fitScale = {}; // 보기(orig/ai)별로 마지막에 맞았던 글자 배율
 
   // ── 색: 단어가 놓인 자리의 배경색에 맞춰 고릅니다 ───────────────────
@@ -214,7 +215,13 @@
     $("people").textContent = agg.people;
     $("total").textContent = agg.total;
 
-    const loading = session.ai_status === "loading";
+    // '생각을 모으는 중'은 최대 70초만 보여 줍니다(서버가 중간에 멈춰도 화면이 갇히지 않게).
+    if (session.ai_status !== "loading") loadingSince = 0;
+    else if (!loadingSince) {
+      loadingSince = Date.now();
+      setTimeout(() => schedule(0), 71000);
+    }
+    const loading = session.ai_status === "loading" && Date.now() - loadingSince < 70000;
     const empty = agg.total === 0;
     $("wait").hidden = !empty;
     $("qr").hidden = empty;
