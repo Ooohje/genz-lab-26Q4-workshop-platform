@@ -1,0 +1,7 @@
+# 원본 이미지(웹용은 assets/ 에 있음)와 로컬 도구 폴더
+/Background.png
+/GenZ Lab._Logo.png
+/글리밍.png
+.omc/
+.claude/
+node_modules/

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>워드클라우드 발표 화면 · GenZ Lab</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="screen">
+<div class="bg" aria-hidden="true"></div>
+
+<div id="stage">
+  <div id="cloud" aria-live="off"></div>
+
+  <div class="s-head" id="head">
+    <div class="brand">
+      <img src="assets/logo-navy.png" alt="GenZ Lab">
+      <span class="bar"></span>
+      <span class="name">GenZ Lab 워크샵</span>
+    </div>
+    <h1 id="question"></h1>
+  </div>
+
+  <div class="s-stats glass" id="stats">
+    <div class="stat">참여 <b id="people">0</b> 명</div>
+    <span class="sep"></span>
+    <div class="stat">단어 <b id="total">0</b> 개</div>
+  </div>
+
+  <!-- 대기: QR을 중앙에 크게 -->
+  <div class="s-wait glass" id="wait" hidden>
+    <div class="qr-tile" data-qr></div>
+    <div class="txt">
+      <div class="eyebrow">곧 시작합니다</div>
+      <div class="big">QR을 찍어 주세요</div>
+      <div class="knox">Knox 메신저로<br>링크를 확인하세요!</div>
+      <div class="addr" data-addr></div>
+    </div>
+    <img class="mascot" src="assets/glimming.png" alt="GenZ Lab 캐릭터 글리밍">
+  </div>
+
+  <div class="s-loading glass" id="loading" hidden>
+    <svg aria-hidden="true" width="44" height="44" viewBox="0 0 24 24" fill="#F4775C"><path d="M12 1.5c.6 5.6 4.9 9.9 10.5 10.5-5.6.6-9.9 4.9-10.5 10.5C11.4 16.9 7.1 12.6 1.5 12c5.6-.6 9.9-4.900 10.5-10.5z"/></svg>
+    <span>생각을 모으는 중…</span>
+  </div>
+
+  <div class="s-msg glass" id="msg" hidden></div>
+
+  <div class="s-ai" id="ai">
+    <button type="button" id="ai-btn">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="#1F2540"><path d="M12 1.5c.6 5.6 4.9 9.9 10.5 10.5-5.6.6-9.9 4.9-10.5 10.5C11.4 16.9 7.1 12.6 1.5 12c5.6-.6 9.9-4.900 10.5-10.5z"/></svg>
+      <span id="ai-label">AI 요약</span>
+    </button>
+    <div class="info" id="ai-info" hidden>
+      <b id="ai-line"></b>
+      <span>아무 곳이나 누르면 원래 화면으로 돌아갑니다</span>
+    </div>
+  </div>
+
+  <img class="s-mascot" id="mascot" src="assets/glimming.png" alt="GenZ Lab 캐릭터 글리밍" hidden>
+
+  <div class="s-qr glass" id="qr" hidden>
+    <div class="qr-tile" data-qr></div>
+    <div class="txt">
+      <div class="eyebrow">지금 참여하기</div>
+      <div class="big">QR을 찍어 주세요</div>
+      <div class="knox">Knox 메신저로 링크를 확인하세요!</div>
+      <div class="addr" data-addr></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.7/build/d3.layout.cloud.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="config.js"></script>
+<script src="js/common.js"></script>
+<script src="js/screen.js"></script>
+</body>
+</html>

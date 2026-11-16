@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>워드클라우드 진행자 관리 · GenZ Lab</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="bg" aria-hidden="true"></div>
+
+<!-- 비밀번호 입력 -->
+<main class="admin-login" id="login">
+  <form class="glass" id="login-form">
+    <img class="mascot" src="assets/glimming.png" alt="">
+    <img class="logo" src="assets/logo-navy.png" alt="GenZ Lab">
+    <div>
+      <h1>진행자 관리</h1>
+      <p style="margin-top:6px">워드클라우드를 관리하려면 비밀번호를 입력해 주세요.</p>
+    </div>
+    <div>
+      <label for="pw">관리자 비밀번호</label>
+      <input class="field" id="pw" type="password" placeholder="비밀번호" autocomplete="current-password" required>
+    </div>
+    <div class="err" id="login-err" role="alert" hidden></div>
+    <button type="submit" class="btn-coral" id="login-btn" style="height:56px">들어가기</button>
+    <div class="note">비밀번호는 이 기기에 저장되지 않아요.</div>
+  </form>
+</main>
+
+<!-- 관리 화면 -->
+<main class="admin" id="panel" hidden>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <img src="assets/logo-navy.png" alt="GenZ Lab">
+        <span class="bar"></span>
+        <h1>진행자 관리</h1>
+      </div>
+      <div class="pills">
+        <span class="pill"><span class="dot" id="dot"></span><span id="status-text">응답 받는 중</span></span>
+        <a class="pill" id="link-screen" href="screen.html" target="_blank" rel="noopener">발표 화면 열기</a>
+        <a class="pill" id="link-join" href="./" target="_blank" rel="noopener">참여 화면 열기</a>
+      </div>
+    </header>
+
+    <div class="cols">
+      <div class="left">
+        <section class="glass">
+          <label class="h" for="q">질문</label>
+          <textarea id="q" rows="2" maxlength="100" placeholder="참여자에게 보여 줄 질문"></textarea>
+          <div class="between">
+            <span class="sub" id="q-note">최대 100자</span>
+            <button type="button" class="btn" id="q-save">질문 저장</button>
+          </div>
+        </section>
+
+        <section class="glass">
+          <div class="between" style="flex-wrap:nowrap">
+            <div>
+              <div class="h">응답 받기</div>
+              <div class="sub" id="open-hint" style="margin-top:4px"></div>
+            </div>
+            <button type="button" class="switch" id="open-toggle" aria-label="응답 받기 켜기/끄기" aria-pressed="true"><span></span></button>
+          </div>
+          <div class="stats">
+            <div>참여 인원<b id="people">0명</b></div>
+            <div>받은 단어<b id="total">0개</b></div>
+          </div>
+        </section>
+
+        <section class="glass">
+          <div class="between">
+            <div class="h">AI 정리</div>
+            <button type="button" class="btn coral" id="ai-run">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5c.6 5.6 4.9 9.9 10.5 10.5-5.6.6-9.9 4.9-10.5 10.5C11.4 16.9 7.1 12.6 1.5 12c5.6-.6 9.9-4.900 10.5-10.5z"/></svg>
+              <span id="ai-run-label">AI 정리 실행</span>
+            </button>
+          </div>
+          <div class="sub">비슷한 표현을 대표 단어로 묶어 발표 화면에 다시 그립니다. 숨긴 단어는 빼고 보냅니다.</div>
+          <div class="err" id="ai-err" role="alert" hidden></div>
+          <div class="box" id="ai-box" hidden>
+            <div class="between">
+              <div class="sub" id="ai-title" style="font-weight:600"></div>
+              <button type="button" class="btn ghost" id="ai-clear" style="height:36px;padding:0 14px;font-size:13px">원본으로 되돌리기</button>
+            </div>
+            <div class="chips" id="ai-chips"></div>
+          </div>
+        </section>
+
+        <section class="glass">
+          <div class="between">
+            <div>
+              <div class="h">초기화</div>
+              <div class="sub" style="margin-top:4px">받은 단어와 AI 정리 결과를 모두 지웁니다. 되돌릴 수 없어요.</div>
+            </div>
+            <button type="button" class="btn danger" id="reset">모두 지우기</button>
+          </div>
+        </section>
+      </div>
+
+      <section class="glass right">
+        <div class="between">
+          <h2>단어 목록</h2>
+          <div class="sub" id="list-note"></div>
+        </div>
+        <div class="table-scroll">
+          <div class="table">
+            <div class="tr th"><span>단어</span><span style="text-align:right">횟수</span><span></span></div>
+            <div id="list"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="js/common.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>
