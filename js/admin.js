@@ -232,7 +232,7 @@
       }
     });
     session = {
-      id: "demo", question: "9기 Gen Z Lab. Crew가 된다면 더 해보고 싶은 활동을 자유롭게 말해주세요", is_open: true, rev: 0,
+      id: "demo", question: "Gen Z Lab.의 8번째 프로그램을 기획한다면, 어떤 프로그램을 하면 좋을까요?", is_open: true, rev: 0,
       ai_status: "done",
       ai_groups: [{ label: "연결", count: 19, members: ["연결", "소통"] }, { label: "성장", count: 12, members: ["성장"] },
         { label: "공감", count: 15, members: ["공감", "존중"] }, { label: "도전", count: 14, members: ["도전", "용기"] },

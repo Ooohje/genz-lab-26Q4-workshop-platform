@@ -121,5 +121,5 @@ $$;
 --    접속 코드는 'genz'. 질문은 관리 화면에서 언제든 바꿀 수 있습니다.
 
 insert into public.sessions (code, question)
-values ('genz', '9기 Gen Z Lab. Crew가 된다면 더 해보고 싶은 활동을 자유롭게 말해주세요')
+values ('genz', 'Gen Z Lab.의 8번째 프로그램을 기획한다면, 어떤 프로그램을 하면 좋을까요?')
 on conflict (code) do nothing;
