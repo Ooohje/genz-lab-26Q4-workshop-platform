@@ -11,6 +11,7 @@
   let busy = false;
   let qDirty = false;
   let aiRunning = false;
+  const PLATFORM = window.WCAdminPlatform;
 
   // ── Edge Function 호출 ───────────────────────────────────────────
   async function api(action, extra) {
@@ -54,6 +55,12 @@
     $("link-screen").href = "screen.html" + suffix;
     $("link-join").href = "./" + suffix;
     await resync();
+    // 메인 관제·명단·석식 탭(js/admin-platform.js)에 연결
+    PLATFORM.entered({
+      api, demo: DEMO, toast,
+      getSession: () => session,
+      setSession: (s) => { session = s; render(); },
+    });
     if (DEMO) return;
     subscribe(session.id, {
       onWord: (r) => {
@@ -82,6 +89,7 @@
 
   // ── 그리기 ──────────────────────────────────────────────────────
   function render() {
+    PLATFORM.changed(session);
     const open = session.is_open;
     $("dot").classList.toggle("off", !open);
     $("status-text").textContent = open ? "응답 받는 중" : "응답 마감됨";
@@ -215,6 +223,8 @@
 
   // ── 미리보기(demo) ───────────────────────────────────────────────
   function demoApi(action, extra) {
+    const handled = PLATFORM.demoApi(action, extra, session);
+    if (handled) return Promise.resolve(handled);
     if (action === "set_question") session.question = extra.question;
     if (action === "set_open") session.is_open = extra.open;
     if (action === "hide_word") rows.forEach((r) => { if (r.normalized === extra.normalized) r.hidden = extra.hidden; });
@@ -232,7 +242,7 @@
       }
     });
     session = {
-      id: "demo", question: "Gen Z Lab.의 8번째 프로그램을 기획한다면, 어떤 프로그램을 하면 좋을까요?", is_open: true, rev: 0,
+      id: "demo", question: "Gen Z Lab.의 8번째 프로그램을 기획한다면, 어떤 프로그램을 하면 좋을까요?", is_open: true, rev: 0, program: "lobby", notice: null, roster_rev: 0,
       ai_status: "done",
       ai_groups: [{ label: "연결", count: 19, members: ["연결", "소통"] }, { label: "성장", count: 12, members: ["성장"] },
         { label: "공감", count: 15, members: ["공감", "존중"] }, { label: "도전", count: 14, members: ["도전", "용기"] },

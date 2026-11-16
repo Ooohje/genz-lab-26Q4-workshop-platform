@@ -1,10 +1,12 @@
-// join: 참여자가 단어를 적어 보내는 화면
+// join: 워드클라우드 프로그램의 참여자 화면(답변을 적어 보내는 부분).
+// 화면 전환과 세션 구독은 js/app.js 가 맡고, 여기서는 window.WCJoin 으로 불려 그리기만 합니다.
 (function () {
-  const { db, getSession, subscribe, toast } = window.WC;
+  const { db, getSession, toast } = window.WC;
   const MAX_LEN = 15;
   const $ = (id) => document.getElementById(id);
 
-  // 브라우저마다 임의 번호 하나(익명). 참여 인원을 세고 "내가 보낸 단어"를 찾는 데만 씁니다.
+  // 브라우저마다 임의 번호 하나(익명). 참여 인원을 세고 "내가 보낸 답변"을 찾는 데만 씁니다.
+  // Knox ID와 연결하지 않으므로 누가 어떤 답변을 보냈는지는 남지 않습니다.
   function clientId() {
     const KEY = "wc-client-id";
     let id = null;
@@ -20,7 +22,8 @@
   const me = clientId();
 
   let session = null;
-  let mine = [];        // 내가 보낸 단어
+  let active = false;    // 지금 워드클라우드 화면이 보이는 중인지
+  let mine = [];         // 내가 보낸 답변
   let values = ["", ""]; // 입력칸
   let sending = false;
 
@@ -82,14 +85,16 @@
 
   function render() {
     if (!session) return;
-    $("question").textContent = session.question;
     const open = session.is_open;
     const sent = mine.length > 0;
 
+    $("send-bar").hidden = !active || !open;
+    if (!active) return;
+
+    $("question").textContent = session.question;
     $("closed").hidden = open;
     $("form").hidden = !open;
     $("hint").hidden = !open;
-    $("send-bar").hidden = !open;
     $("sent").hidden = !open || !sent;
 
     if (open) {
@@ -147,42 +152,25 @@
   });
   $("send").addEventListener("click", send);
 
-  async function refresh() {
-    const fresh = await getSession();
-    if (!fresh) return;
-    const reset = session && fresh.rev !== session.rev;
-    session = fresh;
-    if (reset) await loadMine();
-    render();
-  }
-
-  async function start() {
-    try {
-      session = await getSession();
-    } catch (e) {
-      $("question").textContent = "연결하지 못했어요. 새로고침해 주세요.";
-      return;
-    }
-    if (!session) {
-      $("question").textContent = "진행 중인 워크샵을 찾지 못했어요.";
-      return;
-    }
-    await loadMine();
-    renderRows(false);
-    render();
-    subscribe(session.id, {
-      onSession: async (s) => {
-        const reset = s.rev !== session.rev;
-        session = s;
-        if (reset) await loadMine(); // 초기화·숨기기가 있었으면 내 단어도 다시 확인
-        render();
-      },
-    });
-    // 화면을 껐다 켜면 실시간 연결이 끊겼을 수 있으니 다시 확인
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) refresh().catch(() => {});
-    });
-  }
-
-  start();
+  window.WCJoin = {
+    // 처음 한 번: 내 답변을 읽고 입력칸을 만듭니다.
+    async init(s) {
+      session = s;
+      await loadMine();
+      renderRows(false);
+      render();
+    },
+    // 세션이 바뀔 때마다(실시간): 초기화·숨기기가 있었으면 내 답변도 다시 확인합니다.
+    async setSession(s) {
+      const reset = session && s.rev !== session.rev;
+      session = s;
+      if (reset) await loadMine();
+      render();
+    },
+    // 워드클라우드 화면이 보이게/안 보이게 될 때
+    setActive(on) {
+      active = on;
+      render();
+    },
+  };
 })();

@@ -1,0 +1,194 @@
+// app: 참여자 화면의 뼈대.
+// Knox ID로 입장하고, 진행자가 고른 프로그램(sessions.program)에 맞는 화면을 보여 줍니다.
+//
+// 프로그램을 추가하려면:
+//   1) 아래 PROGRAMS 에 이름을 넣고  2) index.html 에 <section id="view-이름" class="view"> 를 만들고
+//   3) supabase/platform.sql 의 check 목록과 admin 함수·관리 화면 버튼에도 같은 이름을 넣습니다.
+(function () {
+  const { db, getSession, subscribe, toast } = window.WC;
+  const $ = (id) => document.getElementById(id);
+  const PROGRAMS = ["lobby", "wordcloud", "dinner", "end"];
+  const KEY = "wc-knox-id";
+  const params = new URLSearchParams(location.search);
+  // ?p=dinner 처럼 열면 진행 중인 프로그램과 상관없이 그 화면을 보여 줍니다(석식 투표 링크를 따로 돌릴 때).
+  const forced = PROGRAMS.includes(params.get("p")) ? params.get("p") : null;
+
+  let session = null;
+  let me = null;         // { knox_id, name, team_no, team_name, teammates, dinner }
+  let needsName = false; // 명단에 없는 Knox ID라 이름을 받아야 하는 상태
+  let busy = false;
+
+  const saved = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
+  const save = (v) => { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch (e) { /* 무시 */ } };
+
+  async function rpc(name, args) {
+    const { data, error } = await db.rpc(name, args);
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  // platform.sql 을 아직 실행하지 않은 프로젝트에서는 예전처럼 워드클라우드만 보여 줍니다.
+  const isPlatform = () => !!session && "program" in session;
+
+  function currentView() {
+    if (!session) return "loading";
+    if (!isPlatform()) return "wordcloud";
+    if (!me) return "login";
+    return forced || session.program;
+  }
+
+  function render() {
+    const view = currentView();
+    document.querySelectorAll(".view").forEach((el) => { el.hidden = el.id !== "view-" + view; });
+    window.WCJoin.setActive(view === "wordcloud");
+
+    const notice = session && session.notice;
+    $("notice").hidden = !notice || view === "login" || view === "loading";
+    $("notice").textContent = notice || "";
+
+    $("user").hidden = !me;
+    if (me) {
+      $("user-name").textContent = me.name;
+      $("user-team").textContent = me.team_name || "조 미배정";
+    }
+
+    if (view === "login") {
+      $("login-name-row").hidden = !needsName;
+      $("login-help").textContent = needsName
+        ? "명단에 없는 Knox ID예요. 이름을 적으면 입장할 수 있고, 조는 진행자가 배정해 드려요."
+        : "사내 메신저 Knox의 ID를 적어 주세요.";
+      $("login-btn").textContent = busy ? "확인하는 중…" : "입장하기";
+      $("login-btn").disabled = busy;
+    }
+
+    if (view === "lobby" && me) {
+      $("lobby-hello").textContent = me.name + "님, 반가워요!";
+      $("lobby-team").textContent = me.team_name || "조 배정을 기다리는 중이에요";
+      const mates = $("lobby-mates");
+      mates.innerHTML = "";
+      (me.teammates || []).forEach((n) => {
+        const c = document.createElement("span");
+        c.className = "chip";
+        c.textContent = n;
+        mates.appendChild(c);
+      });
+      $("lobby-mates-wrap").hidden = !(me.teammates || []).length;
+    }
+
+    if (view === "dinner" && me) {
+      ["yes", "no"].forEach((c) => {
+        const b = $("dinner-" + c);
+        b.setAttribute("aria-pressed", String(me.dinner === c));
+        b.disabled = busy;
+      });
+      $("dinner-status").textContent = me.dinner === "yes" ? "참석으로 받았어요. 바꾸려면 다시 눌러 주세요."
+        : me.dinner === "no" ? "미참석으로 받았어요. 바꾸려면 다시 눌러 주세요."
+        : "하나를 골라 주세요.";
+    }
+  }
+
+  // ── 입장 ────────────────────────────────────────────────────────
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const knox = $("login-knox").value.trim().toLowerCase();
+    const name = $("login-name").value.trim();
+    if (!knox) return toast("Knox ID를 적어 주세요");
+    if (needsName && !name) return toast("이름을 적어 주세요");
+    busy = true;
+    render();
+    try {
+      const out = await rpc("wc_enter", { p_knox_id: knox, p_name: needsName ? name : null });
+      if (out.found) {
+        me = out;
+        needsName = false;
+        save(me.knox_id);
+      } else {
+        needsName = true;
+      }
+    } catch (err) {
+      toast(err.message);
+    }
+    busy = false;
+    render();
+    if (needsName) $("login-name").focus();
+  });
+  $("login-knox").addEventListener("input", () => {
+    if (needsName) { needsName = false; render(); }
+  });
+
+  $("user").addEventListener("click", () => {
+    if (confirm("다른 Knox ID로 다시 입장할까요?")) $("logout").click();
+  });
+  $("logout").addEventListener("click", () => {
+    me = null;
+    needsName = false;
+    save(null);
+    $("login-knox").value = "";
+    $("login-name").value = "";
+    render();
+  });
+
+  // ── 석식 투표 ───────────────────────────────────────────────────
+  async function vote(choice) {
+    if (!me || busy) return;
+    busy = true;
+    render();
+    try {
+      const out = await rpc("wc_dinner", { p_knox_id: me.knox_id, p_choice: choice });
+      me.dinner = out.dinner;
+    } catch (err) {
+      toast("저장하지 못했어요. 다시 눌러 주세요");
+    }
+    busy = false;
+    render();
+  }
+  $("dinner-yes").addEventListener("click", () => vote("yes"));
+  $("dinner-no").addEventListener("click", () => vote("no"));
+
+  // ── 내 정보 다시 읽기 (조가 바뀌었을 때 등) ───────────────────────
+  async function refreshMe() {
+    const id = me ? me.knox_id : saved();
+    if (!id || !isPlatform()) return;
+    try {
+      const out = await rpc("wc_me", { p_knox_id: id });
+      if (out.found) me = out;
+      else { me = null; save(null); } // 명단에서 지워진 경우 다시 입장
+    } catch (e) { /* 잠깐 끊겨도 화면은 그대로 둡니다 */ }
+  }
+
+  async function start() {
+    try {
+      session = await getSession();
+    } catch (e) {
+      session = null;
+    }
+    if (!session) {
+      $("loading-text").textContent = "진행 중인 워크샵을 찾지 못했어요. 새로고침해 주세요.";
+      return;
+    }
+    await Promise.all([window.WCJoin.init(session), refreshMe()]);
+    render();
+
+    subscribe(session.id, {
+      onSession: async (s) => {
+        const rosterChanged = s.roster_rev !== session.roster_rev;
+        session = s;
+        await window.WCJoin.setSession(s);
+        if (rosterChanged) await refreshMe();
+        render();
+      },
+    });
+
+    // 화면을 껐다 켜면 실시간 연결이 끊겼을 수 있으니 다시 맞춥니다.
+    document.addEventListener("visibilitychange", async () => {
+      if (document.hidden) return;
+      const fresh = await getSession().catch(() => null);
+      if (!fresh) return;
+      session = fresh;
+      await Promise.all([window.WCJoin.setSession(fresh), refreshMe()]);
+      render();
+    });
+  }
+
+  start();
+})();

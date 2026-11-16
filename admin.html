@@ -47,6 +47,127 @@
       </div>
     </header>
 
+    <nav class="tabs" aria-label="관리 메뉴">
+      <button type="button" class="tab" data-tab="control" aria-pressed="true">메인 관제</button>
+      <button type="button" class="tab" data-tab="wordcloud" aria-pressed="false">워드클라우드</button>
+      <button type="button" class="tab" data-tab="roster" aria-pressed="false">명단 · 조</button>
+      <button type="button" class="tab" data-tab="dinner" aria-pressed="false">석식 투표</button>
+    </nav>
+
+    <div class="err" id="platform-msg" role="alert" hidden></div>
+
+    <!-- ───────── 메인 관제 ───────── -->
+    <div class="tabpane" id="tab-control">
+      <div class="cols">
+        <section class="glass" style="flex:1 1 420px;min-width:0">
+          <h2>지금 진행할 프로그램</h2>
+          <div class="sub">누르는 즉시 모든 참여자 화면이 그 프로그램으로 넘어갑니다.</div>
+          <div class="programs" id="programs">
+            <button type="button" class="program" data-program="lobby" aria-pressed="false"><b>대기</b><span>입장하고 우리 조를 확인</span></button>
+            <button type="button" class="program" data-program="wordcloud" aria-pressed="false"><b>워드클라우드</b><span>질문에 답변 보내기</span></button>
+            <button type="button" class="program" data-program="dinner" aria-pressed="false"><b>석식 투표</b><span>참석 / 미참석</span></button>
+            <button type="button" class="program" data-program="end" aria-pressed="false"><b>마무리</b><span>끝인사 화면</span></button>
+          </div>
+        </section>
+
+        <div class="left" style="flex:1 1 360px">
+          <section class="glass">
+            <h2>입장 현황</h2>
+            <div class="stats">
+              <div>명단<b id="c-roster">0명</b></div>
+              <div>입장<b id="c-joined">0명</b></div>
+            </div>
+            <div class="sub" id="c-note"></div>
+          </section>
+          <section class="glass">
+            <label class="h" for="notice-text">공지</label>
+            <textarea id="notice-text" rows="2" maxlength="120" placeholder="모든 참여자 화면 위에 띄울 한 줄 (비우고 저장하면 사라져요)"></textarea>
+            <div class="between">
+              <span class="sub">최대 120자</span>
+              <button type="button" class="btn" id="notice-save">공지 저장</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────── 명단 · 조 ───────── -->
+    <div class="tabpane" id="tab-roster" hidden>
+      <div class="cols">
+        <div class="left" style="flex:1 1 380px">
+          <section class="glass">
+            <h2>명단 올리기</h2>
+            <div class="sub">한 줄에 한 명씩 <b>Knox ID, 이름, 조 번호</b> 순서로 적습니다. 엑셀에서 세 칸을 복사해 붙여 넣어도 됩니다. 조 번호를 비우면 미배정으로 들어갑니다.</div>
+            <textarea id="csv" rows="8" spellcheck="false" placeholder="gildong.hong, 홍길동, 1&#10;younghee.kim, 김영희, 1&#10;chulsoo.lee, 이철수, 2"></textarea>
+            <label class="check"><input type="checkbox" id="csv-replace"> 기존 명단을 모두 지우고 새로 올리기 (석식 투표도 함께 지워져요)</label>
+            <div class="between">
+              <label class="btn ghost" for="csv-file" style="cursor:pointer">CSV 파일 열기</label>
+              <input type="file" id="csv-file" accept=".csv,.txt,text/csv,text/plain" hidden>
+              <button type="button" class="btn" id="csv-import">명단 올리기</button>
+            </div>
+          </section>
+          <section class="glass">
+            <h2>조 이름</h2>
+            <div class="sub">조 이름을 누르면 바꿀 수 있습니다.</div>
+            <div class="chips" id="team-chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+          </section>
+        </div>
+
+        <section class="glass right">
+          <div class="between">
+            <h2>참가자</h2>
+            <div class="sub" id="roster-note"></div>
+          </div>
+          <div class="table-scroll">
+            <div class="table" style="min-width:560px">
+              <div class="tr roster th"><span>이름</span><span>Knox ID</span><span>입장</span><span>조</span><span></span></div>
+              <div id="roster-list"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ───────── 석식 투표 ───────── -->
+    <div class="tabpane" id="tab-dinner" hidden>
+      <div class="cols">
+        <div class="left" style="flex:1 1 320px">
+          <section class="glass">
+            <h2>석식 참석</h2>
+            <div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+              <div>참석<b id="d-yes">0명</b></div>
+              <div>미참석<b id="d-no">0명</b></div>
+              <div>미응답<b id="d-none">0명</b></div>
+            </div>
+            <div class="between">
+              <button type="button" class="btn ghost" id="d-refresh">새로고침</button>
+              <button type="button" class="btn" id="d-csv">명단 CSV 받기</button>
+            </div>
+            <div class="sub">참여자 화면을 "석식 투표"로 보내거나, 참여 주소 뒤에 <b>?p=dinner</b>를 붙인 링크를 따로 공유할 수 있습니다.</div>
+          </section>
+          <section class="glass">
+            <div class="between">
+              <div>
+                <div class="h">투표 초기화</div>
+                <div class="sub" style="margin-top:4px">석식 투표를 모두 지웁니다. 되돌릴 수 없어요.</div>
+              </div>
+              <button type="button" class="btn danger" id="d-reset">모두 지우기</button>
+            </div>
+          </section>
+        </div>
+
+        <section class="glass right">
+          <div class="dinner-cols">
+            <div><h2>참석 <span class="sub" id="d-yes-n"></span></h2><div id="d-yes-list" class="namelist"></div></div>
+            <div><h2>미참석 <span class="sub" id="d-no-n"></span></h2><div id="d-no-list" class="namelist"></div></div>
+            <div><h2>미응답 <span class="sub" id="d-none-n"></span></h2><div id="d-none-list" class="namelist"></div></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ───────── 워드클라우드 ───────── -->
+    <div class="tabpane" id="tab-wordcloud" hidden>
     <div class="cols">
       <div class="left">
         <section class="glass">
@@ -115,12 +236,14 @@
         </div>
       </section>
     </div>
+    </div>
   </div>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="js/common.js"></script>
+<script src="js/admin-platform.js"></script>
 <script src="js/admin.js"></script>
 </body>
 </html>

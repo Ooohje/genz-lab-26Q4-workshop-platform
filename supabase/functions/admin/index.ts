@@ -167,6 +167,25 @@ const normalize = (s: string) => s.replace(/\s+/g, "").toLowerCase();
 
 type Group = { label: string; count: number; members: string[] };
 
+// 메인 관제에서 고를 수 있는 프로그램 (platform.sql 의 check 목록, js/app.js 의 PROGRAMS 와 같아야 합니다)
+const PROGRAMS = ["lobby", "wordcloud", "dinner", "end"];
+
+// 명단·조·석식 선택을 읽어 옵니다.
+// deno-lint-ignore no-explicit-any
+async function loadRoster(db: any) {
+  const [teams, people, dinner] = await Promise.all([
+    db.from("teams").select("team_no, name").order("team_no"),
+    db.from("participants").select("knox_id, name, team_no, is_preregistered, joined_at, last_seen").order("name"),
+    db.from("dinner_rsvp").select("knox_id, choice, updated_at"),
+  ]);
+  for (const r of [teams, people, dinner]) if (r.error) throw new Error(r.error.message);
+  const choice = new Map<string, string>((dinner.data ?? []).map((d: { knox_id: string; choice: string }) => [d.knox_id, d.choice]));
+  return {
+    teams: teams.data ?? [],
+    participants: (people.data ?? []).map((p: { knox_id: string }) => ({ ...p, dinner: choice.get(p.knox_id) ?? null })),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "POST만 지원합니다" }, 405);
@@ -248,6 +267,108 @@ Deno.serve(async (req) => {
           ok: true,
           session: await update({ ai_status: "idle", ai_groups: null, ai_updated_at: null }),
         });
+
+      // ───────────── 플랫폼: 메인 관제 ─────────────
+
+      // 모든 참여자 화면을 해당 프로그램으로 보냅니다.
+      case "set_program": {
+        const program = String(body.program ?? "");
+        if (!PROGRAMS.includes(program)) return json({ error: "알 수 없는 프로그램입니다" }, 400);
+        return json({ ok: true, session: await update({ program }) });
+      }
+
+      // 모든 참여자 화면 위에 띄우는 공지 (빈 값이면 지움)
+      case "set_notice": {
+        const notice = String(body.notice ?? "").trim().slice(0, 120);
+        return json({ ok: true, session: await update({ notice: notice || null }) });
+      }
+
+      // ───────────── 플랫폼: 명단·조 ─────────────
+
+      // 명단 + 조 + 석식 선택을 한 번에 돌려줍니다 (관리 화면 전용)
+      case "roster":
+        return json({ ok: true, session, ...(await loadRoster(db)) });
+
+      // 명단 올리기: rows = [{knox_id, name, team_no}]. replace 가 true 면 기존 명단을 지우고 새로 넣습니다.
+      case "roster_import": {
+        const input = Array.isArray(body.rows) ? body.rows : [];
+        const rows = new Map<string, { knox_id: string; name: string; team_no: number | null; is_preregistered: boolean }>();
+        for (const r of input) {
+          const knox_id = String(r?.knox_id ?? "").trim().toLowerCase();
+          const name = String(r?.name ?? "").trim().slice(0, 30);
+          const t = Number.parseInt(String(r?.team_no ?? ""), 10);
+          if (!knox_id || knox_id.length > 40 || !name) continue;
+          rows.set(knox_id, { knox_id, name, team_no: t >= 1 && t <= 99 ? t : null, is_preregistered: true });
+        }
+        if (rows.size === 0) return json({ error: "읽을 행이 없습니다. knox_id,이름,조 형식인지 확인해 주세요" }, 400);
+        if (rows.size > 500) return json({ error: "한 번에 500명까지 올릴 수 있습니다" }, 400);
+
+        if (body.replace === true) {
+          const { error } = await db.from("participants").delete().neq("knox_id", "");
+          if (error) throw new Error(error.message);
+        }
+        // 없는 조는 'N조' 이름으로 만들어 둡니다(이미 있는 조의 이름은 건드리지 않음).
+        const teamNos = [...new Set([...rows.values()].map((r) => r.team_no).filter((t): t is number => t !== null))];
+        if (teamNos.length) {
+          const { error } = await db.from("teams")
+            .upsert(teamNos.map((team_no) => ({ team_no, name: `${team_no}조` })), { onConflict: "team_no", ignoreDuplicates: true });
+          if (error) throw new Error(error.message);
+        }
+        const { error } = await db.from("participants").upsert([...rows.values()], { onConflict: "knox_id" });
+        if (error) throw new Error(error.message);
+        const next = await update({ roster_rev: (session.roster_rev ?? 0) + 1 });
+        return json({ ok: true, imported: rows.size, session: next, ...(await loadRoster(db)) });
+      }
+
+      // 한 사람의 조·이름을 바꿉니다. team_no 가 null 이면 '미배정'
+      case "participant_update": {
+        const knox_id = String(body.knox_id ?? "").trim().toLowerCase();
+        const patch: Record<string, unknown> = {};
+        if ("team_no" in body) {
+          const t = body.team_no === null ? null : Number.parseInt(String(body.team_no), 10);
+          if (t !== null && !(t >= 1 && t <= 99)) return json({ error: "조 번호가 올바르지 않습니다" }, 400);
+          if (t !== null) {
+            const { error } = await db.from("teams")
+              .upsert([{ team_no: t, name: `${t}조` }], { onConflict: "team_no", ignoreDuplicates: true });
+            if (error) throw new Error(error.message);
+          }
+          patch.team_no = t;
+        }
+        if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim().slice(0, 30);
+        if (!knox_id || Object.keys(patch).length === 0) return json({ error: "바꿀 내용이 없습니다" }, 400);
+        const { error } = await db.from("participants").update(patch).eq("knox_id", knox_id);
+        if (error) throw new Error(error.message);
+        const next = await update({ roster_rev: (session.roster_rev ?? 0) + 1 });
+        return json({ ok: true, session: next, ...(await loadRoster(db)) });
+      }
+
+      case "participant_delete": {
+        const knox_id = String(body.knox_id ?? "").trim().toLowerCase();
+        if (!knox_id) return json({ error: "Knox ID가 비어 있습니다" }, 400);
+        const { error } = await db.from("participants").delete().eq("knox_id", knox_id);
+        if (error) throw new Error(error.message);
+        const next = await update({ roster_rev: (session.roster_rev ?? 0) + 1 });
+        return json({ ok: true, session: next, ...(await loadRoster(db)) });
+      }
+
+      case "team_rename": {
+        const team_no = Number.parseInt(String(body.team_no), 10);
+        const name = String(body.name ?? "").trim().slice(0, 20);
+        if (!(team_no >= 1 && team_no <= 99) || !name) return json({ error: "조 번호와 이름을 확인해 주세요" }, 400);
+        const { error } = await db.from("teams").upsert([{ team_no, name }], { onConflict: "team_no" });
+        if (error) throw new Error(error.message);
+        const next = await update({ roster_rev: (session.roster_rev ?? 0) + 1 });
+        return json({ ok: true, session: next, ...(await loadRoster(db)) });
+      }
+
+      // ───────────── 플랫폼: 석식 투표 ─────────────
+
+      case "dinner_reset": {
+        const { error } = await db.from("dinner_rsvp").delete().neq("knox_id", "");
+        if (error) throw new Error(error.message);
+        const next = await update({ roster_rev: (session.roster_rev ?? 0) + 1 });
+        return json({ ok: true, session: next, ...(await loadRoster(db)) });
+      }
 
       case "ai_summary": {
         const apiKey = Deno.env.get("GEMINI_API_KEY");

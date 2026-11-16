@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#C9BFE0">
-<title>워드클라우드 참여 · Gen Z Lab.</title>
+<title>워크샵 참여 · Gen Z Lab.</title>
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/favicon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
@@ -14,50 +14,122 @@
 <div class="bg rotate" aria-hidden="true"></div>
 
 <main class="join">
-  <div class="brand">
-    <img src="assets/logo-navy.png" alt="Gen Z Lab.">
-    <span class="bar"></span>
-    <span class="name">Gen Z Lab. 워크샵</span>
+  <div class="topline">
+    <div class="brand">
+      <img src="assets/logo-navy.png" alt="Gen Z Lab.">
+      <span class="bar"></span>
+      <span class="name">Gen Z Lab. 워크샵</span>
+    </div>
+    <!-- 입장한 사람: 이름 · 조 -->
+    <button type="button" class="user" id="user" hidden aria-label="다른 Knox ID로 다시 입장">
+      <b id="user-name"></b><span id="user-team"></span>
+    </button>
   </div>
 
-  <h1 id="question">불러오는 중…</h1>
+  <!-- 진행자 공지 -->
+  <div class="notice" id="notice" role="status" hidden></div>
 
-  <!-- 전송 완료: 내가 보낸 답변 -->
-  <section id="sent" class="glass card with-mascot" hidden>
-    <img class="mascot" src="assets/glimming.png" alt="">
-    <div class="sent-head">
-      <span class="check"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.3l3 3 6-6.5"/></svg></span>
-      <span>보냈어요! 화면을 확인해 보세요</span>
+  <!-- 불러오는 중 -->
+  <section id="view-loading" class="view">
+    <h1 id="loading-text">불러오는 중…</h1>
+  </section>
+
+  <!-- 입장: Knox ID -->
+  <section id="view-login" class="view" hidden>
+    <h1>Knox ID로<br>입장해 주세요</h1>
+    <form class="glass card with-mascot" id="login-form" autocomplete="off">
+      <img class="mascot" src="assets/glimming.png" alt="">
+      <label class="card-title" for="login-knox">Knox ID</label>
+      <input class="field" id="login-knox" type="text" inputmode="email" autocapitalize="none" spellcheck="false" maxlength="40" placeholder="예: gildong.hong" required>
+      <div id="login-name-row" hidden style="display:flex;flex-direction:column;gap:12px">
+        <label class="card-title" for="login-name">이름</label>
+        <input class="field" id="login-name" type="text" maxlength="30" placeholder="이름">
+      </div>
+      <p class="hint" id="login-help" style="text-align:left"></p>
+      <button type="submit" class="btn-coral" id="login-btn">입장하기</button>
+    </form>
+  </section>
+
+  <!-- 대기(로비) -->
+  <section id="view-lobby" class="view" hidden>
+    <h1 id="lobby-hello"></h1>
+    <div class="glass card with-mascot">
+      <img class="mascot" src="assets/glimming.png" alt="">
+      <div class="label">우리 조</div>
+      <div class="big" id="lobby-team"></div>
+      <div id="lobby-mates-wrap" hidden style="display:flex;flex-direction:column;gap:10px">
+        <div class="label">함께하는 사람들</div>
+        <div class="chips" id="lobby-mates"></div>
+      </div>
     </div>
-    <div class="label">내가 보낸 답변</div>
-    <div class="chips" id="sent-chips"></div>
+    <p class="hint">곧 프로그램이 시작돼요.<br>이 화면을 켜 두면 자동으로 넘어갑니다.</p>
   </section>
 
-  <!-- 입력 -->
-  <section id="form" class="glass card with-mascot" hidden>
-    <img class="mascot" id="form-mascot" src="assets/glimming.png" alt="">
-    <div class="card-title" id="form-title">자유롭게 적어 주세요</div>
-    <div id="rows"></div>
-    <button type="button" class="add" id="add">
-      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 2.5v11M2.5 8h11"/></svg>
-      <span>입력칸 추가</span>
-    </button>
-  </section>
+  <!-- 프로그램: 워드클라우드 -->
+  <section id="view-wordcloud" class="view" hidden>
+    <h1 id="question"></h1>
 
-  <p class="hint" id="hint" hidden>이름 없이 익명으로 보내져요 · 한 칸에 15자까지</p>
-
-  <!-- 응답 마감 -->
-  <section id="closed" class="glass card closed" hidden>
-    <img src="assets/glimming.png" alt="">
-    <span class="badge">응답 마감</span>
-    <div class="title">응답이 마감되었어요</div>
-    <p class="desc">참여해 주셔서 고마워요.<br>앞쪽 화면에서 함께 모은 답변을 확인해 보세요.</p>
-    <div id="closed-mine" hidden style="display:contents">
-      <div class="divider"></div>
+    <!-- 전송 완료: 내가 보낸 답변 -->
+    <section id="sent" class="glass card with-mascot" hidden>
+      <img class="mascot" src="assets/glimming.png" alt="">
+      <div class="sent-head">
+        <span class="check"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.3l3 3 6-6.5"/></svg></span>
+        <span>보냈어요! 화면을 확인해 보세요</span>
+      </div>
       <div class="label">내가 보낸 답변</div>
-      <div class="chips" id="closed-chips"></div>
+      <div class="chips" id="sent-chips"></div>
+    </section>
+
+    <!-- 입력 -->
+    <section id="form" class="glass card with-mascot" hidden>
+      <img class="mascot" id="form-mascot" src="assets/glimming.png" alt="">
+      <div class="card-title" id="form-title">자유롭게 적어 주세요</div>
+      <div id="rows"></div>
+      <button type="button" class="add" id="add">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 2.5v11M2.5 8h11"/></svg>
+        <span>입력칸 추가</span>
+      </button>
+    </section>
+
+    <p class="hint" id="hint" hidden>이름 없이 익명으로 보내져요 · 한 칸에 15자까지</p>
+
+    <!-- 응답 마감 -->
+    <section id="closed" class="glass card closed" hidden>
+      <img src="assets/glimming.png" alt="">
+      <span class="badge">응답 마감</span>
+      <div class="title">응답이 마감되었어요</div>
+      <p class="desc">참여해 주셔서 고마워요.<br>앞쪽 화면에서 함께 모은 답변을 확인해 보세요.</p>
+      <div id="closed-mine" hidden style="display:contents">
+        <div class="divider"></div>
+        <div class="label">내가 보낸 답변</div>
+        <div class="chips" id="closed-chips"></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- 프로그램: 석식 참석 투표 -->
+  <section id="view-dinner" class="view" hidden>
+    <h1>오늘 석식에<br>참석하시나요?</h1>
+    <div class="glass card with-mascot">
+      <img class="mascot" src="assets/glimming.png" alt="">
+      <div class="choice-row">
+        <button type="button" class="choice" id="dinner-yes" aria-pressed="false">참석</button>
+        <button type="button" class="choice" id="dinner-no" aria-pressed="false">미참석</button>
+      </div>
+      <p class="hint" id="dinner-status" style="text-align:left"></p>
     </div>
   </section>
+
+  <!-- 마무리 -->
+  <section id="view-end" class="view" hidden>
+    <h1>오늘 함께해 주셔서<br>고마워요!</h1>
+    <div class="glass card closed">
+      <img src="assets/glimming.png" alt="">
+      <p class="desc">워크샵이 모두 끝났어요.<br>조심히 들어가세요.</p>
+    </div>
+  </section>
+
+  <button type="button" class="linklike" id="logout" hidden>다른 Knox ID로 입장</button>
 </main>
 
 <div class="send-bar" id="send-bar" hidden>
@@ -68,5 +140,6 @@
 <script src="config.js"></script>
 <script src="js/common.js"></script>
 <script src="js/join.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
