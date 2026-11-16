@@ -36,8 +36,8 @@
       input.type = "text";
       input.maxLength = MAX_LEN;
       input.value = v;
-      input.placeholder = i === 0 && mine.length === 0 ? "예: 연결" : "단어 " + (i + 1);
-      input.setAttribute("aria-label", "단어 " + (i + 1));
+      input.placeholder = "답변 " + (i + 1);
+      input.setAttribute("aria-label", "답변 " + (i + 1));
       input.autocomplete = "off";
       input.enterKeyHint = "next";
       const counter = document.createElement("span");
@@ -67,7 +67,7 @@
     const n = filled().length;
     const btn = $("send");
     btn.disabled = n === 0 || sending;
-    btn.textContent = sending ? "보내는 중…" : n > 0 ? "단어 " + n + "개 보내기" : mine.length ? "더 보내기" : "보내기";
+    btn.textContent = sending ? "보내는 중…" : n > 0 ? n + "개 보내기" : mine.length ? "더 보내기" : "보내기";
   }
 
   function chips(el) {
@@ -96,7 +96,7 @@
       // 캐릭터는 맨 위 카드에만
       $("form").classList.toggle("with-mascot", !sent);
       $("form-mascot").hidden = sent;
-      $("form-title").textContent = sent ? "더 떠오르는 단어가 있나요?" : "떠오르는 단어를 적어 주세요";
+      $("form-title").textContent = sent ? "더 적고 싶은 것이 있나요?" : "자유롭게 적어 주세요";
       chips($("sent-chips"));
       renderSend();
     } else {
@@ -127,7 +127,7 @@
       const fresh = await getSession().catch(() => null);
       if (fresh) session = fresh;
       if (session.is_open) {
-        toast(/30개/.test(error.message) ? "단어는 한 사람당 30개까지 보낼 수 있어요"
+        toast(/30개/.test(error.message) ? "한 사람당 30개까지 보낼 수 있어요"
           : "보내지 못했어요. 잠시 후 다시 눌러 주세요");
       }
       render();
