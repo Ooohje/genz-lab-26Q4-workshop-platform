@@ -403,6 +403,9 @@
         $("platform-msg").hidden = false;
         showTab("wordcloud");
       }
+      // admin.html?tab=roster 처럼 열면 그 탭부터 보여 줍니다.
+      const first = new URLSearchParams(location.search).get("tab");
+      if (ready && first && $("tab-" + first)) showTab(first);
       render();
       loadRoster();
       // 석식 투표·입장은 실시간 알림이 없어서 15초마다 다시 읽습니다.
