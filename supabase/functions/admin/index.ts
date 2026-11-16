@@ -1,4 +1,4 @@
-// GenZ Lab 워크샵 워드클라우드 — 관리자 Edge Function
+// Gen Z Lab. 워크샵 워드클라우드 — 관리자 Edge Function
 //
 // 관리자 동작(질문 변경, 응답 시작/마감, 초기화, 단어 숨기기, AI 정리)은 전부 이 함수 하나로 처리합니다.
 // 필요한 secrets (대시보드 > Edge Functions > Secrets):

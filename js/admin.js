@@ -226,7 +226,7 @@
       }
     });
     session = {
-      id: "demo", question: "우리가 함께 만들고 싶은 내일을 한 단어로 표현한다면?", is_open: true, rev: 0,
+      id: "demo", question: "9기 Gen Z Lab. Crew가 된다면 더 해보고 싶은 활동을 자유롭게 말해주세요", is_open: true, rev: 0,
       ai_status: "done",
       ai_groups: [{ label: "연결", count: 19, members: ["연결", "소통"] }, { label: "성장", count: 12, members: ["성장"] },
         { label: "공감", count: 15, members: ["공감", "존중"] }, { label: "도전", count: 14, members: ["도전", "용기"] },
