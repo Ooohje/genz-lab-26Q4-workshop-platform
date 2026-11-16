@@ -39,8 +39,9 @@ Supabase 대시보드에서 위에서 아래로 따라 하면 됩니다. 15분 �
 
 1. <https://aistudio.google.com/apikey> 접속 → **Create API key**
 2. 키를 복사해 둡니다. (다음 단계에서 Supabase secrets에만 넣습니다.)
-3. 모델은 따로 고르지 않아도 됩니다. 함수가 `gemini-3.8-flash` → `gemini-3.5-flash-lite` → `gemini-flash-latest` 순서로 시도합니다.
-   다른 모델을 먼저 쓰고 싶을 때만 3단계에서 `GEMINI_MODEL`로 지정하세요.
+3. 모델은 따로 고르지 않아도 됩니다. 함수가 잘 묶는 모델(`gemini-3.8-flash`)과 빠른 모델(`gemini-3.5-flash-lite`)을 동시에 부르고,
+   잘 묶는 모델이 15초 안에 답하면 그 결과를, 늦으면 빠른 모델의 결과를 씁니다.
+   잘 묶는 쪽을 다른 모델로 바꾸고 싶을 때만 3단계에서 `GEMINI_MODEL`로 지정하세요.
 
 ## 3. Secrets 넣기
 
