@@ -194,6 +194,9 @@
     if (confirm("다른 Knox ID로 다시 입장할까요?")) $("logout").click();
   });
   $("logout").addEventListener("click", () => {
+    // 로그아웃하면 입장도 취소합니다(관리 화면의 입장 인원에서 빠짐). 투표한 내용은 남습니다.
+    // leave.sql 을 아직 실행하지 않았으면 조용히 넘어갑니다.
+    if (me) db.rpc("wc_leave", { p_knox_id: me.knox_id }).then(() => {}, () => {});
     me = null;
     tv = null;
     tvPick = null;
