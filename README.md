@@ -1,7 +1,9 @@
-# Gen Z Lab. 워크샵 플랫폼
+# Gen Z Lab. 26Q4 워크샵 플랫폼
 
 워크샵 하루를 한 사이트로 진행하는 웹앱입니다. 참여자는 Knox ID로 입장하고, 진행자가 관리 화면에서 프로그램을 바꾸면 모든 참여자의 스마트폰 화면이 그 프로그램으로 넘어갑니다.
-70명 안팎의 워크샵을 기준으로 만들었습니다.
+2026년 4분기 Gen Z Lab. 워크샵용으로, 70명 안팎을 기준으로 만들었습니다. 3분기 워크샵에 쓴 [genz-lab-26Q3-workshop-platform](https://github.com/Ooohje/genz-lab-26Q3-workshop-platform)의 명단 · 조 · 관제 방식을 이어받았습니다.
+
+저장소: <https://github.com/Ooohje/genz-lab-26Q4-workshop-platform>
 
 | 프로그램 | 참여자 화면에서 하는 일 |
 |---|---|
@@ -17,9 +19,9 @@
 
 | 화면 | 누가 | 주소 |
 |---|---|---|
-| 참여 (join) | 참여자 · 스마트폰 | <https://ooohje.github.io/genz-lab-Word-Cloud/> |
-| 발표 (screen) | 프로젝터 · 전체화면(F11) | <https://ooohje.github.io/genz-lab-Word-Cloud/screen.html> |
-| 관리 (admin) | 진행자 · 노트북 | <https://ooohje.github.io/genz-lab-Word-Cloud/admin.html> |
+| 참여 (join) | 참여자 · 스마트폰 | <https://ooohje.github.io/genz-lab-26Q4-workshop-platform/> |
+| 발표 (screen) | 프로젝터 · 전체화면(F11) | <https://ooohje.github.io/genz-lab-26Q4-workshop-platform/screen.html> |
+| 관리 (admin) | 진행자 · 노트북 | <https://ooohje.github.io/genz-lab-26Q4-workshop-platform/admin.html> |
 
 참여 주소는 발표 화면의 QR코드로도 열 수 있고, Knox 메신저로 링크를 공유해도 됩니다.
 참여 주소 뒤에 `?p=dinner`나 `?p=teamvote`를 붙이면 진행 중인 프로그램과 상관없이 그 화면을 엽니다(석식 투표 링크만 따로 돌릴 때).
