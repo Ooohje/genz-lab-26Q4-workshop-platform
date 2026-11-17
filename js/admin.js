@@ -215,6 +215,69 @@
 
   $("ai-clear").addEventListener("click", (e) => act("clear_ai", {}, e.currentTarget));
 
+  // ── 내려받기 (CSV, 엑셀에서 바로 열림) ────────────────────────────
+  function cell(v) {
+    let s = v == null ? "" : String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // 엑셀이 수식으로 읽지 않게
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function download(name, table) {
+    const csv = "﻿" + table.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n"; // BOM: 엑셀 한글 깨짐 방지
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function stamp() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-" + p(d.getHours()) + p(d.getMinutes());
+  }
+  const when = (iso) => {
+    const d = iso ? new Date(iso) : null;
+    return d && !isNaN(d) ? d.toLocaleString("sv-SE") : ""; // 2026-11-17 14:03:22 (이 컴퓨터 시간대)
+  };
+
+  // 원본: 받은 답변을 한 줄씩. 참여자는 이름 없이 기기별 번호로만 구분합니다.
+  $("raw-download").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      await resync(); // 방금 들어온 답변까지
+      if (!rows.length) return toast("아직 받은 단어가 없어요");
+      const who = new Map();
+      const table = [["질문", session.question], [],
+        ["번호", "보낸 시각", "참여자", "단어", "숨김"]];
+      rows.forEach((r, i) => {
+        if (!who.has(r.client_id)) who.set(r.client_id, who.size + 1);
+        table.push([i + 1, when(r.created_at), "참여자 " + who.get(r.client_id), r.word, r.hidden ? "숨김" : ""]);
+      });
+      download("워드클라우드-원본-" + stamp() + ".csv", table);
+      toast("원본 " + rows.length + "줄을 내려받았어요");
+    } catch (err) {
+      toast("내려받지 못했어요: " + err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // AI 정리 결과: 대표 단어, 횟수, 묶인 표현
+  $("ai-download").addEventListener("click", () => {
+    const groups = session.ai_groups || [];
+    if (!groups.length) return toast("먼저 AI 정리를 실행해 주세요");
+    const table = [["질문", session.question], [],
+      ["순위", "대표 단어", "횟수", "묶인 표현"]];
+    groups.slice().sort((a, b) => b.count - a.count).forEach((g, i) => {
+      table.push([i + 1, g.label, g.count, (g.members || [g.label]).join(", ")]);
+    });
+    download("워드클라우드-AI정리-" + stamp() + ".csv", table);
+    toast("AI 정리 결과를 내려받았어요");
+  });
+
   $("reset").addEventListener("click", async (e) => {
     if (!confirm("받은 단어와 AI 정리 결과를 모두 지울까요?\n되돌릴 수 없어요.")) return;
     const out = await act("reset", {}, e.currentTarget);

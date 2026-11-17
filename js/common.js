@@ -23,7 +23,7 @@
     for (let from = 0; ; from += 1000) {
       const { data, error } = await db
         .from("words")
-        .select("id, word, normalized, hidden, client_id")
+        .select("id, word, normalized, hidden, client_id, created_at")
         .eq("session_id", sessionId)
         .order("created_at")
         .order("id")

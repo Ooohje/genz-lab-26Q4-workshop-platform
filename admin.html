@@ -247,7 +247,10 @@
           <div class="box" id="ai-box" hidden>
             <div class="between">
               <div class="sub" id="ai-title" style="font-weight:600"></div>
-              <button type="button" class="btn ghost" id="ai-clear" style="height:36px;padding:0 14px;font-size:13px">원본으로 되돌리기</button>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button type="button" class="btn" id="ai-download" style="height:36px;padding:0 14px;font-size:13px">정리 결과 내려받기</button>
+                <button type="button" class="btn ghost" id="ai-clear" style="height:36px;padding:0 14px;font-size:13px">원본으로 되돌리기</button>
+              </div>
             </div>
             <div class="chips" id="ai-chips"></div>
           </div>
@@ -268,6 +271,10 @@
         <div class="between">
           <h2>단어 목록</h2>
           <div class="sub" id="list-note"></div>
+        </div>
+        <div class="between">
+          <div class="sub">받은 답변을 한 줄씩 엑셀(CSV) 파일로 받습니다. 숨긴 단어도 표시와 함께 들어갑니다.</div>
+          <button type="button" class="btn" id="raw-download" style="height:36px;padding:0 14px;font-size:13px">원본 데이터 내려받기</button>
         </div>
         <div class="table-scroll">
           <div class="table">
