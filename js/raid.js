@@ -1,455 +1,14 @@
-<!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="icon" type="image/png" href="assets/favicon.png">
-<title>보스 레이드 시뮬레이터</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
-<script src="js/raid-sim-bgm.js"></script>
-<style>
-/* 화면 세 가지: 진행자(기본) · 참여자(#join, 휴대폰) · 발표 화면(#screen, 프로젝터 전체 화면). 모두 같은 실시간 데이터를 봅니다.
-   글꼴은 Pretendard 하나. 크기는 비율로: 발표 화면은 화면 너비(cqw), 휴대폰은 휴대폰 너비(cqw), 진행자 화면은 rem·%·fr. */
-:root {
-  --bg: #EEF0F7; --panel: #FFFFFF; --ink: #1F2540; --muted: #626A88; --line: #DCE0EE; --soft: #F4F5FA;
-  --coral: #F4775C; --coral-deep: #C2462B; --blue: #4A6FD0; --gold: #FFC23D; --ok: #2E9E6B;
-  --stage: #F7F3EE; --stage-ink: #1F2540;
-  --font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-}
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #121420; --panel: #1C1F30; --ink: #ECEEF8; --muted: #9EA5C2; --line: #2E3350; --soft: #252941; color-scheme: dark;
-} }
-:root[data-theme="dark"] { --bg: #121420; --panel: #1C1F30; --ink: #ECEEF8; --muted: #9EA5C2; --line: #2E3350; --soft: #252941; color-scheme: dark; }
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 0.875rem; line-height: 1.5;
-  word-break: keep-all; overflow-wrap: anywhere; -webkit-text-size-adjust: 100%; }
-button, input, textarea, select { font: inherit; color: inherit; }
-button { cursor: pointer; }
-button:disabled { cursor: default; opacity: 0.45; }
-button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible { outline: 0.2rem solid var(--blue); outline-offset: 0.125rem; }
-a { color: var(--blue); }
-.toast { position: fixed; left: 50%; bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60; max-width: min(92vw, 32rem);
-  padding: 0.6rem 1rem; border-radius: 0.75rem; background: var(--ink); color: var(--panel); font-weight: 700; font-size: 0.8rem; }
-
-/* 캐릭터 그림 칸: 넘어져도 이 칸 안에서 */
-.art { position: relative; aspect-ratio: 16 / 18; }
-.art > svg { transform-origin: 50% 50%; }
-
-/* ── 진행자 화면 ─────────────────────────────────────────────── */
-.host { position: sticky; top: 0; z-index: 5; padding: calc(0.75rem + env(safe-area-inset-top, 0px)) max(2.5%, env(safe-area-inset-right, 0px)) 0.75rem max(2.5%, env(safe-area-inset-left, 0px));
-  background: var(--panel); border-bottom: 0.0625rem solid var(--line); }
-.host-in { max-width: 90rem; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; }
-.brand { display: flex; align-items: baseline; gap: 0.6rem; margin-right: auto; flex-wrap: wrap; min-width: 0; }
-.brand h1 { margin: 0; font-weight: 800; font-size: 1.5rem; letter-spacing: -0.02em; }
-.brand h1 span { color: inherit; }
-.live { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--muted); }
-.live i { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--muted); }
-.live.on i { background: var(--ok); }
-.step { display: inline-flex; align-items: center; min-height: 1.75rem; padding: 0 0.75rem; border-radius: 0.875rem; background: var(--ink); color: var(--panel); font-size: 0.75rem; font-weight: 700; }
-.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 2.5rem; padding: 0 1rem; border-radius: 0.75rem; border: 0.0625rem solid var(--line); background: var(--soft);
-  font-weight: 700; font-size: 0.875rem; color: var(--ink); text-decoration: none; }
-.btn.go { background: var(--coral); border-color: var(--coral); color: #1F2540; }
-.btn.quiet { background: transparent; border-color: transparent; color: var(--muted); }
-.btn.sm { min-height: 1.9rem; padding: 0 0.65rem; font-size: 0.78rem; }
-.login { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.login input { min-height: 2.5rem; width: 12.5rem; max-width: 100%; padding: 0 0.75rem; border-radius: 0.75rem; border: 0.0625rem solid var(--line); background: var(--panel); font-size: 0.875rem; }
-.hostview { padding: 0 max(2.5%, env(safe-area-inset-right, 0px)) 2.5rem max(2.5%, env(safe-area-inset-left, 0px)); }
-.tabs { max-width: 90rem; margin: 1rem auto 0; display: flex; gap: 0.4rem; flex-wrap: wrap; }
-.tabs button { min-height: 2.25rem; padding: 0 0.9rem; border-radius: 0.625rem; border: 0.0625rem solid var(--line); background: transparent; color: var(--muted); font-weight: 700; }
-.tabs button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
-.wrap { max-width: 90rem; margin: 1rem auto 0; display: flex; flex-direction: column; gap: 1rem; }
-.sec-title { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.4rem; }
-.small { font-size: 0.75rem; color: var(--muted); }
-.top { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
-.side { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
-.panel { background: var(--panel); border: 0.0625rem solid var(--line); border-radius: 0.875rem; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
-.panel h2 { margin: 0; font-size: 0.95rem; font-weight: 800; }
-.join-box { display: grid; grid-template-columns: 30% minmax(0, 1fr); gap: 0.9rem; align-items: center; }
-.join-side { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
-.qr { width: 100%; aspect-ratio: 1; padding: 5%; border-radius: 0.625rem; background: #fff; }
-.qr svg { width: 100%; height: 100%; display: block; }
-.link { font-size: 0.78rem; word-break: break-all; padding: 0.4rem 0.5rem; border-radius: 0.5rem; background: var(--soft); user-select: all; }
-.secret { padding: 0.6rem 0.75rem; border-radius: 0.625rem; background: var(--soft); font-size: 0.8rem; line-height: 1.55; }
-.secret b { color: var(--coral-deep); }
-.res-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-.res-table th, .res-table td { padding: 0.4rem 0.25rem; border-top: 0.0625rem solid var(--line); text-align: left; vertical-align: top; }
-.res-table th { color: var(--muted); font-weight: 500; border-top: none; white-space: nowrap; }
-.res-table td:first-child, .res-table .n { white-space: nowrap; }
-.res-table .n { text-align: right; font-variant-numeric: tabular-nums; }
-.res-table .ok { color: var(--coral-deep); font-weight: 700; }
-.who-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
-.who { display: grid; grid-template-columns: 16% minmax(0, 1fr); gap: 0.5rem; align-items: center; padding: 0.4rem 0.5rem; border-radius: 0.625rem; background: var(--soft); font-size: 0.78rem; min-width: 0; }
-.who .art { border-radius: 0.375rem; background: rgba(127, 127, 127, 0.15); }
-.who b { display: block; }
-.who .small { display: block; }
-.dot { display: inline-block; width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--muted); margin-right: 0.25rem; vertical-align: 0.06rem; }
-.dot.on { background: var(--ok); }
-.reset-seats { align-self: flex-start; }
-/* 보스·규칙 설정 탭 */
-.settings { max-width: 60rem; }
-.cfg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12.5rem), 1fr)); gap: 0.75rem; }
-.f { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.78rem; font-weight: 700; color: var(--muted); min-width: 0; }
-.f small { font-weight: 400; font-size: 0.72rem; line-height: 1.4; }
-.f input[type="text"], .f input[type="number"], .f textarea { width: 100%; min-width: 0; padding: 0.5rem 0.6rem; border-radius: 0.625rem; border: 0.0625rem solid var(--line); background: var(--panel); color: var(--ink); font-size: 0.875rem; font-weight: 400; }
-.f textarea { resize: vertical; }
-.f input:disabled, .f textarea:disabled { opacity: 0.5; }
-.num { display: flex; align-items: center; gap: 0.4rem; }
-.num input { flex: 1; }
-.num em { font-style: normal; font-weight: 400; }
-.f-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
-.bcount { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem; }
-.bcount select { min-height: 2.25rem; padding: 0 0.6rem; border-radius: 0.625rem; border: 0.0625rem solid var(--line); background: var(--panel); font-size: 0.875rem; font-weight: 700; }
-.bcard { border: 0.0625rem solid var(--line); border-radius: 0.75rem; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; background: var(--soft); }
-.bcard-h { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; }
-.bcard-h b { font-size: 0.95rem; }
-.bexp { font-size: 0.75rem; color: var(--muted); margin-right: auto; }
-.bact { display: flex; gap: 0.25rem; }
-.checks { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; }
-.chk { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; font-weight: 700; color: var(--ink); cursor: pointer; }
-.chk input { width: 1.1rem; height: 1.1rem; margin: 0; }
-.save-bar { position: sticky; bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)); z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem;
-  border: 0.0625rem solid var(--line); border-radius: 0.875rem; background: var(--panel); box-shadow: 0 -0.5rem 1.5rem -1.1rem rgba(0, 0, 0, 0.4); }
-.save-bar [data-dirty] { margin-right: auto; }
-.row { display: flex; gap: 0.4rem; }
-.row > * { flex: 1; }
-.row.left { flex-wrap: wrap; }
-.row.left > * { flex: 0 0 auto; }
-.notice { padding: 0.6rem 0.75rem; border-radius: 0.75rem; background: #FFF4D6; color: #6B4A00; font-size: 0.8rem; }
-
-/* ── 발표 화면 (16:9, 모든 크기는 화면 너비의 %: cqw) ─────────────── */
-.proj-box { container-type: inline-size; }
-.proj { position: relative; aspect-ratio: 16 / 9; border-radius: 1cqw; overflow: hidden; color: var(--stage-ink);
-  background: radial-gradient(120% 90% at 85% 10%, #F6C9D8 0%, transparent 55%), radial-gradient(90% 80% at 10% 100%, #BFD0F5 0%, transparent 60%), var(--stage);
-  box-shadow: 0 0.8cqw 2.2cqw -1.2cqw rgba(31, 37, 64, 0.45); }
-.screen-only { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #0E1018; z-index: 30; }
-.screen-only .proj-box { width: min(100vw, 177.78vh); }
-.screen-only .proj { border-radius: 0; }
-.pv { position: absolute; inset: 0; padding: 4cqw 4.4cqw; display: flex; flex-direction: column; gap: 1.6cqw; min-height: 0; }
-.pv > * { min-height: 0; }
-.pv .eyebrow { font-size: 1.4cqw; font-weight: 700; color: var(--coral-deep); }
-.pv .h { font-weight: 800; font-size: 4cqw; line-height: 1.15; letter-spacing: -0.02em; text-wrap: balance; }
-.pv .sub { font-size: 1.6cqw; color: #545C7A; line-height: 1.45; }
-.glass { background: rgba(255, 255, 255, 0.72); border-radius: 1.4cqw; }
-.pv-center { align-items: center; justify-content: center; text-align: center; }
-.title-glow { color: inherit; }
-.stat-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.2cqw; }
-.stat-card { padding: 1.4cqw; display: flex; flex-direction: column; gap: 0.6cqw; border-top: 0.45cqw solid var(--c); min-width: 0; }
-.stat-card .art { width: 50%; align-self: center; }
-.stat-card b { font-weight: 800; font-size: 2.4cqw; color: var(--c); }
-.stat-card span { font-size: 1.25cqw; line-height: 1.4; }
-.pv-foot { margin-top: auto; display: flex; gap: 1.2cqw; align-items: stretch; }
-.count { display: flex; align-items: baseline; gap: 0.8cqw; padding: 1.2cqw 2cqw; font-size: 1.6cqw; font-weight: 700; }
-.count b { font-weight: 800; font-size: 4.4cqw; font-variant-numeric: tabular-nums; }
-.pv-qr { display: flex; align-items: center; gap: 1.2cqw; padding: 1cqw 1.6cqw; font-size: 1.4cqw; font-weight: 700; margin-left: auto; text-align: left; }
-.pv-qr .q { width: 8cqw; aspect-ratio: 1; background: #fff; padding: 0.4cqw; border-radius: 0.6cqw; }
-.pv-qr .q svg { width: 100%; height: 100%; display: block; }
-.pv-qr.big { margin: 0; flex-direction: column; text-align: center; padding: 1.4cqw; gap: 0.8cqw; font-size: 1.5cqw; }
-.pv-qr.big .q { width: 14cqw; }
-.lobby-row { display: flex; align-items: stretch; justify-content: center; gap: 1.6cqw; margin-top: 1cqw; }
-.lobby-row .count { flex-direction: column; align-items: center; justify-content: center; gap: 0.2cqw; padding: 1.6cqw 3cqw; }
-.qs { margin: 0; padding-left: 3.4cqw; display: flex; flex-direction: column; gap: 1.2cqw; font-size: 2.4cqw; line-height: 1.35; }
-.qs b { color: var(--coral-deep); }
-.timer { font-weight: 800; font-size: 4.4cqw; padding: 0.6cqw 2cqw; font-variant-numeric: tabular-nums; display: flex; align-items: center; justify-content: center; }
-.timer.urgent { color: var(--coral-deep); }
-.rules-box { padding: 2cqw 3cqw; max-width: 90%; }
-.rules { margin: 0; padding-left: 3cqw; display: flex; flex-direction: column; gap: 1cqw; font-size: 1.9cqw; line-height: 1.4; text-align: left; }
-.boss-row { flex: 1 1 auto; display: grid; grid-template-columns: 20% minmax(0, 1fr); gap: 2.6cqw; align-items: center; padding: 2.2cqw 2.6cqw; }
-.boss-art { display: block; width: 100%; aspect-ratio: 12 / 11; animation: bob 1.6s ease-in-out infinite alternate; }
-.boss-name { font-weight: 800; font-size: 3.4cqw; line-height: 1.2; letter-spacing: -0.02em; text-wrap: balance; }
-.boss-desc { font-size: 1.7cqw; line-height: 1.5; margin-top: 0.6cqw; }
-.chips { display: flex; flex-wrap: wrap; gap: 0.6cqw; margin-top: 1cqw; }
-.chips span { padding: 0.35cqw 1.1cqw; border-radius: 2cqw; background: #fff; font-size: 1.3cqw; font-weight: 700; }
-.chips .hot { background: var(--coral); }
-.meet-foot { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 1.2cqw; }
-.hint { display: flex; align-items: center; gap: 1cqw; padding: 1.2cqw 1.8cqw; font-size: 1.8cqw; font-weight: 700; }
-.hint em { font-style: normal; flex-shrink: 0; padding: 0.3cqw 0.9cqw; border-radius: 1cqw; background: var(--stage-ink); color: #fff; font-size: 1.2cqw; }
-.mini-count { display: flex; align-items: baseline; gap: 0.6cqw; padding: 0.8cqw 1.8cqw; font-size: 1.3cqw; font-weight: 700; }
-.mini-count b { font-weight: 800; font-size: 3.3cqw; }
-.event-note { padding: 0.8cqw 1.6cqw; font-size: 1.3cqw; font-weight: 700; }
-.fighters { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.6cqw; align-content: center; }
-.fighter { display: grid; grid-template-columns: 34% minmax(0, 1fr); gap: 1.6cqw; align-items: center; padding: 2cqw; animation: rise 0.6s both; min-width: 0; }
-.fighter b { font-weight: 800; font-size: 3cqw; display: block; line-height: 1.2; }
-.fighter span { font-size: 1.5cqw; color: #545C7A; }
-.fighters.many { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1cqw; }
-.fighters.many .fighter { gap: 0.8cqw; padding: 1cqw; }
-.fighters.many .fighter b { font-size: 1.9cqw; }
-.fighters.many .fighter span { font-size: 1.15cqw; }
-.reveal-head { display: flex; flex-direction: column; gap: 0.4cqw; }
-.reveal-head .sub { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.reveal-stats { font-weight: 800; font-size: 4.6cqw; line-height: 1.1; animation: pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-.result-line { font-size: 1.45cqw; font-weight: 700; color: var(--stage-ink); margin-top: 0.4cqw; line-height: 1.45; }
-.bars { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 1.6cqw; padding: 2cqw 2.4cqw; }
-.bar-row { display: grid; grid-template-columns: 7cqw 15cqw minmax(0, 1fr) 15cqw; gap: 1.4cqw; align-items: center; animation: rise 0.5s 0.3s both; min-width: 0; }
-.bar-row .nm { min-width: 0; }
-.bar-row .nm b { font-weight: 800; font-size: 2.3cqw; display: block; line-height: 1.2; }
-.bar-row .nm span { font-size: 1.4cqw; color: #545C7A; }
-.track { position: relative; height: 3cqw; border-radius: 1.5cqw; background: rgba(31, 37, 64, 0.08); }
-.track i { position: absolute; inset: 0 auto 0 0; max-width: 100%; border-radius: 1.5cqw; background: var(--blue); animation: grow 2.6s 0.8s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.bar-row.win .track i { background: var(--coral); }
-.track::after { content: ""; position: absolute; top: -0.8cqw; bottom: -0.8cqw; left: var(--hp); border-left: 0.3cqw dashed var(--coral-deep); }
-.res { display: flex; flex-direction: column; align-items: flex-start; gap: 0.2cqw; min-width: 0; }
-.res b { font-weight: 800; font-size: 3cqw; line-height: 1; font-variant-numeric: tabular-nums; }
-.res span { font-size: 1.3cqw; font-weight: 700; }
-.res .dice-note { font-weight: 500; }
-.bar-row.win .res b { color: var(--coral-deep); }
-.star { padding: 0.1cqw 0.7cqw; border-radius: 0.8cqw; background: var(--gold); font-size: 1.1cqw; font-weight: 900; }
-.hp-note { display: flex; align-items: center; gap: 0.8cqw; font-size: 1.3cqw; font-weight: 700; color: var(--coral-deep); }
-.hp-note i { display: inline-block; width: 2.4cqw; border-top: 0.3cqw dashed var(--coral-deep); }
-/* 조 5~6개: 한 줄씩 촘촘하게 */
-.pv.many { gap: 1cqw; padding-block: 2.8cqw; }
-.pv.many .reveal-stats { font-size: 3.2cqw; }
-.pv.many .reveal-head .sub { font-size: 1.35cqw; }
-.pv.many .result-line { font-size: 1.25cqw; }
-.bars.many { gap: 0.4cqw; padding: 1.2cqw 2cqw; justify-content: space-between; }
-.bars.many .bar-row { grid-template-columns: 3.2cqw 13cqw minmax(0, 1fr) 21cqw; gap: 1cqw; }
-.bars.many .bar-row .nm b { font-size: 1.6cqw; display: inline; margin-right: 0.6cqw; }
-.bars.many .bar-row .nm span { font-size: 1.1cqw; }
-.bars.many .track { height: 1.6cqw; }
-.bars.many .res, .bars.cols .res { flex-direction: row; align-items: baseline; gap: 0.6cqw; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
-.bars.many .res b { font-size: 1.9cqw; }
-.bars.many .res span { font-size: 1.05cqw; }
-.bars.many .res .dice-note, .bars.cols .res .dice-note { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-/* 조 7개 이상: 양옆 두 줄 (왼쪽 1~절반, 오른쪽 나머지) */
-.bars.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto repeat(var(--rows, 6), minmax(0, 1fr)); grid-auto-flow: column;
-  column-gap: 3cqw; row-gap: 0.3cqw; align-items: center; padding: 1.2cqw 2cqw; }
-.bars.cols .hp-note { grid-column: 1 / -1; grid-row: 1; margin-bottom: 0.4cqw; }
-.bars.cols .bar-row { grid-template-columns: 2.8cqw 9.5cqw minmax(0, 1fr) 18cqw; gap: 0.8cqw; }
-.bars.cols .bar-row .nm b { font-size: 1.5cqw; display: inline; margin-right: 0.5cqw; }
-.bars.cols .bar-row .nm span { font-size: 1.05cqw; }
-.bars.cols .track { height: 1.4cqw; }
-.bars.cols .track::after { top: -0.5cqw; bottom: -0.5cqw; border-left-width: 0.22cqw; }
-.bars.cols .res b { font-size: 1.7cqw; }
-.bars.cols .res span { font-size: 0.95cqw; }
-.bars.cols.dense .bar-row { grid-template-columns: 2.1cqw 9.5cqw minmax(0, 1fr) 18cqw; }
-.bars.cols.dense .bar-row .nm b { font-size: 1.3cqw; }
-.bars.cols.dense .res b { font-size: 1.45cqw; }
-.podium { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3cqw; align-items: end; padding: 0 10%; }
-.podium > div { display: flex; flex-direction: column; gap: 1cqw; text-align: center; animation: rise 0.8s both; min-width: 0; }
-.podium b { font-weight: 800; font-size: 3.4cqw; }
-.podium span { font-size: 1.6cqw; font-weight: 700; }
-.podium .block { font-weight: 800; font-size: 3.4cqw; border-radius: 1.6cqw 1.6cqw 0 0; display: flex; align-items: center; justify-content: center; }
-.podium .r1 .block { height: 22cqw; background: rgba(255, 194, 61, 0.8); }
-.podium .r2 .block { height: 14cqw; }
-.podium .r3 .block { height: 9cqw; }
-.rank-list { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(var(--rows, 6), minmax(0, auto)); grid-auto-flow: column; align-content: center; gap: 0.6cqw 3cqw; padding: 2cqw 3cqw; }
-.rank-list .rk { display: grid; grid-template-columns: 6cqw minmax(0, 1fr) auto; align-items: baseline; gap: 1cqw; padding: 0.6cqw 1.2cqw; border-radius: 1cqw; font-size: 1.8cqw; font-weight: 700; }
-.rank-list .rk b { font-weight: 800; font-size: 2.3cqw; }
-.rank-list .rk.top { background: rgba(255, 194, 61, 0.8); }
-/* 돌발 이벤트 주사위 */
-.die { display: inline-block; width: 7cqw; aspect-ratio: 1; flex: 0 0 auto; }
-.die svg { display: block; width: 100%; height: 100%; }
-.die.rolling { animation: shake 0.28s linear infinite; }
-.die.best svg .face { stroke: var(--gold); stroke-width: 9; }
-.die.dim { opacity: 0.38; }
-.dice-grid { flex: 1; display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 1.4cqw; align-content: center; }
-.dice-team { display: flex; flex-direction: column; align-items: center; gap: 1cqw; padding: 1.6cqw 1.2cqw; text-align: center; min-width: 0; }
-.dice-team .dwho { font-size: 1.5cqw; font-weight: 700; color: #545C7A; }
-.dice-team .dwho b { font-weight: 800; font-size: 2.6cqw; color: var(--stage-ink); display: block; }
-/* 돌발 이벤트 룰렛 */
-.reel { display: flex; align-items: center; justify-content: center; width: 92%; min-height: 5cqw; padding: 0.6cqw 1.2cqw; border-radius: 1cqw; background: #fff; border: 0.3cqw solid var(--line);
-  font-weight: 800; font-size: 1.9cqw; text-align: center; overflow: hidden; white-space: nowrap; }
-.reel.spinning span { display: inline-block; animation: reel-tick 0.12s linear infinite; }
-.reel.done { border-color: var(--gold); animation: pop 0.4s both; }
-.reel.good { color: var(--coral-deep); }
-@keyframes reel-tick { 0% { transform: translateY(-35%); opacity: 0.35; } 50% { transform: none; opacity: 1; } 100% { transform: translateY(35%); opacity: 0.35; } }
-.dice-grid.many .reel { font-size: 1.3cqw; min-height: 3.4cqw; }
-.dice-grid.dense .reel { font-size: 1cqw; min-height: 2.6cqw; border-width: 0.2cqw; }
-.pdice .reel { width: 100%; font-size: 6cqw; min-height: 16cqw; border-radius: 3cqw; border-width: 0.8cqw; }
-/* 결과 공개: 출전자의 판정 스탯 값 */
-.stv { display: block; font-style: normal; font-size: 1.15cqw; font-weight: 700; color: var(--blue); }
-.bars.many .stv { font-size: 1cqw; }
-.bars.cols .stv { font-size: 0.85cqw; }
-.practice-tag { display: inline-block; padding: 0.1cqw 0.8cqw; border-radius: 0.8cqw; background: #DDE6FF; color: var(--blue); font-size: 1.1cqw; font-weight: 800; vertical-align: 0.3cqw; }
-/* 설정: 룰렛 칸 */
-.spin-row { display: grid; grid-template-columns: 1.5rem minmax(0, 10rem) 5rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; }
-.spin-row select, .spin-row input { min-height: 2.25rem; padding: 0 0.5rem; border-radius: 0.625rem; border: 0.0625rem solid var(--line); background: var(--panel); color: var(--ink); font-size: 0.875rem; min-width: 0; width: 100%; }
-.spin-label { font-weight: 700; font-size: 0.85rem; }
-@media (max-width: 40rem) { .spin-row { grid-template-columns: 1.5rem minmax(0, 1fr) 5rem; } .spin-label { grid-column: 2 / -1; } .spin-row .bact { grid-column: 2 / -1; } }
-.ev-alert { color: var(--coral-deep); animation: alert 0.5s steps(2) 4; }
-@keyframes alert { 50% { opacity: 0.25; transform: scale(1.04); } }
-.card .ev-alert { font-size: 5.6cqw; font-weight: 900; text-align: center; }
-.dice-row { display: flex; gap: 0.8cqw; justify-content: center; flex-wrap: wrap; }
-.dice-team .eff { font-weight: 800; font-size: 2.3cqw; }
-.eff.up { color: var(--coral-deep); }
-.dice-grid.many { gap: 1cqw; }
-.dice-grid.many .die { width: 3.6cqw; }
-.dice-grid.many .dice-team { padding: 0.8cqw; gap: 0.4cqw; }
-.dice-grid.many .dice-team .dwho { font-size: 1.1cqw; }
-.dice-grid.many .dice-team .dwho b { font-size: 1.7cqw; }
-.dice-grid.many .dice-team .eff { font-size: 1.3cqw; }
-/* 조 13개 이상: 더 작게, 한 줄에 더 많이 */
-.fighters.many.dense { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.8cqw; }
-.fighters.many.dense .fighter { grid-template-columns: 28% minmax(0, 1fr); padding: 0.7cqw; gap: 0.7cqw; }
-.fighters.many.dense .fighter b { font-size: 1.6cqw; }
-.fighters.many.dense .fighter span { font-size: 1cqw; }
-.dice-grid.dense { gap: 0.6cqw; }
-.dice-grid.dense .dice-team { padding: 0.6cqw; gap: 0.3cqw; }
-.dice-grid.dense .die { width: 2.8cqw; }
-.dice-grid.dense .dice-row { gap: 0.4cqw; }
-.dice-grid.dense .dice-team .dwho { font-size: 1cqw; }
-.dice-grid.dense .dice-team .dwho b { font-size: 1.4cqw; }
-.dice-grid.dense .dice-team .eff { font-size: 1.05cqw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-
-/* 격파 실패: 게이지가 다 찬 뒤 캐릭터가 자기 칸 안에서 옆으로 쓰러지고 회색으로 */
-.bar-row.lose .art > svg { animation: fall 0.7s 3.4s ease-in both; }
-.pfight.lose .art > svg { animation: lunge 0.5s 0.2s, fall 0.7s 1.3s ease-in both; }
-@keyframes fall {
-  0% { transform: none; filter: none; }
-  65% { transform: translateY(12%) rotate(100deg) scale(0.85); }
-  100% { transform: translateY(12%) rotate(90deg) scale(0.85); filter: grayscale(1) opacity(0.55); }
-}
-
-/* 결과 공개: 보스 타격 연출 (게이지가 차는 0.8~3.4초 동안 보스가 맞고, 3.4초에 K.O. 또는 쓰러짐) */
-.reveal-top { display: grid; grid-template-columns: minmax(0, 1fr) 15cqw; gap: 2cqw; align-items: center; }
-.pv.many .reveal-top { grid-template-columns: minmax(0, 1fr) 10cqw; }
-.boss-hit { display: flex; flex-direction: column; align-items: center; gap: 0.5cqw; min-width: 0; }
-.boss-box { position: relative; width: 72%; }
-.boss-box .boss-art, .pboss .boss-art { animation: hit-shake 0.42s 0.8s 6; }
-.boss-hit.ko .boss-art { animation: hit-shake 0.42s 0.8s 6, boss-down 0.6s 3.4s forwards; }
-.ko-stamp { position: absolute; left: -15%; right: -15%; top: 28%; text-align: center; font-weight: 900; font-size: 2.6cqw; color: var(--coral-deep); letter-spacing: 0.04em;
-  text-shadow: 0.15cqw 0.15cqw 0 #fff; animation: stamp 0.4s 3.4s both; pointer-events: none; }
-.bhp { width: 100%; height: 1.1cqw; border-radius: 0.6cqw; background: rgba(31, 37, 64, 0.12); overflow: hidden; }
-.bhp i { display: block; height: 100%; width: 100%; border-radius: 0.6cqw; background: var(--coral-deep); animation: drain 2.6s 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
-.bhp-t { font-size: 1.15cqw; font-weight: 700; color: var(--coral-deep); white-space: nowrap; }
-.track .spark { position: absolute; top: 50%; width: 3.2cqw; aspect-ratio: 1; transform: translate(-50%, -50%) scale(0); pointer-events: none;
-  background: radial-gradient(circle, #fff 0 22%, var(--gold) 23% 100%); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
-  animation: spark 0.6s 3.3s both; }
-.bars.cols .track .spark, .bars.many .track .spark { width: 2cqw; }
-.bar-row.win .art > svg { animation: cheer 0.45s 3.4s 2; }
-@keyframes hit-shake { 0% { transform: none; filter: none; } 20% { transform: translateX(-6%) rotate(-3deg); filter: brightness(2.2); } 45% { transform: translateX(5%) rotate(2deg); } 70% { transform: translateX(-3%); } 100% { transform: none; filter: none; } }
-@keyframes boss-down { to { transform: translateY(8%) rotate(-10deg); filter: grayscale(1) opacity(0.55); } }
-@keyframes stamp { from { opacity: 0; transform: rotate(-12deg) scale(2.4); } to { opacity: 1; transform: rotate(-12deg) scale(1); } }
-@keyframes drain { to { width: var(--left); } }
-@keyframes spark { 0% { transform: translate(-50%, -50%) scale(0); opacity: 1; } 55% { transform: translate(-50%, -50%) scale(1.25); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.5) rotate(30deg); opacity: 0; } }
-@keyframes cheer { 50% { transform: translateY(-14%); } }
-@keyframes lunge { 45% { transform: translateX(28%) rotate(8deg); } }
-/* BGM 버튼 */
-.bgm-btn { border: 0.0625rem solid var(--line); background: var(--panel); color: var(--ink); border-radius: 0.8rem; padding: 0.1rem 0.6rem; font-size: 0.72rem; font-weight: 700; margin-left: 0.4rem; }
-.bgm-btn.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
-.bgm-float { position: fixed; right: 1.5vmin; bottom: 1.5vmin; z-index: 31; border: 0; border-radius: 2vmin; padding: 0.8vmin 1.6vmin; font-size: 1.8vmin; font-weight: 700; background: rgba(255, 255, 255, 0.14); color: #fff; opacity: 0.55; }
-.bgm-float:hover, .bgm-float:focus-visible { opacity: 1; }
-
-/* ── 휴대폰 (진행자 화면의 미리보기와 실제 휴대폰이 같은 모양. 크기는 휴대폰 너비의 %: cqw) ── */
-.phones { display: flex; flex-direction: column; gap: 1.25rem; }
-.team-group { min-width: 0; display: flex; flex-direction: column; gap: 0.4rem; }
-.team-label { font-weight: 700; font-size: 0.8rem; color: var(--muted); }
-.team-phones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
-.phone { container-type: inline-size; min-width: 0; aspect-ratio: 9 / 17; border-radius: 1.6rem; border: 0.375rem solid #1F2540; background: #FBF9F6; color: #1F2540; display: flex; flex-direction: column; overflow: hidden; }
-.joinview { min-height: 100vh; min-height: 100dvh; display: flex; justify-content: center; color: #1F2540; background: #FBF9F6; }
-.pwrap { container-type: inline-size; width: min(100%, 34rem); display: flex; flex-direction: column; padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px); }
-.phone-bar { display: flex; align-items: center; gap: 1.6cqw; padding: 2.2cqw 3.4cqw; background: #fff; border-bottom: 0.25cqw solid #ECEAF2; font-size: 3.2cqw; color: #1F2540; }
-.phone-bar b { font-size: 3.6cqw; margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.phone-bar > span { padding: 0.3cqw 2.2cqw; border-radius: 2.4cqw; background: #EEF0F7; font-weight: 700; white-space: nowrap; }
-.phone-bar .btn { min-height: 0; height: 7.4cqw; padding: 0 2.2cqw; font-size: 3cqw; }
-.joinview .phone-bar { position: sticky; top: 0; z-index: 3; padding-top: calc(2.2cqw + env(safe-area-inset-top, 0px)); }
-.screen { flex: 1; min-height: 0; overflow-y: auto; padding: 3.2cqw; display: flex; flex-direction: column; gap: 2.6cqw; font-size: 3.6cqw; }
-.joinview .screen { flex: none; overflow: visible; padding: 3.6cqw 3.6cqw calc(6cqw + env(safe-area-inset-bottom, 0px)); }
-.screen h3 { margin: 0; font-weight: 800; font-size: 5.8cqw; line-height: 1.25; letter-spacing: -0.02em; }
-.card { background: #fff; border-radius: 3.6cqw; padding: 3.2cqw; display: flex; flex-direction: column; gap: 2cqw; box-shadow: 0 0.25cqw 0 #ECEAF2; min-width: 0; }
-.card .t { font-weight: 700; font-size: 3.7cqw; }
-.muted { color: #6B7290; font-size: 3.3cqw; line-height: 1.5; }
-.remain { font-weight: 700; font-size: 3.4cqw; padding: 1.6cqw 2.6cqw; border-radius: 2.6cqw; background: rgba(244, 119, 92, 0.15); }
-.remain.done { background: rgba(46, 158, 107, 0.15); }
-.stepper { display: grid; grid-template-columns: 14% 10% minmax(0, 1fr) 6% 10%; align-items: center; gap: 1.6cqw; font-size: 3.4cqw; font-weight: 700; }
-.stepper > span:last-of-type { text-align: center; font-variant-numeric: tabular-nums; }
-.stepper button { aspect-ratio: 1; width: 100%; border-radius: 2.6cqw; border: none; background: #1F2540; color: #fff; font-size: 5cqw; line-height: 1; }
-.bar { height: 2.4cqw; border-radius: 1.3cqw; background: #ECEEF5; overflow: hidden; }
-.bar b { display: block; height: 100%; }
-.pbtn { min-height: 11cqw; border-radius: 3cqw; border: none; background: var(--coral); color: #1F2540; font-weight: 800; font-size: 3.7cqw; padding: 0 3cqw; }
-.pbtn.ghost { background: #EEF0F7; }
-.pc { display: grid; grid-template-columns: 16% minmax(0, 1fr); gap: 2.6cqw; align-items: center; padding: 2cqw; border-radius: 3cqw; text-align: left; border: 0.5cqw solid transparent;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--aura) 16%, #fff), #fff); width: 100%; color: #1F2540; }
-.pc .art { background: rgba(255, 255, 255, 0.8); border-radius: 2cqw; padding: 0.5cqw; }
-.pc .ttl { font-size: 2.9cqw; font-weight: 700; color: color-mix(in srgb, var(--aura) 75%, #1F2540); }
-.pc .nm { font-weight: 800; font-size: 3.7cqw; }
-.pc .tag, .tag { display: inline-block; font-size: 2.7cqw; padding: 0 1.5cqw; border-radius: 1.5cqw; background: #EEF0F7; margin-left: 1cqw; font-weight: 700; vertical-align: 0.2cqw; }
-.pc.on { border-color: #1F2540; }
-.pc.big { grid-template-columns: 26% minmax(0, 1fr); }
-.pc.empty { background: #F4F5FA; border: 0.5cqw dashed #DCE0EE; }
-.mstats { display: grid; grid-template-columns: 15% minmax(0, 1fr) 5%; gap: 0.5cqw 1.3cqw; align-items: center; font-size: 2.8cqw; font-weight: 700; margin-top: 0.5cqw; }
-.mstats > span:nth-child(3n) { text-align: right; font-variant-numeric: tabular-nums; }
-.mstats i { height: 1.3cqw; border-radius: 0.8cqw; background: #ECEEF5; overflow: hidden; }
-.mstats i b { display: block; height: 100%; }
-.ptimer { font-weight: 800; font-size: 6.2cqw; color: var(--coral-deep); font-variant-numeric: tabular-nums; line-height: 1.15; }
-.ptimer.inline { font-size: 4.4cqw; margin-left: auto; }
-.t-row { display: flex; align-items: baseline; gap: 2cqw; }
-.outcome { font-weight: 800; font-size: 6.2cqw; }
-.outcome.win { color: var(--coral-deep); }
-.rank-row { display: grid; grid-template-columns: 14% minmax(0, 1fr) auto; padding: 2cqw 2.6cqw; border-radius: 2.6cqw; font-size: 3.6cqw; }
-.rank-row.mine { background: #1F2540; color: #fff; }
-.phone-chips { display: flex; flex-wrap: wrap; gap: 1cqw; }
-.phone-chips span { padding: 0.3cqw 2cqw; border-radius: 2cqw; background: #EEF0F7; font-size: 3cqw; font-weight: 700; }
-.phone-chips .hot { background: var(--coral); }
-.boss-mini { display: grid; grid-template-columns: 18% minmax(0, 1fr); gap: 3cqw; align-items: center; }
-.boss-mini .boss-art { animation: none; }
-.boss-mini .t { font-size: 4.2cqw; line-height: 1.3; }
-.slot { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2cqw; padding: 3cqw; border-radius: 3cqw; border: 0.5cqw solid #ECEAF2; background: #fff; text-align: left; width: 100%; color: #1F2540; }
-.slot b { font-size: 3.9cqw; }
-.slot.taken { opacity: 0.7; }
-.namebox { width: 100%; min-height: 11cqw; padding: 0 3cqw; border-radius: 2.6cqw; border: 0.4cqw solid #DCE0EE; font-size: max(1rem, 3.9cqw); background: #fff; color: #1F2540; }
-.screen .notice { border-radius: 3cqw; font-size: 3.3cqw; padding: 2.6cqw 3cqw; }
-.pfight { display: grid; grid-template-columns: 24% minmax(0, 1fr) 24%; gap: 2cqw; align-items: center; text-align: center; }
-.pfight .art > svg { animation: lunge 0.5s 0.2s; }
-.pvs { display: flex; flex-direction: column; align-items: center; }
-.pdmg { font-weight: 900; font-size: 9cqw; line-height: 1; color: var(--coral-deep); animation: pop 0.4s 0.45s both; }
-.pvs span { font-size: 3cqw; color: #6B7290; font-weight: 700; }
-.pboss { position: relative; }
-.php { height: 3.2cqw; border-radius: 1.6cqw; background: #ECEEF5; overflow: hidden; }
-.php i { display: block; height: 100%; width: 100%; border-radius: 1.6cqw; background: var(--coral-deep); animation: drain 0.9s 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
-.php-t { font-size: 3.3cqw; font-weight: 700; color: var(--coral-deep); text-align: center; }
-.pboss .boss-art { animation: hit-shake 0.42s 0.45s 2; }
-.pfight.win .pboss .boss-art { animation: hit-shake 0.42s 0.45s 2, boss-down 0.6s 1.3s forwards; }
-.pboss .ko-stamp { font-size: 6cqw; animation-delay: 1.3s; text-shadow: none; }
-.fold { display: flex; flex-direction: column; gap: 1cqw; }
-.fold:not(.open) .ftxt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.more { align-self: flex-start; border: 0; background: none; padding: 0; color: var(--blue); font-weight: 700; font-size: 3.2cqw; }
-.pdice .die { width: 16cqw; }
-.pdice .dice-row { gap: 2.6cqw; }
-.pdice .eff { font-weight: 800; font-size: 5.6cqw; }
-/* 점수 규칙 (i) */
-.info-btn { width: 7.7cqw; aspect-ratio: 1; border-radius: 50%; border: 0.4cqw solid #1F2540; background: #fff; color: #1F2540; font: italic 700 3.9cqw/1 Georgia, serif; flex: 0 0 auto; padding: 0; }
-.info-btn.x { font: 700 3.6cqw/1 var(--font); }
-.modal-back { position: fixed; inset: 0; z-index: 50; background: rgba(14, 16, 24, 0.55); display: flex; align-items: flex-end; justify-content: center; }
-.modal { width: 100cqw; max-height: 88vh; max-height: 88dvh; overflow-y: auto; background: #FBF9F6; color: #1F2540; border-radius: 5cqw 5cqw 0 0;
-  padding: 4.6cqw 4.1cqw calc(4.6cqw + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 2.6cqw; font-size: 3.6cqw; }
-.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 2.6cqw; }
-.modal-head h3 { margin: 0; font-weight: 800; font-size: 5.6cqw; }
-.mini-die { display: inline-block; width: 5.1cqw; aspect-ratio: 1; vertical-align: -1.3cqw; margin-right: 0.5cqw; }
-.mini-die svg { width: 100%; height: 100%; display: block; }
-
-@keyframes bob { to { transform: translateY(-4%); } }
-@keyframes rise { from { opacity: 0.2; transform: translateY(6%); } to { opacity: 1; transform: none; } }
-@keyframes pop { from { opacity: 0.2; transform: scale(0.8); } to { opacity: 1; transform: none; } }
-@keyframes grow { from { width: 0; } }
-@keyframes shake { 0% { transform: rotate(-14deg) translateY(0); } 50% { transform: rotate(14deg) translateY(-10%); } 100% { transform: rotate(-14deg) translateY(0); } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01s !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; } }
-@media (max-width: 68rem) { .top { grid-template-columns: minmax(0, 1fr); } .team-phones { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 40rem) { .f-row { grid-template-columns: minmax(0, 1fr); } .team-phones { grid-template-columns: minmax(0, 1fr); } .brand h1 { font-size: 1.2rem; } .join-box { grid-template-columns: minmax(0, 1fr); } .join-box .qr { width: 40%; } }
-</style>
-</head>
-<body>
-<!-- 보스 레이드 시뮬레이터 (스탯 판정, AI 없음). 진행자 화면 · 발표 화면(#screen) · 참여자 휴대폰(#join)이
-     워크샵 플랫폼과 같은 Supabase 프로젝트(config.js, supabase/raid-sim.sql)에 실시간으로 연결되고, 판정은 데이터베이스 함수가 합니다. 진행 버튼은 진행자 비밀번호로(Edge Function raid-sim).
-     ?local 을 붙여 열거나 Supabase 에 연결할 수 없으면 같은 화면이 이 브라우저 안에서만 동작합니다(휴대폰 미리보기로 진행).
-     설정 탭에 참여자 명단(아이디·이름·조)을 넣으면 휴대폰에서 아이디만 입력해 자기 조로 들어갑니다. -->
-
-<div id="app"></div>
-<div class="toast" id="toast" role="status" hidden></div>
-
-<script>
-(function () {
+// raid: 오프닝 보스 레이드 (픽셀 캐릭터 → 조 내 공유 → 연습 → 보스 레이드 → 최종 순위).
+// 워크샵 플랫폼의 세 화면이 이 모듈을 함께 씁니다. 각 화면은 Shadow DOM 안에 그려서 플랫폼 CSS(css/style.css)와 섞이지 않습니다(css/raid.css).
+//   관리 화면(admin.html)  '보스 레이드' 탭 = 진행 · '레이드 설정' 탭 = 보스·규칙·문구·연습 보스·룰렛. 관리자 비밀번호를 그대로 씁니다.
+//   참여 화면(index.html)  메인 관제가 '보스 레이드'일 때 내 휴대폰 화면. 워크샵에 입장한 Knox ID로 자동 입장.
+//   발표 화면(screen.html) 메인 관제가 '보스 레이드'일 때 프로젝터 화면 + BGM(js/raid-sim-bgm.js).
+// 진행·판정은 Supabase 데이터베이스 함수(supabase/raid-sim.sql)가 하고 Realtime 으로 모든 화면에 옵니다. 진행 버튼은 Edge Function raid-sim.
+// admin.html?demo=1 에서는 서버 없이 js/raid-sim-engine.js 로 이 브라우저 안에서만 동작합니다(휴대폰 미리보기 포함).
+window.WCRaid = (function () {
   "use strict";
-  // 참여자에게 보내는 주소. 이 페이지를 연 주소 그대로에 #join 을 붙입니다.
-  // 워크샵 플랫폼과 같이 쓸 때는 플랫폼 참여 주소(Knox ID로 입장 → 보스 레이드 프로그램이면 자동으로 이 화면), ?local 연습 모드는 이 화면의 #join
-  const SESSION_Q = (() => { const q = new URLSearchParams(location.search).get("s"); return q ? "?s=" + encodeURIComponent(q) : ""; })();
-  const JOIN_URL = window.WORDCLOUD_CONFIG && !new URLSearchParams(location.search).has("local")
-    ? location.href.split("#")[0].split("?")[0].replace(/raid-sim\.html$/, "") + SESSION_Q
-    : location.href.split("#")[0] + "#join";
+  // 참여 주소 (발표 화면 첫 페이지 QR)
+  const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
 
   const STATS = [
     { key: "hp", label: "체력", desc: "오래 버티는 힘, 몸으로 밀어붙이는 추진력", color: "#E0694E" },
@@ -570,34 +129,24 @@ a { color: var(--blue); }
   }
 
   // ── 상태: Supabase 가 보내 주는 그대로 그립니다 ───────────────────
-  // 진행·판정은 Supabase 데이터베이스 함수(supabase/raid-sim.sql)가 하고, 바뀔 때마다 Realtime 으로 모든 화면에 옵니다.
-  // 진행자 버튼은 진행자 비밀번호를 거쳐 raid-sim Edge Function 으로 갑니다.
-  // ?local 을 붙여 열거나 Supabase 에 연결할 수 없으면 js/raid-sim-engine.js 를 이 브라우저 안에서 돌립니다.
   let MODE = "loading";     // "supabase" | "local"
-  let isHost = false;       // 판정 스탯까지 보이는 진행자 화면인지 (진행자 비밀번호 확인 뒤)
+  let isHost = false;       // 판정 스탯까지 받는 관리 화면인지 (관리자 비밀번호 확인 뒤)
+  let hostError = "";
   let connected = false;
   let clockOffset = 0;      // 서버 시각 - 이 기기 시각 (타이머 보정)
   const ready = { state: false, people: false };
   let game = null;          // 진행 상태와 결과
-  const people = {};        // 자리 0..5 (이름, 조, 캐릭터)
+  const people = {};        // 자리 (이름, 조, 캐릭터)
   const picks = {};         // r{라운드}t{조} → {pid, by, auto}
   const drafts = {};        // 휴대폰마다 고치는 중인 스탯 (저장 전, 이 기기에만)
   const editing = {};
-  const STORE_ME = "raid-sim-me";
-  const STORE_ME_NAME = "raid-sim-me-name";   // 명단 판에서 다른 명단으로 바뀌었는지 알아보려고
-  let myPid = null, myName = null;
-  try { const v = localStorage.getItem(STORE_ME); if (v !== null && v !== "") myPid = Number(v); myName = localStorage.getItem(STORE_ME_NAME); } catch (e) { /* 기억 못 해도 동작 */ }
+  let myPid = null, myName = null, myKnox = null, loginState = "", loginSig = "";
   const now = () => Date.now() + clockOffset;
-  const CFG = window.WORDCLOUD_CONFIG || null;   // config.js (워크샵 플랫폼과 같은 Supabase 프로젝트)
-  let SB = null;            // Supabase 클라이언트
-  let password = null;      // 진행자 비밀번호. 메모리에만 두고, 새로고침하면 다시 입력합니다.
-  let setupError = "";      // raid-sim.sql 을 아직 안 돌렸을 때 등
-
-  function toast(msg) {
-    const el = document.getElementById("toast");
-    el.textContent = msg; el.hidden = false;
-    clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 3500);
-  }
+  const CFG = window.WORDCLOUD_CONFIG || null;
+  let SB = null;            // Supabase 클라이언트 (플랫폼 것을 같이 씀)
+  let getPassword = () => null;
+  let setupError = "";
+  const toast = (msg) => { if (window.WC && window.WC.toast) window.WC.toast(msg); };
   // fresh: 방금 만든 상태라서 서버 시각으로 이 기기 시계를 보정해도 되는지
   function apply(snap, fresh) {
     if (!snap || !snap.people) return;
@@ -623,16 +172,16 @@ a { color: var(--blue); }
     const res = await fetch(CFG.supabaseUrl + "/functions/v1/raid-sim", {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: CFG.supabaseKey, Authorization: "Bearer " + CFG.supabaseKey },
-      body: JSON.stringify({ password, op, arg: arg == null ? null : arg, data: data == null ? null : data }),
+      body: JSON.stringify({ password: getPassword(), op, arg: arg == null ? null : arg, data: data == null ? null : data }),
     });
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.ok) { const e = new Error(j.error || (res.status === 404 ? "raid-sim Edge Function 을 먼저 배포해 주세요" : "진행자 요청 실패 (" + res.status + ")")); e.status = res.status; throw e; }
-    return op === "importRoster" ? j.rows : j.view;
+    return j.view;
   }
   async function hostAct(fn, arg, data) {
-    try { const v = await callAdmin(fn, arg, data); isHost = true; apply(v, true); return true; }
+    try { const v = await callAdmin(fn, arg, data); isHost = true; hostError = ""; apply(v, true); return true; }
     catch (e) {
-      if (e.status === 401) { password = null; isHost = false; lastHtml = ""; render(); }
+      if (!isHost) { hostError = e.message; invalidate(); }
       toast(e.message); return false;
     }
   }
@@ -643,7 +192,7 @@ a { color: var(--blue); }
     hostRefreshTimer = setTimeout(async () => {
       if (hostRefreshing) { hostRefreshAgain = true; return; }
       hostRefreshing = true;
-      try { apply(await callAdmin("state"), true); } catch (e) { if (e.status === 401) { password = null; isHost = false; lastHtml = ""; render(); } }
+      try { apply(await callAdmin("state"), true); } catch (e) { /* 다음 변경 때 다시 */ }
       hostRefreshing = false;
       if (hostRefreshAgain) { hostRefreshAgain = false; refreshHost(); }
     }, 120);
@@ -761,23 +310,17 @@ a { color: var(--blue); }
       backend.act(pid, "pick", { m: extra });
     }
   }
-  async function claim(pid, name) {
-    if (!people[pid]) return;
-    myPid = pid;
-    try { localStorage.setItem(STORE_ME, String(pid)); } catch (e) { /* 이 기기에 기억 못 함 */ }
-    render();
-    await backend.act(pid, "claim", { name });
-  }
-  function leaveSeat() { myPid = null; myName = null; try { localStorage.removeItem(STORE_ME); localStorage.removeItem(STORE_ME_NAME); } catch (e) { /* 무시 */ } render(); }
-  async function joinById(uid) {
-    const v = String(uid || "").trim();
-    if (!v) { toast("아이디를 적어 주세요"); return; }
-    const r = await loginId(v);
-    if (!r.ok) { toast(r.error || "입장하지 못했어요"); return; }
-    myPid = r.pid; myName = r.name || null;
-    if (people[myPid]) people[myPid].claimed = true;   // 서버 소식이 오기 전에 다시 그려도 입장 상태 유지
-    try { localStorage.setItem(STORE_ME, String(myPid)); if (myName) localStorage.setItem(STORE_ME_NAME, myName); } catch (e) { /* 이 기기에 기억 못 함 */ }
-    lastHtml = ""; render();
+  // 참여 화면: 워크샵에 입장한 Knox ID 로 보스 레이드 자리를 찾습니다 (명단은 관리 화면 '명단 · 조' 그대로).
+  // 명단이 바뀌어 못 찾았으면 명단이 바뀔 때마다 다시 찾아봅니다.
+  async function ensureLogin() {
+    if (!myKnox || !game || loginState === "busy") return;
+    const sig = personList().map((p) => p.name).join("|");
+    if (loginState === "none" && loginSig === sig) return;
+    loginState = "busy"; loginSig = sig;
+    const r = await loginId(myKnox);
+    if (r && r.ok) { myPid = r.pid; myName = r.name || null; loginState = ""; if (people[myPid]) people[myPid].claimed = true; }
+    else { myPid = null; loginState = "none"; }
+    invalidate();
   }
 
   // ── 돌발 이벤트 룰렛 ──────────────────────────────────────────
@@ -794,7 +337,7 @@ a { color: var(--blue); }
     if (!rolling()) return;
     const L = (RULES.roulette || []).map(effLabel), p = Math.min(1, (now() - game.rollAt) / ROLL_MS), gap = 60 + 420 * p * p * p, t = Date.now();
     if (!L.length) return;
-    document.querySelectorAll("[data-reel]").forEach((el) => {
+    qsaAll("[data-reel]").forEach((el) => {
       if (t - (Number(el.dataset.t) || 0) < gap) return;
       const i = ((el.dataset.i != null ? Number(el.dataset.i) : rand(L.length)) + 1) % L.length;
       el.dataset.i = i; el.dataset.t = t; el.textContent = L[i];
@@ -803,7 +346,7 @@ a { color: var(--blue); }
   let rollTimer = null;
   function scheduleRollEnd() {
     clearTimeout(rollTimer);
-    if (rolling()) rollTimer = setTimeout(() => { lastHtml = ""; render(); }, Math.max(50, ROLL_MS - (now() - game.rollAt)) + 60);
+    if (rolling()) rollTimer = setTimeout(() => { invalidate(); }, Math.max(50, ROLL_MS - (now() - game.rollAt)) + 60);
   }
   // 우리 조 결과 문장 (휴대폰에만): 몇 점 모자랐는지, 받은 점수
   function myResultLine(x, b) {
@@ -815,11 +358,9 @@ a { color: var(--blue); }
   }
 
   // ── 화면 ────────────────────────────────────────────────────────
-  const $ = (id) => document.getElementById(id);
-  const view = () => (location.hash === "#join" ? "join" : location.hash === "#screen" ? "screen" : "host");
   function left(ms) { if (!(ms > 0)) return "0:00"; const s = Math.ceil(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
   function tick() {
-    document.querySelectorAll("[data-deadline]").forEach((el) => { const ms = Number(el.dataset.deadline) - now(); el.textContent = left(ms); el.classList.toggle("urgent", ms < 20000); });
+    qsaAll("[data-deadline]").forEach((el) => { const ms = Number(el.dataset.deadline) - now(); el.textContent = left(ms); el.classList.toggle("urgent", ms < 20000); });
   }
   setInterval(tick, 500);
 
@@ -843,7 +384,7 @@ a { color: var(--blue); }
     const qr = '<div class="pv-qr glass"><div class="q">' + qrSvg(JOIN_URL) + "</div><span>휴대폰으로<br>QR을 찍어 참여</span></div>";
     if (game.stage === "lobby") {
       const joined = personList().filter((p) => p.claimed).length;
-      return '<div class="pv pv-center"><div class="eyebrow">오프닝 아이스브레이킹</div><div class="h">' + (RULES.lobbyTitle ? richText(RULES.lobbyTitle) : '나만의 <span class="title-glow">픽셀 캐릭터</span><br>&amp; 보스 레이드') + '</div><div class="sub">' + (RULES.lobbySub ? richText(RULES.lobbySub) : "휴대폰으로 QR을 찍고 아이디를 입력해 주세요") + "</div>" +
+      return '<div class="pv pv-center"><div class="eyebrow">오프닝 아이스브레이킹</div><div class="h">' + (RULES.lobbyTitle ? richText(RULES.lobbyTitle) : '나만의 <span class="title-glow">픽셀 캐릭터</span><br>&amp; 보스 레이드') + '</div><div class="sub">' + (RULES.lobbySub ? richText(RULES.lobbySub) : "휴대폰으로 QR을 찍고 Knox ID로 입장해 주세요") + "</div>" +
         '<div class="lobby-row"><div class="pv-qr glass big"><div class="q">' + qrSvg(JOIN_URL) + '</div><span>QR을 찍어 참여</span></div><div class="count glass"><span>입장</span><b>' + joined + "</b><span>/ " + personList().length + "명</span></div></div></div>";
     }
     if (game.stage === "make") {
@@ -900,8 +441,8 @@ a { color: var(--blue); }
   }
 
   function adminHtml() {
-    if (!isHost) return '<p class="small">판정 스탯과 진행 버튼은 위에서 진행자 비밀번호로 로그인하면 보여요.</p>';
-    if (!game || !personList().length) return '<p class="small">위의 "게임 준비하기"를 누르면 진행 상태가 만들어져요. 보스·규칙 설정 탭에 명단을 넣었으면 명단대로, 아니면 참여자 자리 6개(A조·B조 3명씩)로 만들어져요.</p>';
+    if (!isHost) return '<p class="small">' + esc(hostError || "관리자 비밀번호로 확인하는 중이에요…") + "</p>";
+    if (!game || !personList().length) return '<p class="small">위의 "게임 준비하기"를 누르면 워크샵 명단(명단 · 조 탭, Chief Crew 조 제외)으로 보스 레이드 판이 만들어져요.</p>';
     let html = "";
     if (game.stage !== "boss" || game.phase === "idle") {
       html += '<div class="secret">판정 스탯은 여기에만 보여요.<br>' + (PRACTICE ? "연습. " + esc(PRACTICE.name) + " → <b>" + statsText(PRACTICE.stats) + "</b> · HP " + PRACTICE.hp + "<br>" : "") +
@@ -1019,72 +560,10 @@ a { color: var(--blue); }
       '<div class="card"><div class="t">출전</div><div class="muted">연습 라운드는 점수와 출전 기록에 들어가지 않아요. 라운드마다 조에서 <b>1명</b>이 나가요. 한 사람은 한 번만 나갈 수 있고(모두 나갔으면 다시 가능), ' + (JOIN_MODE === "roster" ? "아이디로 입장한 사람만 고를 수 있어요. " : "") + "아무도 안 고르면 마감 때 아직 안 나간 사람 중 랜덤이에요.</div></div></div></div>";
   }
   const infoBtn = '<button type="button" class="info-btn" data-info aria-label="점수 규칙 보기">i</button>';
-  function joinHtml() {
-    if (!ready.state || !ready.people) return '<div class="joinview"><div class="pwrap"><div class="screen"><h3>불러오는 중…</h3></div></div></div>';
-    if (!game || !personList().length) return '<div class="joinview"><div class="pwrap"><div class="screen"><h3>곧 시작해요</h3><div class="muted">진행자가 아직 게임을 준비하지 않았어요. 준비되면 이 화면이 자동으로 바뀌어요.</div></div></div></div>';
-    // 명단이 바뀌어 같은 번호가 다른 사람이 됐으면 다시 입장
-    if (JOIN_MODE === "roster" && myPid != null && people[myPid] && myName && people[myPid].name !== myName) myPid = null;
-    // 조는 명단대로 고정: 참여자는 바꿀 수 없고, 진행자가 "입장 표시 지우기"를 누르면 아이디부터 다시 입력
-    if (JOIN_MODE === "roster" && myPid != null && people[myPid] && people[myPid].claimed === false) myPid = null;
-    if ((myPid == null || !people[myPid]) && JOIN_MODE === "roster") {
-      setTimeout(tryAutoLogin, 0);
-      return '<div class="joinview"><div class="pwrap"><div class="screen"><h3>보스 레이드에<br>참여해 주세요</h3>' +
-        '<form class="card" data-idlogin><div class="t">아이디</div><input class="namebox" id="uid-in" maxlength="40" placeholder="명단에 있는 아이디" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false">' +
-        '<div class="muted">아이디를 입력하면 이름과 조가 명단대로 정해져요. 조는 바꿀 수 없어요.</div><button type="submit" class="pbtn">입장하기</button></form>' +
-        '<button type="button" class="pbtn ghost" data-info>점수 규칙 보기</button>' + lostNote() + "</div>" + (infoOpen ? infoHtml() : "") + "</div></div>";
-    }
-    if (myPid == null || !people[myPid]) {
-      return '<div class="joinview"><div class="pwrap"><div class="screen"><h3>보스 레이드에<br>참여해 주세요</h3>' +
-        '<div class="card"><div class="t">이름 (선택)</div><input class="namebox" id="name-in" maxlength="12" placeholder="화면에 보일 이름" autocomplete="off"><div class="muted">이름을 적고 아래에서 내 자리를 눌러 주세요. 비워 두면 자리 이름 그대로 써요.</div></div>' +
-        TEAMS.map((tn, t) => '<div class="card"><div class="t">' + tn + "</div>" + teamOf(t).map((m) => '<button type="button" class="slot' + (m.claimed ? " taken" : "") + '" data-claim="' + m.id + '"><span><b>' + esc(m.name) + '</b><br><span class="muted">' + (m.claimed ? "다른 기기가 사용 중 · 눌러서 이어받기" : "비어 있음") + '</span></span><span class="tag">고르기</span></button>').join("") + "</div>").join("") +
-        lostNote() + "</div></div></div>";
-    }
-    const p = people[myPid];
-    return '<div class="joinview"><div class="pwrap"><div class="phone-bar"><b>' + esc(p.name) + "</b><span>" + TEAMS[p.team] + "</span>" + (JOIN_MODE === "roster" ? "" : '<button type="button" class="btn quiet" data-leave>자리 바꾸기</button>') + infoBtn + '</div><div class="screen" id="screen-me">' + phoneHtml(myPid) +
-      lostNote() + "</div>" + (infoOpen ? infoHtml() : "") + "</div></div>";
-  }
-
   // ── 보스·규칙 설정 탭 (진행자만) ─────────────────────────────────
   // 고치는 동안에는 이 화면의 setDraft 에만 두고, "저장"을 눌러야 Supabase(또는 이 브라우저의 엔진)에 들어갑니다.
-  const STORE_TAB = "raid-sim-tab";
-  let hostTab = "run";
-  try { if (localStorage.getItem(STORE_TAB) === "settings") hostTab = "settings"; } catch (e) { /* 기억 못 해도 동작 */ }
   let setDraft = null;
   let setBusy = false;
-  let rosterText = null;    // 명단 칸에 적는 중인 내용 (null 이면 지금 명단)
-  // 명단 글 → [{uid, name, team}]. 한 줄에 "아이디, 이름, 조" (쉼표 또는 탭). 조가 숫자뿐이면 "1조"처럼 붙임.
-  function parseRoster(text) {
-    const rows = [], errs = [];
-    let first = true;
-    String(text || "").split(/\r?\n/).forEach((line, i) => {
-      const raw = line.trim();
-      if (!raw) return;
-      const cols = (raw.includes("\t") ? raw.split("\t") : raw.split(",")).map((c) => c.trim());   // 탭이 있으면 탭으로만 나눔 (이름에 쉼표가 있어도 됨)
-      const isHeader = first && /^(아이디|id|knox ?id|사번|이름|name)$/i.test(cols[0]);   // 맨 첫 줄이 머리글이면 건너뜀
-      first = false;
-      if (isHeader) return;
-      if (cols.length < 3 || !cols[0] || !cols[1] || !cols[2]) { errs.push(i + 1 + "번째 줄: 아이디, 이름, 조 3칸이 필요해요"); return; }
-      rows.push({ uid: cols[0].toLowerCase(), name: cols[1], team: /^\d+$/.test(cols[2]) ? cols[2] + "조" : cols[2] });
-    });
-    // 조 순서: 숫자를 고려한 가나다순 (1조, 2조, … 10조)
-    const teams = [...new Set(rows.map((r) => r.team))].sort((a, b) => a.localeCompare(b, "ko", { numeric: true }));
-    rows.sort((a, b) => teams.indexOf(a.team) - teams.indexOf(b.team));
-    const dup = [...new Set(rows.map((r) => r.uid).filter((u, i, a) => a.indexOf(u) !== i))];
-    if (dup.length) errs.push("아이디가 두 번 나와요: " + dup.join(", "));
-    if (rows.length && teams.length < 2) errs.push("조가 2개 이상이어야 해요");
-    if (teams.length > 20) errs.push("조는 20개까지예요");
-    if (rows.length > 300) errs.push("명단은 300명까지예요");
-    rows.forEach((r, i) => { if (r.uid.length > 40 || r.name.length > 20 || r.team.length > 20) errs.push(i + 1 + "번째 사람: 아이디는 40자, 이름·조는 20자까지예요"); });
-    return { rows, teams, errs };
-  }
-  const currentRosterText = () => (JOIN_MODE === "roster" ? personList().filter((p) => p.uid).map((p) => [p.uid, p.name, TEAM_NAMES[p.team]].join("	")).join("\n") : "");
-  function rosterSummary() {
-    const r = parseRoster(rosterText != null ? rosterText : currentRosterText());
-    if (!r.rows.length && !r.errs.length) return MODE === "supabase" ? "직접 넣은 명단이 없어요 → 워크샵 명단(관리 화면 '명단 · 조')을 그대로 써요 (Chief Crew 조 제외)" : "명단이 비어 있어요 → 6자리(A조·B조 3명씩) 연습판";
-    return "<b>" + r.rows.length + "명 · 조 " + r.teams.length + "개</b> (" + r.teams.map((t) => esc(t) + " " + r.rows.filter((x) => x.team === t).length + "명").join(", ") + ")" +
-      (r.errs.length ? '<br><b style="color:var(--coral-deep)">' + r.errs.slice(0, 5).map(esc).join("<br>") + "</b>" : "") +
-      (rosterText != null && rosterText !== currentRosterText() ? '<br><span style="color:var(--coral-deep)">아직 적용하지 않았어요. "명단 적용"을 눌러 주세요.</span>' : "");
-  }
   const CFG_FIELDS = [
     { k: "statTotal", label: "스탯 합계", unit: "점", note: "캐릭터가 스탯 5개에 나눠 쓰는 점수", rule: true },
     { k: "statMin", label: "스탯 최소", unit: "점", rule: true },
@@ -1116,23 +595,17 @@ a { color: var(--blue); }
     const ruleLocked = !!game && game.stage !== "lobby";
     let h = '<main class="wrap settings">';
     if (roundBusy()) h += '<div class="notice">지금 ' + game.round + "라운드가 진행 중이에요. 보스는 결과 공개 뒤에 저장할 수 있어요. 규칙(시간·MVP·운)은 지금도 저장돼요.</div>";
-    const lobby = !game || game.stage === "lobby";
-    h += '<section class="panel"><h2>참여자 명단</h2><p class="small">한 줄에 한 사람씩 <b>아이디, 이름, 조</b>를 적어 주세요. 엑셀에서 세 칸을 복사해 붙여 넣어도 돼요. 조에 숫자만 적으면 "1조"처럼 붙여요.<br>' +
-      "명단을 적용하면 참여자는 휴대폰에서 <b>아이디만 입력</b>하면 자기 이름과 조로 들어가요. 비워 두면 " + (MODE === "supabase" ? "<b>워크샵 명단(관리 화면 '명단 · 조')</b>을 그대로 써요(Chief Crew 조 제외). 워크샵 명단을 바꿨으면 '워크샵 명단으로 다시 맞추기'를 눌러 주세요." : "6자리(A조·B조 3명씩) 연습판이에요.") + "</p>" +
-      '<label class="f"><span>명단</span><textarea rows="8" data-f="roster" spellcheck="false" placeholder="knox01, 김민지, 1조&#10;knox02, 이서준, 1조&#10;knox03, 박지우, 2조"' + (lobby ? "" : " disabled") + ">" + esc(rosterText != null ? rosterText : currentRosterText()) + "</textarea></label>" +
-      '<div class="small" data-roster-sum>' + rosterSummary() + "</div>" +
-      '<div class="row left">' + (MODE === "supabase" ? '<button type="button" class="btn" data-set="rosterImport"' + (lobby ? "" : " disabled") + ">워크샵 명단 불러오기</button>" : "") +
-      '<button type="button" class="btn go" data-set="roster"' + (lobby ? "" : " disabled") + ">명단 적용</button>" +
-      (JOIN_MODE === "roster" ? '<button type="button" class="btn quiet" data-set="rosterClear"' + (lobby ? "" : " disabled") + ">" + (MODE === "supabase" ? "워크샵 명단으로 다시 맞추기" : "명단 비우기 (6자리 연습판으로)") + "</button>" : "") + "</div>" +
-      (lobby ? "" : '<p class="small">명단은 대기 단계에서만 바꿀 수 있어요. 진행 탭에서 "처음부터"를 누르면 바꿀 수 있어요.</p>') + "</section>";
+    h += '<section class="panel"><h2>참여자 명단</h2><p class="small">관리 화면 <b>명단 · 조</b> 탭의 명단을 그대로 써요(조 이름에 Chief·치프가 들어간 조는 빠져요). ' +
+      "캐릭터 만들기를 시작할 때 최신 명단으로 다시 맞추고, 참여자는 워크샵에 입장한 Knox ID로 자동으로 들어와요." +
+      (game && personList().length ? " 지금 " + personList().length + "명 · 조 " + TEAM_NAMES.length + "개." : "") + "</p></section>";
     h += '<section class="panel"><h2>게임 규칙</h2><div class="cfg-grid">' + CFG_FIELDS.map((f) =>
       '<label class="f"><span>' + f.label + '</span><span class="num"><input type="number" inputmode="numeric" step="1" data-f="c.' + f.k + '" value="' + esc(d.config[f.k]) + '"' + (f.rule && ruleLocked ? " disabled" : "") + "><em>" + f.unit + "</em></span>" +
       (f.note ? "<small>" + esc(f.note) + "</small>" : "") + "</label>").join("") + "</div>" +
-      '<p class="small">스탯 규칙(합계·최소·최대)은 대기 단계에서만 바꿀 수 있어요' + (ruleLocked ? '. 지금은 잠겨 있어요. 진행 탭에서 "처음부터"를 누르면 바꿀 수 있어요.' : ".") + " 시간은 다음에 시작하는 단계부터 적용돼요.</p></section>";
+      '<p class="small">스탯 규칙(합계·최소·최대)은 대기 단계에서만 바꿀 수 있어요' + (ruleLocked ? '. 지금은 잠겨 있어요. 보스 레이드 탭에서 "처음부터"를 누르면 바꿀 수 있어요.' : ".") + " 시간은 다음에 시작하는 단계부터 적용돼요.</p></section>";
     const T = d.texts, tf = (k) => 'data-f="t.' + k + '"';
     h += '<section class="panel"><h2>첫 화면 · 규칙 화면 문구</h2><p class="small">발표 화면의 첫 화면(대기·QR)과 보스 레이드 규칙 화면에 나오는 글이에요. <b>비워 두면 기본 문구</b>가 나와요. **이렇게** 감싸면 굵게, 줄바꿈은 그대로 보여요.</p>' +
       '<label class="f"><span>첫 화면 제목</span><textarea rows="2" maxlength="200" ' + tf("lobbyTitle") + ' placeholder="나만의 픽셀 캐릭터&#10;&amp; 보스 레이드">' + esc(T.lobbyTitle) + "</textarea></label>" +
-      '<label class="f"><span>첫 화면 안내</span><input type="text" maxlength="200" ' + tf("lobbySub") + ' placeholder="휴대폰으로 QR을 찍고 아이디를 입력해 주세요" value="' + esc(T.lobbySub) + '"></label>' +
+      '<label class="f"><span>첫 화면 안내</span><input type="text" maxlength="200" ' + tf("lobbySub") + ' placeholder="휴대폰으로 QR을 찍고 Knox ID로 입장해 주세요" value="' + esc(T.lobbySub) + '"></label>' +
       '<label class="f"><span>규칙 화면 제목</span><input type="text" maxlength="200" ' + tf("rulesTitle") + ' placeholder="' + esc(defaultRulesTitle()) + '" value="' + esc(T.rulesTitle) + '"></label>' +
       '<label class="f"><span>규칙 (한 줄에 한 항목, 12줄까지)</span><textarea rows="8" ' + tf("rulesLines") + ' placeholder="' + esc(defaultRuleLines().join("\n")) + '">' + esc(T.rulesLines) + "</textarea></label>" +
       '<div class="row left"><button type="button" class="btn sm" data-set="rulesFill">기본 규칙 문구를 불러와서 고치기</button></div></section>';
@@ -1205,19 +678,18 @@ a { color: var(--blue); }
     d.dirty = true;
     return true;
   }
-  document.addEventListener("input", (e) => {
+  function onInput(e, mt) {
     const el = e.target;
     if (!el.dataset || !el.dataset.f || el.type === "checkbox") return;
-    if (el.dataset.f === "roster") { rosterText = el.value; const m = document.querySelector("[data-roster-sum]"); if (m) m.innerHTML = rosterSummary(); return; }
     if (setField(el)) {
-      const m = document.querySelector("[data-dirty]"); if (m) m.textContent = "저장하지 않은 변경이 있어요";
+      const m = mt.root.querySelector("[data-dirty]"); if (m) m.textContent = "저장하지 않은 변경이 있어요";
       const row = el.closest(".spin-row"), lab = row && row.querySelector(".spin-label");
       if (lab && setDraft) { const x = setDraft.roulette[Number(el.dataset.f.split(".")[1])]; if (x) lab.textContent = "→ " + effLabel({ kind: x.kind, value: toInt(x.value) || 0 }); }
     }
-  });
-  document.addEventListener("change", (e) => {
+  }
+  function onChange(e) {
     const el = e.target;
-    if (el.dataset && el.dataset.f && (el.type === "checkbox" || el.tagName === "SELECT") && setField(el)) { lastHtml = ""; render(); }
+    if (el.dataset && el.dataset.f && (el.type === "checkbox" || el.tagName === "SELECT") && setField(el)) { invalidate(); }
     // 보스 수: 늘리면 맨 뒤에 새 보스, 줄이면 맨 뒤부터 지움
     if (el.matches && el.matches("[data-count]") && setDraft) {
       const L = setDraft.bosses, n = Number(el.value);
@@ -1227,9 +699,9 @@ a { color: var(--blue); }
         L.length = n;
       } else while (L.length < n) L.push(newBoss());
       setDraft.dirty = true;
-      lastHtml = ""; render();
+      invalidate();
     }
-  });
+  }
   async function saveSettings() {
     const d = setDraft;
     if (!d) return;
@@ -1279,34 +751,6 @@ a { color: var(--blue); }
     const L = setDraft && setDraft.bosses;
     if (what === "save") { await saveSettings(); return; }
     if (what === "revert") { setDraft = null; return; }
-    // 워크샵 본 프로젝트의 명단(아이디·이름·조)을 명단 칸에 채움. "명단 적용"을 눌러야 반영
-    if (what === "rosterImport") {
-      let rows;
-      try { rows = await callAdmin("importRoster"); }
-      catch (e) { toast(e.message); return; }
-      // Chief Crew 는 보스 레이드에 참여하지 않으므로 그 조는 뺍니다
-      const isCrew = (r) => /chief|치프/i.test(String(r.team || ""));
-      const crew = (rows || []).filter(isCrew).length;
-      rows = (rows || []).filter((r) => !isCrew(r));
-      if (!rows.length) { toast("워크샵 명단에 조가 정해진 사람이 없어요"); return; }
-      rosterText = rows.map((r) => [r.uid, r.name, r.team].join("\t")).join("\n");
-      toast("워크샵 명단 " + rows.length + "명을 불러왔어요" + (crew ? " (Chief Crew " + crew + "명 제외)" : "") + ". 확인하고 \"명단 적용\"을 눌러 주세요");
-      return;
-    }
-    if (what === "roster") {
-      const r = parseRoster(rosterText != null ? rosterText : currentRosterText());
-      if (r.errs.length) { toast(r.errs[0]); return; }
-      if (!r.rows.length) { toast('명단이 비어 있어요. 6자리로 돌아가려면 "명단 비우기"를 눌러 주세요'); return; }
-      if (!confirm(r.rows.length + "명 · 조 " + r.teams.length + "개로 새 판을 만들까요? 지금 자리·캐릭터·결과는 초기화돼요.")) return;
-      if (await backend.host("saveRoster", null, r.rows)) { rosterText = null; toast("명단을 적용했어요. 참여자는 휴대폰에서 아이디만 입력하면 돼요"); }
-      return;
-    }
-    if (what === "rosterClear") {
-      const ws = MODE === "supabase";
-      if (!confirm(ws ? "워크샵 명단(관리 화면 '명단 · 조')으로 다시 맞출까요? 지금 자리·캐릭터·결과는 초기화돼요." : "명단을 비우고 6자리(A조·B조 3명씩) 연습판으로 돌아갈까요? 지금 자리·캐릭터·결과는 초기화돼요.")) return;
-      if (await backend.host("saveRoster", null, [])) { rosterText = null; toast(ws ? "워크샵 명단으로 맞췄어요" : "6자리 연습판으로 돌아갔어요"); }
-      return;
-    }
     if (what === "defaults") {
       if (!confirm("보스를 기본 5명으로 되돌릴까요? 고친 보스 내용이 모두 사라져요.")) return;
       if (await backend.host("resetBosses")) { setDraft = null; toast("보스를 기본값으로 되돌렸어요"); }
@@ -1337,37 +781,13 @@ a { color: var(--blue); }
     setDraft.dirty = true;
   }
 
-  const lostNote = () => (MODE === "supabase" && !connected ? '<div class="notice">실시간 연결이 끊겼어요. 다시 연결하는 중…</div>' : "");
-  const liveWord = () => MODE === "loading" ? "연결하는 중…"
-    : MODE === "local" ? (setupError || "이 화면 안에서만 동작 (연습용)")
-    : !connected ? "실시간 연결이 끊김 · 다시 연결하는 중" : isHost ? "Supabase 실시간 연결 · 휴대폰과 같은 데이터" : "Supabase 실시간 연결 · 진행하려면 진행자 비밀번호";
-  const loginHtml = () => '<form class="login" data-login><input id="pw" type="password" placeholder="관리자 비밀번호" autocomplete="current-password"><button type="submit" class="btn go">진행자 로그인</button></form>';
-  function hostHtml() {
-    const preview = game && personList().length && personList().length <= 12;
-    const needLogin = MODE === "supabase" && !isHost;
-    return '<header class="host"><div class="host-in"><div class="brand"><h1>보스 레이드 <span>시뮬레이터</span></h1><span class="live' + (MODE === "supabase" && connected ? " on" : "") + '"><i></i>' + esc(liveWord()) + "</span></div>" +
-      '<span class="step">' + esc(stepWord()) + '</span><div class="actions">' + (needLogin ? loginHtml() : hostTab === "settings" && canSettings() ? "" : hostButtons().map((x) => '<button type="button" class="btn ' + (x.cls || "") + '" data-host="' + x.fn + '">' + esc(x.label) + "</button>").join("")) + "</div></div></header><div class=\"hostview\">" +
-      (canSettings() ? '<nav class="tabs" aria-label="진행자 화면"><button type="button" data-tab="run"' + (hostTab === "run" ? ' class="on" aria-current="page"' : "") + ">진행</button>" +
-        '<button type="button" data-tab="settings"' + (hostTab === "settings" ? ' class="on" aria-current="page"' : "") + ">보스·규칙 설정</button></nav>" : "") +
-      (hostTab === "settings" && canSettings() ? settingsHtml() :
-      '<main class="wrap"><div class="top"><section><p class="sec-title">발표 화면 (프로젝터)' + (MODE === "supabase" ? ' · <a href="' + esc(location.href.split("#")[0]) + '#screen" target="_blank" rel="noopener">이 화면만 따로 열기</a>' : "") + '<button type="button" class="bgm-btn' + (bgmOn() ? " on" : "") + '" data-bgm>' + (bgmOn() ? "♪ BGM 끄기" : "♪ BGM 켜기") + "</button>" + '</p><div class="proj-box"><div class="proj">' + projHtml() + "</div></div></section>" +
-      '<div class="side"><section class="panel"><h2>참여자 링크 (휴대폰)</h2><div class="join-box"><div class="qr">' + qrSvg(JOIN_URL) + '</div><div class="join-side"><div class="link">' + JOIN_URL + "</div>" +
-      '<div class="row left"><button type="button" class="btn sm" data-copy>링크 복사</button><a class="btn sm" href="' + JOIN_URL + '" target="_blank" rel="noopener">새 탭에서 열기</a></div>' +
-      '<span class="small">' + (MODE === "supabase" ? "휴대폰 데이터나 아무 Wi-Fi로 열면 돼요. 로그인은 필요 없어요." : "이 브라우저 안에서만 동작하는 연습 모드예요. 휴대폰과 연결하려면 ?local 없이 배포한 주소로 열어 주세요.") + "</span></div></div></section>" +
-      '<section class="panel"><h2>진행자 전용 (참여자에게는 안 보임)</h2>' + adminHtml() + "</section></div></div>" +
-      (preview ? '<section><p class="sec-title">휴대폰 ' + personList().length + '대 미리보기 · 여기서 눌러도 실제 휴대폰과 같은 데이터가 바뀌어요</p><div class="phones">' +
-      TEAMS.map((tn, t) => '<div class="team-group"><div class="team-label">' + tn + '</div><div class="team-phones">' + teamOf(t).map((p) =>
-        '<div class="phone"><div class="phone-bar"><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b><span>" + tn + '</span></div><div class="screen" id="screen-' + p.id + '">' + phoneHtml(p.id) + "</div></div>").join("") + "</div></div>").join("") +
-      "</div></section>" : game && personList().length ? '<p class="small">참여자가 12명보다 많아서 휴대폰 미리보기는 숨겼어요. 각자 휴대폰으로 진행해 주세요.</p>' : "") + "</main>") + "</div>";
-  }
-
-  // BGM (js/raid-sim-bgm.js): 발표 화면 · 진행자 화면에서만. 단계에 맞는 곡, 결과 공개 때 타격·격파 효과음
+  // BGM (js/raid-sim-bgm.js): 발표 화면(screen.html)에서만. 단계에 맞는 곡, 결과 공개 때 타격·격파 효과음
   const bgmOn = () => !!(window.RaidSimBgm && window.RaidSimBgm.enabled);
   let sfxKey = "", afterTrack = "", afterAt = 0;
   const curSfxKey = () => !game ? "" : game.phase === "revealed" ? "r" + game.round : game.phase === "rolled" ? "d" + game.round : "";
-  function syncBgm(v) {
+  function syncBgm() {
     const B = window.RaidSimBgm, g = game;
-    if (!B || v === "join") return;
+    if (!B || !mounts.some((m) => m.kind === "screen")) return;
     const key = curSfxKey();
     if (key && key !== sfxKey) {
       if (key[0] === "d") { if (rolling()) B.sfx("land", (g.rollAt + ROLL_MS - now()) / 1000); }   // 룰렛이 멈추는 순간에 맞춰
@@ -1377,7 +797,7 @@ a { color: var(--blue); }
         B.sfx("charge", 0.8);
         B.sfx(win ? "ko" : "fail", 3.4);
         afterTrack = win ? "win" : "lose"; afterAt = Date.now() + 4300;
-        setTimeout(() => syncBgm(view()), 4400);
+        setTimeout(() => syncBgm(), 4400);
       }
     }
     sfxKey = key;
@@ -1387,97 +807,116 @@ a { color: var(--blue); }
       : g.phase === "revealed" ? (afterTrack && Date.now() >= afterAt ? afterTrack : "none") : g.phase === "final" ? "victory" : "lobby");
   }
 
-  let lastHtml = "";
-  function render() {
-    const v = view();
-    const scrolls = {};
-    document.querySelectorAll(".screen[id]").forEach((el) => { scrolls[el.id] = el.scrollTop; });
-    const nameIn = $("name-in"), nameVal = nameIn ? nameIn.value : null, nameFocus = nameIn && document.activeElement === nameIn;
-    const uidIn = $("uid-in"), uidVal = uidIn ? uidIn.value : null, uidFocus = uidIn && document.activeElement === uidIn;
-    const pwIn = $("pw"), pwVal = pwIn ? pwIn.value : null, pwFocus = pwIn && document.activeElement === pwIn;
-    const ae = document.activeElement, af = ae && ae.dataset ? ae.dataset.f : null;
-    let sel = null;
-    try { if (af && ae.selectionStart != null) sel = [ae.selectionStart, ae.selectionEnd]; } catch (e) { /* 숫자 칸 */ }
-    const html = v === "screen" ? '<div class="screen-only"><div class="proj-box"><div class="proj">' + projHtml() + '</div></div><button type="button" class="bgm-float" data-bgm>' + (bgmOn() ? "♪ BGM 끄기" : "♪ BGM 켜기") + "</button></div>" : v === "join" ? joinHtml() : hostHtml();
-    syncBgm(v);
-    if (html === lastHtml) return;
-    lastHtml = html;
-    $("app").innerHTML = html;
-    scheduleRollEnd();
-    document.querySelectorAll(".screen[id]").forEach((el) => { if (scrolls[el.id]) el.scrollTop = scrolls[el.id]; });
-    const ni = $("name-in");
-    if (ni && nameVal != null) { ni.value = nameVal; if (nameFocus) ni.focus(); }
-    const ui = $("uid-in");
-    if (ui && uidVal != null) { ui.value = uidVal; if (uidFocus) ui.focus(); }
-    const pi = $("pw");
-    if (pi && pwVal != null) { pi.value = pwVal; if (pwFocus) pi.focus(); }
-    if (af) {
-      const el = document.querySelector('[data-f="' + af + '"]');
-      if (el) { el.focus({ preventScroll: true }); try { if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) { /* 숫자 칸 */ } }
+  const lostNote = () => (MODE === "supabase" && !connected ? '<div class="notice">실시간 연결이 끊겼어요. 다시 연결하는 중…</div>' : "");
+  const liveWord = () => MODE === "local" ? "미리보기 · 이 브라우저 안에서만 동작" : MODE === "supabase" ? (connected ? "실시간 연결됨 · 휴대폰·발표 화면과 같은 데이터" : "실시간 연결이 끊김 · 다시 연결하는 중") : (setupError || "연결하는 중…");
+
+  // ── 화면별 그리기 ───────────────────────────────────────────────
+  // 관리 화면 '보스 레이드' 탭: 단계 버튼 · 발표 화면 미리보기 · 판정표 (미리보기 모드에서는 휴대폰 미리보기도)
+  function hostMountHtml() {
+    if (!ready.state) return '<section class="panel"><h2>보스 레이드</h2><p class="small">' + esc(setupError || "불러오는 중…") + "</p></section>";
+    const preview = MODE === "local" && game && personList().length && personList().length <= 12;
+    return '<section class="panel hostbar"><div class="hb-l"><span class="step">' + esc(stepWord()) + '</span><span class="live' + (connected ? " on" : "") + '"><i></i>' + esc(liveWord()) + "</span></div>" +
+      '<div class="actions">' + (isHost ? hostButtons().map((x) => '<button type="button" class="btn ' + (x.cls || "") + '" data-host="' + x.fn + '">' + esc(x.label) + "</button>").join("") : '<span class="small">' + esc(hostError || "관리자 비밀번호로 확인하는 중…") + "</span>") + "</div></section>" +
+      '<div class="top"><section class="panel"><h2>발표 화면 미리보기</h2><div class="proj-box"><div class="proj">' + projHtml() + "</div></div>" +
+      '<p class="small">프로젝터에 발표 화면(screen.html)을 띄워 두면 메인 관제가 <b>보스 레이드</b>일 때 이 화면이 그대로 나와요. BGM은 발표 화면 오른쪽 아래 버튼으로 켜요.</p></section>' +
+      '<section class="panel"><h2>진행자 전용 (참여자에게는 안 보임)</h2>' + adminHtml() + "</section></div>" +
+      (preview ? '<section class="panel"><h2>휴대폰 ' + personList().length + '대 미리보기</h2><p class="small">미리보기 모드라 여기서 눌러 보며 진행해 볼 수 있어요.</p><div class="phones">' +
+        TEAMS.map((tn, t) => '<div class="team-group"><div class="team-label">' + tn + '</div><div class="team-phones">' + teamOf(t).map((p) =>
+          '<div class="phone"><div class="phone-bar"><b>' + esc(p.name) + "</b><span>" + tn + '</span></div><div class="screen" id="screen-' + p.id + '">' + phoneHtml(p.id) + "</div></div>").join("") + "</div></div>").join("") +
+        "</div></section>" : "");
+  }
+  function settingsMountHtml() {
+    if (!canSettings()) return '<section class="panel"><h2>레이드 설정</h2><p class="small">' + esc(hostError || setupError || "관리자 비밀번호로 확인하는 중…") + "</p></section>";
+    return settingsHtml();
+  }
+  // 발표 화면: 메인 관제가 '보스 레이드'일 때 워드클라우드 대신
+  function screenMountHtml() {
+    return '<div class="screen-only"><div class="proj-box"><div class="proj">' + (ready.state ? projHtml() : '<div class="pv pv-center"><div class="sub">' + esc(setupError || "불러오는 중…") + "</div></div>") + "</div></div>" +
+      '<button type="button" class="bgm-float" data-bgm>' + (bgmOn() ? "♪ BGM 끄기" : "♪ BGM 켜기") + "</button></div>";
+  }
+  // 참여 화면: 내 휴대폰 (Knox ID 로 자동 입장)
+  function phoneMountHtml() {
+    const wrap = (inner) => '<div class="pwrap"><div class="screen">' + inner + lostNote() + "</div>" + (infoOpen ? infoHtml() : "") + "</div>";
+    if (!ready.state) return wrap(setupError ? '<h3>보스 레이드를<br>불러오지 못했어요</h3><div class="muted">' + esc(setupError) + "</div>" : "<h3>불러오는 중…</h3>");
+    if (!game || !personList().length) return wrap('<h3>보스 레이드가<br>곧 시작돼요</h3><div class="card"><div class="muted">진행자가 준비하고 있어요. 준비되면 이 화면이 자동으로 바뀌어요.</div></div>');
+    const me = myPid != null ? people[myPid] : null;
+    if (me && (me.claimed === false || (myName && me.name !== myName))) myPid = null;
+    if (myPid == null || !people[myPid]) {
+      setTimeout(ensureLogin, 0);
+      return wrap(loginState === "none"
+        ? '<h3>보스 레이드 명단에서<br>찾지 못했어요</h3><div class="card"><div class="muted">입장한 Knox ID가 보스 레이드 명단에 없어요. 조가 배정됐는지 진행자에게 알려 주세요. 명단에 들어가면 자동으로 입장돼요.</div></div>'
+        : "<h3>보스 레이드에<br>입장하는 중…</h3>");
     }
+    return '<div class="pwrap"><div class="pbar"><b>보스 레이드</b>' + infoBtn + '</div><div class="screen">' + phoneHtml(myPid) + lostNote() + "</div>" + (infoOpen ? infoHtml() : "") + "</div>";
+  }
+
+  const mounts = [];
+  const qsaAll = (sel) => mounts.flatMap((m) => [...m.root.querySelectorAll(sel)]);
+  const htmlFor = (m) => m.kind === "host" ? hostMountHtml() : m.kind === "settings" ? settingsMountHtml() : m.kind === "screen" ? screenMountHtml() : phoneMountHtml();
+  function render() {
+    syncBgm();
+    mounts.forEach((m) => {
+      const html = htmlFor(m);
+      if (html === m.last) return;
+      const root = m.root, scrolls = {};
+      root.querySelectorAll(".screen[id]").forEach((el) => { scrolls[el.id] = el.scrollTop; });
+      const ae = root.activeElement, af = ae && ae.dataset ? ae.dataset.f : null;
+      let sel = null;
+      try { if (af && ae.selectionStart != null) sel = [ae.selectionStart, ae.selectionEnd]; } catch (e) { /* 숫자 칸 */ }
+      m.last = html;
+      m.body.innerHTML = html;
+      root.querySelectorAll(".screen[id]").forEach((el) => { if (scrolls[el.id]) el.scrollTop = scrolls[el.id]; });
+      if (af) {
+        const el = root.querySelector('[data-f="' + af + '"]');
+        if (el) { el.focus({ preventScroll: true }); try { if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) { /* 숫자 칸 */ } }
+      }
+    });
+    scheduleRollEnd();
     tick();
   }
-  addEventListener("hashchange", () => { lastHtml = ""; render(); });
-  addEventListener("keydown", (e) => { if (e.key === "Escape" && infoOpen) { infoOpen = false; lastHtml = ""; render(); } });
-  let loggingIn = false;
-  document.addEventListener("submit", async (e) => {
-    if (e.target.closest("[data-idlogin]")) {
-      e.preventDefault();
-      if (loggingIn) return;
-      loggingIn = true;
-      try { const el = $("uid-in"); await joinById(el ? el.value : ""); } finally { loggingIn = false; }
-      return;
-    }
-    if (!e.target.closest("[data-login]")) return;
-    e.preventDefault();
-    if (loggingIn) return;
-    loggingIn = true;
-    try { await login(); } finally { loggingIn = false; }
-  });
+  function invalidate() { mounts.forEach((m) => { m.last = ""; }); render(); }
 
+  // ── 누르기 ──────────────────────────────────────────────────────
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && infoOpen) { infoOpen = false; invalidate(); } });
   let hostBusy = false;
-  document.addEventListener("click", async (e) => {
-    if (e.target.closest("[data-info]")) { infoOpen = true; lastHtml = ""; render(); return; }
-    if (e.target.closest("[data-bgm]")) { if (window.RaidSimBgm) { window.RaidSimBgm.toggle(); sfxKey = curSfxKey(); } lastHtml = ""; render(); return; }
+  async function onClick(e) {
+    if (e.target.closest("[data-info]")) { infoOpen = true; invalidate(); return; }
+    if (e.target.closest("[data-bgm]")) { if (window.RaidSimBgm) { window.RaidSimBgm.toggle(); sfxKey = curSfxKey(); } invalidate(); return; }
     const mb = e.target.closest("[data-more]");
-    if (mb) { const k = mb.dataset.more; if (moreOpen.has(k)) moreOpen.delete(k); else moreOpen.add(k); lastHtml = ""; render(); return; }
+    if (mb) { const k = mb.dataset.more; if (moreOpen.has(k)) moreOpen.delete(k); else moreOpen.add(k); invalidate(); return; }
     const ic = e.target.closest("[data-info-close]");
-    if (ic && (ic.classList.contains("info-btn") || e.target === ic)) { infoOpen = false; lastHtml = ""; render(); return; }
-    const tb = e.target.closest("[data-tab]");
-    if (tb) {
-      hostTab = tb.dataset.tab === "settings" ? "settings" : "run";
-      try { localStorage.setItem(STORE_TAB, hostTab); } catch (err) { /* 기억 못 해도 동작 */ }
-      lastHtml = ""; render(); scrollTo(0, 0);
-      return;
-    }
+    if (ic && (ic.classList.contains("info-btn") || e.target === ic)) { infoOpen = false; invalidate(); return; }
     const sb = e.target.closest("[data-set]");
     if (sb) {
       if (sb.disabled || setBusy) return;
       const [what, idx] = sb.dataset.set.split(":");
       setBusy = true;
-      try { await onSetButton(what, Number(idx)); } finally { setBusy = false; lastHtml = ""; render(); }
+      try { await onSetButton(what, Number(idx)); } finally { setBusy = false; invalidate(); }
       return;
     }
     const hb = e.target.closest("[data-host]");
     if (hb) {
       const [fn, arg] = hb.dataset.host.split(":");
       if (fn === "back" && !confirm(game && game.phase === "closed" ? "마감을 취소하고 회의로 돌아갈까요? 이번 라운드 판정은 마감할 때 다시 해요." : "한 단계 전으로 돌아갈까요?")) return;
-      if (!hostBusy) { hostBusy = true; hb.disabled = true; try { await backend.host(fn, arg ? Number(arg) : undefined); } finally { hostBusy = false; lastHtml = ""; render(); } }
+      if (fn === "reset" && !confirm("처음부터 다시 할까요? 캐릭터와 결과가 모두 지워져요.")) return;
+      if (!hostBusy) { hostBusy = true; hb.disabled = true; try { await backend.host(fn, arg ? Number(arg) : undefined); } finally { hostBusy = false; invalidate(); } }
       return;
     }
-    if (e.target.closest("[data-copy]")) {
-      try { await navigator.clipboard.writeText(JOIN_URL); toast("참여자 링크를 복사했어요"); }
-      catch (err) { const l = document.querySelector(".link"); if (l) { const r = document.createRange(); r.selectNodeContents(l); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } toast("링크를 선택해 두었어요. 복사해 주세요."); }
-      return;
-    }
-    const cb = e.target.closest("[data-claim]");
-    if (cb) { const ni = $("name-in"); claim(Number(cb.dataset.claim), ni ? ni.value : ""); return; }
-    if (e.target.closest("[data-leave]")) { leaveSeat(); return; }
     const b = e.target.closest("[data-a]");
     if (b && !b.disabled) personAct(Number(b.dataset.p), b.dataset.a, b.dataset.a === "pick" ? Number(b.dataset.m) : b.dataset.k);
-  });
+  }
+  function mount(el, kind) {
+    if (!el) return null;
+    const root = el.shadowRoot || el.attachShadow({ mode: "open" });
+    root.innerHTML = '<link rel="stylesheet" href="css/raid.css"><div class="rs rs-' + kind + '" data-body></div>';
+    const m = { el, root, kind, body: root.querySelector("[data-body]"), last: "" };
+    root.addEventListener("click", (e) => onClick(e, m));
+    root.addEventListener("input", (e) => onInput(e, m));
+    root.addEventListener("change", (e) => onChange(e, m));
+    mounts.push(m);
+    return m;
+  }
 
-  // ── 시작: Supabase 에 연결 (안 되면 이 브라우저 안에서) ──────────────
   async function loadPublic() {
     const { data, error } = await SB.from("raid_sim_public").select("data, rev").eq("id", 1).maybeSingle();
     if (error) throw error;
@@ -1487,46 +926,16 @@ a { color: var(--blue); }
   let lastRev = -1;
   // 워크샵 플랫폼에서 넘어온 화면(?from=join · ?from=screen)은 진행자가 메인 관제에서 "보스 레이드"가 아닌 프로그램을 고르면
   // 참여 화면(./) · 발표 화면(screen.html)으로 돌아갑니다.
-  async function watchPlatform() {
-    const from = new URLSearchParams(location.search).get("from");
-    if (!from || !CFG || !CFG.sessionCode) return;
-    const code = new URLSearchParams(location.search).get("s") || CFG.sessionCode;
-    const check = (sess) => {
-      if (!sess || !("program" in sess) || sess.program === "raid") return;
-      if (view() === "join") location.replace("./" + SESSION_Q);
-      else if (view() === "screen") location.replace("screen.html" + SESSION_Q);
-    };
-    try {
-      const { data } = await SB.from("sessions").select("*").eq("code", code).maybeSingle();
-      if (!data) return;
-      check(data);
-      SB.channel("raid-sim-session-" + Math.random().toString(36).slice(2, 8))
-        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sessions", filter: "id=eq." + data.id }, (p) => check(p.new))
-        .subscribe();
-      setInterval(async () => { try { const r = await SB.from("sessions").select("*").eq("id", data.id).maybeSingle(); check(r.data); } catch (e) { /* 다음에 */ } }, 15000);
-    } catch (e) { /* 플랫폼 표가 없으면 시뮬레이터만 */ }
-  }
-  // 워크샵 참여 화면에서 넣은 Knox ID(같은 사이트의 wc-knox-id)로 한 번 자동 입장
-  let autoTried = false;
-  function tryAutoLogin() {
-    if (autoTried || JOIN_MODE !== "roster" || loggingIn) return;
-    let id = null;
-    try { id = localStorage.getItem("wc-knox-id"); } catch (e) { /* 무시 */ }
-    autoTried = true;
-    if (id) joinById(id);
-  }
-
   async function connectSupabase() {
-    SB = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    SB = (window.WC && window.WC.db) || window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
     try {
       const row = await loadPublic();
       lastRev = row.rev;
       MODE = "supabase";
       onPublic(row.data, false);
-      watchPlatform();
     } catch (e) {
       if (/raid_sim_public|relation|schema cache|no row/i.test(String(e && e.message))) {
-        setupError = "Supabase 에 시뮬레이터 표가 없어요. SQL Editor 에서 supabase/raid-sim.sql 을 실행해 주세요.";
+        setupError = "보스 레이드 표가 없어요. Supabase SQL Editor 에서 supabase/raid-sim.sql 을 실행해 주세요.";
       } else setupError = "Supabase 에 연결하지 못했어요 (" + ((e && e.message) || "오류") + ").";
       return false;
     }
@@ -1537,7 +946,7 @@ a { color: var(--blue); }
       .subscribe((status) => {
         const was = connected;
         connected = status === "SUBSCRIBED";
-        if (was !== connected) { lastHtml = ""; render(); }
+        if (was !== connected) { invalidate(); }
       });
     // Realtime 이 잠깐 끊겨도 놓치지 않도록 10초마다 한 번 확인
     setInterval(async () => {
@@ -1546,6 +955,7 @@ a { color: var(--blue); }
     return true;
   }
   function startLocal() {
+    return new Promise((done) => {
     const s = document.createElement("script");
     s.src = "js/raid-sim-engine.js";
     s.onload = () => {
@@ -1554,28 +964,38 @@ a { color: var(--blue); }
       LOCAL = { engine: E, S };
       MODE = "local"; isHost = true; connected = true;
       apply(E.snapshot(S, true), true);
+      done();
     };
-    s.onerror = () => toast("js/raid-sim-engine.js 를 불러오지 못했어요. 저장소 폴더 안의 raid-sim.html 을 열어 주세요.");
+    s.onerror = () => { toast("js/raid-sim-engine.js 를 불러오지 못했어요."); done(); };
     document.head.appendChild(s);
+    });
   }
-  async function login() {
-    const el = $("pw");
-    const pw = el ? el.value : "";
-    if (!pw) { toast("진행자 비밀번호를 입력해 주세요"); return; }
-    password = pw;
-    if (await hostAct("state")) toast("진행자로 들어왔어요");
-    else password = null;
+  let startP = null;
+  function start(local) {
+    if (!startP) startP = local ? startLocal() : connectSupabase().then((ok) => { if (!ok) invalidate(); });
+    return startP;
   }
-  async function boot() {
-    const wantLocal = new URLSearchParams(location.search).has("local");
-    if (!wantLocal && CFG && !CFG.supabaseKey) setupError = "config.js 에 Supabase 공개 키(supabaseKey)를 넣어 주세요.";
-    else if (!wantLocal && CFG && window.supabase && await connectSupabase()) return;
-    startLocal();
-    if (setupError) toast(setupError + " 지금은 이 브라우저 안에서만 동작해요.");
-  }
-  render();
-  boot();
+
+  return {
+    // 관리 화면: host = '보스 레이드' 탭, settings = '레이드 설정' 탭, password() = 관리 화면의 관리자 비밀번호, demo = 서버 없는 미리보기
+    mountAdmin(opts) {
+      if (opts.password) getPassword = opts.password;
+      mount(opts.host, "host");
+      mount(opts.settings, "settings");
+      render();
+      start(!!opts.demo).then(() => { if (MODE === "supabase") hostAct("state"); });
+    },
+    // 발표 화면
+    mountScreen(el) { mount(el, "screen"); render(); start(false); },
+    // 참여 화면: knoxId = 워크샵에 입장한 Knox ID
+    mountPhone(el, opts) {
+      myKnox = opts && opts.knoxId ? String(opts.knoxId).toLowerCase() : null;
+      mount(el, "phone"); render(); start(false);
+    },
+    setKnox(id) {
+      const v = id ? String(id).toLowerCase() : null;
+      if (v === myKnox) return;
+      myKnox = v; myPid = null; myName = null; loginState = ""; invalidate();
+    },
+  };
 })();
-</script>
-</body>
-</html>

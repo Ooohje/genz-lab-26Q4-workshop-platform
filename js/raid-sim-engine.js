@@ -1,5 +1,5 @@
 // 보스 레이드 시뮬레이터의 규칙과 진행 상태 (스탯 판정, AI 없음).
-// raid-sim.html 의 연습 모드(?local 또는 Supabase 에 연결할 수 없을 때)에서 브라우저가 직접 씁니다. Supabase 판정은 supabase/raid-sim.sql (규칙이 같아야 합니다).
+// 관리 화면 미리보기(admin.html?demo=1)의 보스 레이드 탭에서 브라우저가 직접 씁니다. Supabase 판정은 supabase/raid-sim.sql (규칙이 같아야 합니다).
 //   캐릭터 스탯 5개: 체력 · 지력 · 친화력 · 멘탈 · 운
 //   공격력 = 판정 스탯 합 (+돌발 이벤트 주사위). 보스 HP 이상이면 격파 → 보상 점수.
 //   돌발 이벤트 룰렛: 진행자가 정한 칸(config.roulette, 2~10칸) 중 하나. 칸 효과 kind: power(공격력 ±value) · clear(격파하면 +value점) · fail(실패해도 +value점) · none

@@ -1,5 +1,5 @@
 -- =====================================================================
--- Gen Z Lab. 워크샵 플랫폼 — 보스 레이드 시뮬레이터 (raid-sim.html)
+-- Gen Z Lab. 워크샵 플랫폼 — 보스 레이드 (js/raid.js · 관리 화면 보스 레이드 탭)
 -- 워크샵 플랫폼과 같은 Supabase 프로젝트에서 씁니다. platform.sql 을 실행한 뒤 이 파일을 SQL Editor 에 통째로 붙여 넣고 Run.
 -- 명단: 진행자가 시뮬레이터에 명단을 따로 넣지 않으면 워크샵 명단(participants · teams, 관리 화면 '명단 · 조')을 그대로 씁니다(Chief Crew 조 제외).
 --       참여자는 워크샵 참여 화면에 넣은 Knox ID 로 자동 입장합니다. 워크샵 명단이 비어 있으면 6자리(A조·B조 3명씩) 연습판입니다.
@@ -530,7 +530,13 @@ begin
     when 'setup' then s := public.raid_sim_fresh();
     when 'make' then
       if v_stage <> 'lobby' then err := '대기 단계에서만 시작할 수 있어요';
-      else s := jsonb_set(s, '{game,stage}', '"make"'); end if;
+      else
+        -- 진행자가 명단을 따로 넣지 않았으면 워크샵 명단(명단 · 조 탭)으로 다시 맞춘 뒤 시작합니다
+        if not exists (select 1 from public.raid_sim_roster where id = 1 and jsonb_typeof(data) = 'array' and jsonb_array_length(data) > 0) then
+          s := public.raid_sim_fresh();
+        end if;
+        s := jsonb_set(s, '{game,stage}', '"make"');
+      end if;
     when 'fillChars' then
       if (g->>'locked')::boolean then err := '캐릭터가 이미 잠겼어요';
       else

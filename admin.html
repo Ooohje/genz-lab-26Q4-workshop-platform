@@ -44,7 +44,6 @@
         <span class="pill"><span class="dot" id="dot"></span><span id="status-text">응답 받는 중</span></span>
         <a class="pill" id="link-screen" href="screen.html" target="_blank" rel="noopener">발표 화면 열기</a>
         <a class="pill" id="link-join" href="./" target="_blank" rel="noopener">참여 화면 열기</a>
-        <a class="pill" id="link-raid" href="raid-sim.html" target="_blank" rel="noopener">보스 레이드 진행</a>
       </div>
     </header>
 
@@ -54,6 +53,8 @@
       <button type="button" class="tab" data-tab="roster" aria-pressed="false">명단 · 조</button>
       <button type="button" class="tab" data-tab="dinner" aria-pressed="false">석식 투표</button>
       <button type="button" class="tab" data-tab="teamvote" aria-pressed="false">우수팀 투표</button>
+      <button type="button" class="tab" data-tab="raid" aria-pressed="false">보스 레이드</button>
+      <button type="button" class="tab" data-tab="raidcfg" aria-pressed="false">레이드 설정</button>
     </nav>
 
     <div class="err" id="platform-msg" role="alert" hidden></div>
@@ -69,7 +70,7 @@
             <button type="button" class="program" data-program="wordcloud" aria-pressed="false"><b>워드클라우드</b><span>질문에 답변 보내기</span></button>
             <button type="button" class="program" data-program="dinner" aria-pressed="false"><b>석식 투표</b><span>참석 / 미참석</span></button>
             <button type="button" class="program" data-program="teamvote" aria-pressed="false"><b>우수팀 투표</b><span>발표가 좋았던 조 고르기</span></button>
-            <button type="button" class="program" data-program="raid" aria-pressed="false"><b>보스 레이드</b><span>오프닝 · 캐릭터 만들기부터 최종 순위까지 (보스 레이드 진행 화면에서)</span></button>
+            <button type="button" class="program" data-program="raid" aria-pressed="false"><b>보스 레이드</b><span>오프닝 · 진행은 '보스 레이드' 탭에서</span></button>
             <button type="button" class="program" data-program="end" aria-pressed="false"><b>마무리</b><span>끝인사 화면</span></button>
           </div>
         </section>
@@ -209,6 +210,10 @@
       </div>
     </div>
 
+    <!-- ───────── 보스 레이드 (js/raid.js) ───────── -->
+    <div class="tabpane" id="tab-raid" hidden><div id="raid-host"></div></div>
+    <div class="tabpane" id="tab-raidcfg" hidden><div id="raid-settings"></div></div>
+
     <!-- ───────── 워드클라우드 ───────── -->
     <div class="tabpane" id="tab-wordcloud" hidden>
     <div class="cols">
@@ -293,6 +298,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="js/common.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="js/raid.js"></script>
 <script src="js/admin-platform.js"></script>
 <script src="js/admin.js"></script>
 </body>

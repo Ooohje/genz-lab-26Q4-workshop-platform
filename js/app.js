@@ -17,6 +17,7 @@
   let me = null;         // { knox_id, name, team_no, team_name, teammates, dinner }
   let needsName = false; // 명단에 없는 Knox ID라 이름을 받아야 하는 상태
   let busy = false;
+  let raidMounted = false;
 
   const saved = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
   const save = (v) => { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch (e) { /* 무시 */ } };
@@ -39,10 +40,10 @@
 
   function render() {
     const view = currentView();
-    // 보스 레이드는 시뮬레이터(raid-sim.html)에서 합니다. 같은 Knox ID로 자동 입장하고, 진행자가 다른 프로그램을 고르면 이 화면으로 돌아옵니다.
-    if (view === "raid") {
-      location.replace("raid-sim.html?from=join" + (params.get("s") ? "&s=" + encodeURIComponent(params.get("s")) : "") + "#join");
-      return;
+    // 보스 레이드는 js/raid.js 가 이 화면 안에 그립니다. 입장한 Knox ID로 자동으로 자기 자리에 들어갑니다.
+    if (view === "raid" && me && window.WCRaid) {
+      if (!raidMounted) { window.WCRaid.mountPhone($("raid-phone"), { knoxId: me.knox_id }); raidMounted = true; }
+      else window.WCRaid.setKnox(me.knox_id);
     }
     document.querySelectorAll(".view").forEach((el) => { el.hidden = el.id !== "view-" + view; });
     window.WCJoin.setActive(view === "wordcloud");

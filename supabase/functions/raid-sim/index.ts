@@ -1,4 +1,4 @@
-// Gen Z Lab. 보스 레이드 시뮬레이터 — 진행자 Edge Function (raid-sim.html 전용)
+// Gen Z Lab. 보스 레이드 — 진행자 Edge Function (관리 화면의 보스 레이드 · 레이드 설정 탭, js/raid.js)
 //
 // 진행자 버튼(게임 준비, 보스 시작, 마감, 결과 공개 …)은 비밀번호를 확인한 뒤 이 함수가
 // 데이터베이스 함수 raid_sim_admin 을 부릅니다. 판정 스탯이 든 상태는 이 함수만 돌려줍니다.

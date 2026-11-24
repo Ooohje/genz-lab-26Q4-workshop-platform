@@ -145,7 +145,7 @@ AI 정리와 단어 추가·마감 차단은 3단계에서 화면을 붙인 뒤 
 3. Edge Functions > `admin` > Code에 [`functions/admin/index.ts`](functions/admin/index.ts)를 다시 붙여 넣고 **Deploy** (메인 관제의 "보스 레이드" 버튼).
 4. 비밀번호: 따로 정하지 않으면 **관리자 비밀번호(`ADMIN_PASSWORD`)를 그대로** 씁니다. 보스 레이드만 다른 비밀번호를 쓰려면 Secrets에 `RAID_SIM_PASSWORD`를 넣습니다.
 
-확인: `raid-sim.html`을 열어 관리자 비밀번호로 로그인 → **게임 준비하기** → 설정 탭 참여자 명단에 워크샵 명단이 보이면 됩니다.
+확인: 관리 화면 **보스 레이드** 탭 → **게임 준비하기** → 진행자 전용 칸에 워크샵 명단이 보이면 됩니다.
 참여자 명단은 `participants` · `teams`(명단 · 조 탭)를 그대로 읽습니다. 다른 프로젝트의 명단을 읽어야 할 때만 secret `WORKSHOP_SUPABASE_URL` · `WORKSHOP_SERVICE_ROLE_KEY`를 넣습니다.
 
 ## 로그아웃하면 입장 취소되게 하기

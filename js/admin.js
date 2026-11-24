@@ -54,7 +54,6 @@
     const suffix = params.get("s") ? "?s=" + encodeURIComponent(params.get("s")) : "";
     $("link-screen").href = "screen.html" + suffix;
     $("link-join").href = "./" + suffix;
-    $("link-raid").href = "raid-sim.html" + suffix;
     await resync();
     // 메인 관제·명단·석식 탭(js/admin-platform.js)에 연결
     PLATFORM.entered({
@@ -62,6 +61,8 @@
       getSession: () => session,
       setSession: (s) => { session = s; render(); },
     });
+    // 보스 레이드 탭 · 레이드 설정 탭 (js/raid.js): 이 화면의 관리자 비밀번호를 그대로 씁니다
+    if (window.WCRaid) window.WCRaid.mountAdmin({ host: $("raid-host"), settings: $("raid-settings"), password: () => password, demo: DEMO });
     if (DEMO) return;
     subscribe(session.id, {
       onWord: (r) => {
