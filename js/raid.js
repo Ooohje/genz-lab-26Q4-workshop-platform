@@ -544,9 +544,9 @@ window.WCRaid = (function () {
   const moreOpen = new Set();
   function fold(key, text) {
     const t = esc(text);
-    if (String(text || "").length <= 60) return '<div class="muted">' + t + "</div>";
     const open = moreOpen.has(key);
-    return '<div class="fold' + (open ? " open" : "") + '"><div class="muted ftxt">' + t + '</div><button type="button" class="more" data-more="' + key + '">' + (open ? "접기" : "더 보기") + "</button></div>";
+    // "더 보기"는 그린 뒤 실제로 두 줄을 넘칠 때만 보입니다 (measureFolds)
+    return '<div class="fold' + (open ? " open" : "") + '"><div class="muted ftxt">' + t + '</div><button type="button" class="more" data-more="' + key + '" hidden>' + (open ? "접기" : "더 보기") + "</button></div>";
   }
 
   let infoOpen = false;
@@ -864,7 +864,11 @@ window.WCRaid = (function () {
       let sel = null;
       try { if (af && ae.selectionStart != null) sel = [ae.selectionStart, ae.selectionEnd]; } catch (e) { /* 숫자 칸 */ }
       m.last = html;
+      const scene = sceneKey(m);
+      m.body.classList.toggle("settled", m.scene === scene);
+      m.scene = scene;
       m.body.innerHTML = html;
+      measureFolds(root);
       root.querySelectorAll(".screen[id]").forEach((el) => { if (scrolls[el.id]) el.scrollTop = scrolls[el.id]; });
       if (af) {
         const el = root.querySelector('[data-f="' + af + '"]');
@@ -873,6 +877,17 @@ window.WCRaid = (function () {
     });
     scheduleRollEnd();
     tick();
+  }
+  // 같은 장면인지: 장면이 바뀔 때만 애니메이션을 틀고, 같은 장면을 다시 그릴 때는 끝난 모습으로 (css/raid.css 의 .settled)
+  const sceneKey = (m) => !game ? "none" : [game.stage, game.phase, game.round, rolling() ? "spin" : "", m.kind === "phone" ? myPid : ""].join("|");
+  // 긴 글: 두 줄을 넘칠 때만 "더 보기"/"접기"
+  function measureFolds(root) {
+    root.querySelectorAll(".fold").forEach((f) => {
+      const t = f.querySelector(".ftxt"), b = f.querySelector(".more");
+      if (!t || !b || !t.clientHeight) return;
+      const lh = parseFloat(getComputedStyle(t).lineHeight) || 20;
+      b.hidden = !(f.classList.contains("open") ? t.scrollHeight > lh * 2 + 2 : t.scrollHeight > t.clientHeight + 1);
+    });
   }
   function invalidate() { mounts.forEach((m) => { m.last = ""; }); render(); }
 
@@ -913,6 +928,8 @@ window.WCRaid = (function () {
     root.addEventListener("click", (e) => onClick(e, m));
     root.addEventListener("input", (e) => onInput(e, m));
     root.addEventListener("change", (e) => onChange(e, m));
+    // 화면 크기가 바뀌거나 숨겨졌던 탭이 보이면 "더 보기"를 다시 잼
+    if (window.ResizeObserver) new ResizeObserver(() => measureFolds(root)).observe(el);
     mounts.push(m);
     return m;
   }
