@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<title>보스 레이드 시뮬레이터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="raid-sim-config.js"></script>
+<style>
+/* 화면 세 가지: 진행자(기본) · 참여자(#join, 휴대폰) · 발표 화면(#screen, 프로젝터 전체 화면). 모두 같은 실시간 데이터를 봅니다. */
+:root {
+  --bg: #EEF0F7; --panel: #FFFFFF; --ink: #1F2540; --muted: #626A88; --line: #DCE0EE; --soft: #F4F5FA;
+  --coral: #F4775C; --coral-deep: #C2462B; --blue: #4A6FD0; --gold: #FFC23D; --ok: #2E9E6B;
+  --stage: #F7F3EE; --stage-ink: #1F2540;
+  --f-display: "Do Hyeon", "Noto Sans KR", system-ui, sans-serif;
+  --f-body: "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121420; --panel: #1C1F30; --ink: #ECEEF8; --muted: #9EA5C2; --line: #2E3350; --soft: #252941; color-scheme: dark;
+} }
+:root[data-theme="dark"] { --bg: #121420; --panel: #1C1F30; --ink: #ECEEF8; --muted: #9EA5C2; --line: #2E3350; --soft: #252941; color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 40px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: default; opacity: 0.45; }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+a { color: var(--blue); }
+.wrap { max-width: 1440px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.sec-title { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 6px; }
+.small { font-size: 12px; color: var(--muted); }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 40; max-width: min(92vw, 520px);
+  padding: 10px 16px; border-radius: 12px; background: var(--ink); color: var(--panel); font-weight: 700; font-size: 13px; }
+
+.host { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  padding: 12px max(16px, env(safe-area-inset-left, 0px)); background: var(--panel); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
+.host-in { max-width: 1440px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; flex-wrap: wrap; }
+.brand h1 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 26px; }
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.live.on i { background: var(--ok); }
+.step { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 14px; background: var(--ink); color: var(--panel); font-size: 12px; font-weight: 700; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { height: 40px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft); font-weight: 700; font-size: 14px; color: var(--ink); }
+.btn.go { background: var(--coral); border-color: var(--coral); color: #1F2540; }
+.btn.quiet { background: transparent; color: var(--muted); }
+.login { display: flex; gap: 8px; flex-wrap: wrap; }
+.login input { height: 40px; min-width: 0; width: 200px; max-width: 100%; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; }
+.top { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel h2 { margin: 0; font-size: 15px; }
+.join-box { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 14px; align-items: center; }
+.qr { width: 112px; height: 112px; padding: 6px; border-radius: 10px; background: #fff; }
+.qr svg { width: 100%; height: 100%; display: block; }
+.link { font-size: 12.5px; word-break: break-all; padding: 6px 8px; border-radius: 8px; background: var(--soft); user-select: all; }
+.secret { padding: 10px 12px; border-radius: 10px; background: var(--soft); font-size: 13px; line-height: 1.55; }
+.secret b { color: var(--coral-deep); }
+.res-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.res-table th, .res-table td { padding: 6px 4px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+.res-table th { color: var(--muted); font-weight: 500; border-top: none; white-space: nowrap; }
+.res-table td:first-child, .res-table .n { white-space: nowrap; }
+.res-table .n { text-align: right; font-variant-numeric: tabular-nums; }
+.res-table .ok { color: var(--coral-deep); font-weight: 700; }
+.who-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.who { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; align-items: center; padding: 6px 8px; border-radius: 10px; background: var(--soft); font-size: 12.5px; }
+.who .art { width: 34px; aspect-ratio: 16 / 18; border-radius: 6px; background: rgba(127, 127, 127, 0.15); }
+.who b { display: block; }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 4px; vertical-align: 1px; }
+.dot.on { background: var(--ok); }
+
+.proj-box { container-type: inline-size; }
+.proj { position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; color: var(--stage-ink);
+  background: radial-gradient(120% 90% at 85% 10%, #F6C9D8 0%, transparent 55%), radial-gradient(90% 80% at 10% 100%, #BFD0F5 0%, transparent 60%), var(--stage);
+  box-shadow: 0 12px 32px -18px rgba(31, 37, 64, 0.45); }
+.screen-only { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #0E1018; z-index: 30; }
+.screen-only .proj-box { width: min(100vw, 177.78vh); }
+.screen-only .proj { border-radius: 0; }
+.pv { position: absolute; inset: 0; padding: 4.2cqw 4.6cqw; display: flex; flex-direction: column; gap: 1.6cqw; }
+.pv .eyebrow { font-size: 1.4cqw; font-weight: 700; color: var(--coral-deep); }
+.pv .h { font-family: var(--f-display); font-size: 4.2cqw; line-height: 1.1; text-wrap: balance; }
+.pv .sub { font-size: 1.6cqw; color: #545C7A; line-height: 1.45; }
+.glass { background: rgba(255, 255, 255, 0.72); border-radius: 1.4cqw; }
+.pv-center { align-items: center; justify-content: center; text-align: center; }
+.stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2cqw; }
+.stat-card { padding: 1.4cqw; display: flex; flex-direction: column; gap: 0.6cqw; border-top: 0.45cqw solid var(--c); }
+.stat-card .art { width: 7cqw; aspect-ratio: 16 / 18; align-self: center; }
+.stat-card b { font-family: var(--f-display); font-weight: 400; font-size: 2.6cqw; color: var(--c); }
+.stat-card span { font-size: 1.25cqw; line-height: 1.4; }
+.pv-foot { margin-top: auto; display: flex; gap: 1.2cqw; align-items: stretch; }
+.count { display: flex; align-items: baseline; gap: 0.8cqw; padding: 1.2cqw 2cqw; font-size: 1.6cqw; font-weight: 700; }
+.count b { font-family: var(--f-display); font-weight: 400; font-size: 4.6cqw; }
+.pv-qr { display: flex; align-items: center; gap: 1.2cqw; padding: 1cqw 1.6cqw; font-size: 1.4cqw; font-weight: 700; margin-left: auto; text-align: left; }
+.pv-qr .q { width: 8cqw; height: 8cqw; background: #fff; padding: 0.4cqw; border-radius: 0.6cqw; }
+.pv-qr .q svg { width: 100%; height: 100%; display: block; }
+.qs { margin: 0; padding-left: 3.4cqw; display: flex; flex-direction: column; gap: 1.2cqw; font-size: 2.5cqw; line-height: 1.35; }
+.qs b { color: var(--coral-deep); }
+.timer { font-family: var(--f-display); font-size: 4.6cqw; padding: 0.6cqw 2cqw; font-variant-numeric: tabular-nums; }
+.timer.urgent { color: var(--coral-deep); }
+.rules { margin: 0; padding-left: 3cqw; display: flex; flex-direction: column; gap: 1cqw; font-size: 2cqw; line-height: 1.4; text-align: left; }
+.boss-row { display: grid; grid-template-columns: 17cqw minmax(0, 1fr); gap: 2.6cqw; align-items: center; padding: 2.2cqw 2.6cqw; }
+.boss-art { width: 17cqw; aspect-ratio: 12 / 11; animation: bob 1.6s ease-in-out infinite alternate; }
+.boss-name { font-family: var(--f-display); font-size: 3.6cqw; line-height: 1.15; text-wrap: balance; }
+.boss-desc { font-size: 1.7cqw; line-height: 1.45; margin-top: 0.6cqw; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.6cqw; margin-top: 1cqw; }
+.chips span { padding: 0.35cqw 1.1cqw; border-radius: 2cqw; background: #fff; font-size: 1.3cqw; font-weight: 700; }
+.chips .hot { background: var(--coral); }
+.meet-foot { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 1.2cqw; }
+.hint { display: flex; align-items: center; gap: 1cqw; padding: 1.2cqw 1.8cqw; font-size: 1.8cqw; font-weight: 700; }
+.hint em { font-style: normal; flex-shrink: 0; padding: 0.3cqw 0.9cqw; border-radius: 1cqw; background: var(--stage-ink); color: #fff; font-size: 1.2cqw; }
+.mini-count { display: flex; align-items: baseline; gap: 0.6cqw; padding: 0.8cqw 1.8cqw; font-size: 1.3cqw; font-weight: 700; }
+.mini-count b { font-family: var(--f-display); font-weight: 400; font-size: 3.4cqw; }
+.event-note { padding: 0.8cqw 1.6cqw; font-size: 1.3cqw; font-weight: 700; }
+.fighters { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.6cqw; }
+.fighter { display: grid; grid-template-columns: 11cqw minmax(0, 1fr); gap: 1.6cqw; align-items: center; padding: 2cqw; animation: rise 0.6s both; }
+.fighter .art { width: 11cqw; aspect-ratio: 16 / 18; }
+.fighter b { font-family: var(--f-display); font-weight: 400; font-size: 3.2cqw; display: block; }
+.fighter span { font-size: 1.5cqw; color: #545C7A; }
+.reveal-stats { font-family: var(--f-display); font-size: 5cqw; line-height: 1; animation: pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.bars { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 1.6cqw; padding: 2cqw 2.4cqw; }
+.bar-row { display: grid; grid-template-columns: 7cqw 15cqw minmax(0, 1fr) 15cqw; gap: 1.4cqw; align-items: center; animation: rise 0.6s both; }
+.bar-row .art { width: 7cqw; aspect-ratio: 16 / 18; }
+.bar-row .nm b { font-family: var(--f-display); font-weight: 400; font-size: 2.4cqw; display: block; }
+.bar-row .nm span { font-size: 1.4cqw; color: #545C7A; }
+.track { position: relative; height: 3cqw; border-radius: 1.5cqw; background: rgba(31, 37, 64, 0.08); }
+.track i { position: absolute; inset: 0 auto 0 0; border-radius: 1.5cqw; background: var(--blue); animation: grow 1.4s 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.bar-row.win .track i { background: var(--coral); }
+.track::after { content: ""; position: absolute; top: -0.8cqw; bottom: -0.8cqw; left: var(--hp); border-left: 0.3cqw dashed var(--coral-deep); }
+.res { display: flex; flex-direction: column; align-items: flex-start; gap: 0.2cqw; }
+.res b { font-family: var(--f-display); font-weight: 400; font-size: 3cqw; line-height: 1; }
+.res span { font-size: 1.3cqw; font-weight: 700; }
+.bar-row.win .res b { color: var(--coral-deep); }
+.star { padding: 0.1cqw 0.7cqw; border-radius: 0.8cqw; background: var(--gold); font-size: 1.1cqw; font-weight: 900; }
+.hp-note { font-size: 1.3cqw; font-weight: 700; color: var(--coral-deep); }
+.board { display: flex; gap: 1cqw; }
+.board span { padding: 0.5cqw 1.4cqw; border-radius: 1cqw; background: rgba(255, 255, 255, 0.8); font-size: 1.4cqw; font-weight: 700; }
+.podium { flex: 1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 3cqw; align-items: end; padding: 0 10cqw; }
+.podium div { display: flex; flex-direction: column; gap: 1cqw; text-align: center; animation: rise 0.8s both; }
+.podium b { font-family: var(--f-display); font-weight: 400; font-size: 3.6cqw; }
+.podium span { font-size: 1.6cqw; font-weight: 700; }
+.podium .block { font-family: var(--f-display); font-size: 3.4cqw; border-radius: 1.6cqw 1.6cqw 0 0; display: flex; align-items: center; justify-content: center; }
+.podium .r1 .block { height: 22cqw; background: rgba(255, 194, 61, 0.8); }
+.podium .r2 .block { height: 14cqw; }
+
+.phones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.team-group { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.team-phones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.team-label { font-weight: 700; font-size: 13px; color: var(--muted); }
+.phone { min-width: 0; height: 600px; border-radius: 26px; border: 6px solid #1F2540; background: #FBF9F6; color: #1F2540; display: flex; flex-direction: column; overflow: hidden; }
+.phone-bar { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 8px 12px; background: #fff; border-bottom: 1px solid #ECEAF2; font-size: 12px; color: #1F2540; }
+.phone-bar b { font-size: 13px; margin-right: auto; }
+.phone-bar > span { padding: 1px 8px; border-radius: 9px; background: #EEF0F7; font-weight: 700; }
+.screen { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.joinview { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; color: #1F2540; background: #FBF9F6;
+  margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding-inline: max(14px, env(safe-area-inset-left, 0px)) max(14px, env(safe-area-inset-right, 0px)); }
+.joinview > .screen { width: 100%; max-width: 480px; margin-inline: auto; }
+.joinview .phone-bar { margin-inline: calc(-1 * max(14px, env(safe-area-inset-left, 0px))); padding-right: max(14px, env(safe-area-inset-right, 0px)); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 3; padding-inline: max(14px, env(safe-area-inset-left, 0px)); font-size: 14px; }
+.joinview .screen { padding: 14px 0 24px; overflow: visible; }
+.screen h3 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 22px; line-height: 1.2; }
+.card { background: #fff; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 1px 0 #ECEAF2; }
+.card .t { font-weight: 700; font-size: 14px; }
+.muted { color: #6B7290; font-size: 12.5px; line-height: 1.5; }
+.remain { font-weight: 700; font-size: 13px; padding: 6px 10px; border-radius: 10px; background: rgba(244, 119, 92, 0.15); }
+.remain.done { background: rgba(46, 158, 107, 0.15); }
+.stepper { display: grid; grid-template-columns: 46px 36px minmax(0, 1fr) 22px 36px; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+.stepper button { height: 36px; border-radius: 10px; border: none; background: #1F2540; color: #fff; font-size: 19px; line-height: 1; }
+.bar { height: 9px; border-radius: 5px; background: #ECEEF5; overflow: hidden; }
+.bar b { display: block; height: 100%; }
+.pbtn { min-height: 42px; border-radius: 12px; border: none; background: var(--coral); color: #1F2540; font-weight: 800; font-size: 14px; padding: 0 12px; }
+.pbtn.ghost { background: #EEF0F7; }
+.row { display: flex; gap: 6px; }
+.row > * { flex: 1; }
+.pc { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border-radius: 12px; text-align: left; border: 2px solid transparent;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--aura) 16%, #fff), #fff); width: 100%; color: #1F2540; }
+.pc .art { width: 56px; aspect-ratio: 16 / 18; background: rgba(255, 255, 255, 0.8); border-radius: 8px; padding: 2px; }
+.pc .ttl { font-size: 11px; font-weight: 700; color: color-mix(in srgb, var(--aura) 75%, #1F2540); }
+.pc .nm { font-weight: 700; font-size: 14px; }
+.pc .tag, .tag { font-size: 10.5px; padding: 0 6px; border-radius: 6px; background: #EEF0F7; margin-left: 4px; font-weight: 700; }
+.pc.on { border-color: #1F2540; }
+.pc.big { grid-template-columns: 92px minmax(0, 1fr); }
+.pc.big .art { width: 92px; }
+.pc.empty { background: #F4F5FA; border: 2px dashed #DCE0EE; }
+.mstats { display: grid; grid-template-columns: 36px minmax(0, 1fr) 14px; gap: 2px 5px; align-items: center; font-size: 11px; font-weight: 700; margin-top: 2px; }
+.mstats i { height: 5px; border-radius: 3px; background: #ECEEF5; overflow: hidden; }
+.mstats i b { display: block; height: 100%; }
+.ptimer { font-family: var(--f-display); font-size: 24px; color: var(--coral-deep); font-variant-numeric: tabular-nums; }
+.outcome { font-family: var(--f-display); font-size: 24px; }
+.outcome.win { color: var(--coral-deep); }
+.rank-row { display: grid; grid-template-columns: 40px 1fr auto; padding: 8px 10px; border-radius: 10px; font-size: 14px; }
+.rank-row.mine { background: #1F2540; color: #fff; }
+.phone-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.phone-chips span { padding: 1px 8px; border-radius: 8px; background: #EEF0F7; font-size: 11.5px; font-weight: 700; }
+.phone-chips .hot { background: var(--coral); }
+.slot { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 12px; border-radius: 12px; border: 2px solid #ECEAF2; background: #fff; text-align: left; width: 100%; color: #1F2540; }
+.slot b { font-size: 15px; }
+.slot.taken { opacity: 0.7; }
+.namebox { width: 100%; height: 42px; padding: 0 12px; border-radius: 10px; border: 1.5px solid #DCE0EE; font: inherit; font-size: 15px; background: #fff; color: #1F2540; }
+.notice { padding: 10px 12px; border-radius: 12px; background: #FFF4D6; color: #6B4A00; font-size: 13px; }
+
+@keyframes bob { to { transform: translateY(-4%); } }
+@keyframes rise { from { opacity: 0.2; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0.2; transform: scale(0.8); } to { opacity: 1; transform: none; } }
+@keyframes grow { from { width: 0; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01s !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; } }
+@media (max-width: 1100px) { .top { grid-template-columns: minmax(0, 1fr); } .phones { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .team-phones { grid-template-columns: minmax(0, 1fr); } .phone { height: 560px; } .brand h1 { font-size: 22px; } .join-box { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<!-- 보스 레이드 시뮬레이터 (스탯 판정, AI 없음). 진행자 화면 · 발표 화면(#screen) · 참여자 휴대폰(#join)이
+     시뮬레이터 전용 Supabase 프로젝트(raid-sim-config.js, supabase/raid-sim.sql)에 실시간으로 연결되고, 판정은 데이터베이스 함수가 합니다. 진행 버튼은 진행자 비밀번호로(Edge Function raid-sim).
+     ?local 을 붙여 열거나 Supabase 에 연결할 수 없으면 같은 화면이 이 브라우저 안에서만 동작합니다(휴대폰 6대 미리보기로 진행). -->
+
+<div id="app"></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  // 참여자에게 보내는 주소. 이 페이지를 연 주소 그대로에 #join 을 붙입니다.
+  const JOIN_URL = location.href.split("#")[0] + "#join";
+
+  const STATS = [
+    { key: "hp", label: "체력", desc: "오래 버티는 힘, 몸으로 밀어붙이는 추진력", color: "#E0694E" },
+    { key: "intel", label: "지력", desc: "분석하고 정리하고 구조를 짜는 힘", color: "#4A6FD0" },
+    { key: "social", label: "친화력", desc: "사람을 연결하고 분위기를 만드는 힘", color: "#2E9E6B" },
+    { key: "mental", label: "멘탈", desc: "압박과 변수 앞에서 흔들리지 않는 힘", color: "#8A63D2" },
+  ];
+  const KEYS = STATS.map((s) => s.key);
+  const LABEL = Object.fromEntries(STATS.map((s) => [s.key, s.label]));
+  const COLOR = Object.fromEntries(STATS.map((s) => [s.key, s.color]));
+  const TEAMS = ["A조", "B조"];
+  // 보스 정보는 Supabase(또는 js/raid-sim-engine.js)가 보내 줍니다. 판정 스탯은 결과 공개 전까지 진행자에게만 옵니다.
+  let BOSSES = [];
+  const DICE_WORD = { 1: "노트북 업데이트 시작", 6: "동기가 자료를 먼저 보내 줌" };
+
+  // ── 픽셀 캐릭터 (js/raid-common.js 와 같은 그림) ───────────────
+  function rng(seed) {
+    let a = (seed >>> 0) || 1;
+    return function () { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  const SKINS = ["#FBE3CF", "#F9D7B9", "#F1C29A", "#E0A87E", "#C68A5E", "#8D5A3B"];
+  const HAIR_COLORS = ["#2B2238", "#4A2F24", "#7A4A2A", "#C8902F", "#B5473D", "#5B4BC4", "#2F4BA8", "#BFC3D2"];
+  const HAIR_STYLES = ["short", "bob", "spiky", "part", "bun", "long", "buzz"];
+  const TITLES = { "hp+intel": "야근하는 설계자", "hp+social": "회식의 분위기 메이커", "hp+mental": "불굴의 현장러", "intel+social": "회의실의 조율자", "intel+mental": "냉철한 전략가", "social+mental": "사내 상담소장" };
+  function parts(c) {
+    const r = rng(c.seed);
+    const tie = KEYS.map(() => r());
+    const order = KEYS.map((k, i) => ({ k, v: Number(c[k]) || 0, t: tie[i] })).sort((a, b) => b.v - a.v || b.t - a.t).map((x) => x.k);
+    return { top: order[0], second: order[1], low: order[3], sparkle: (Number(c[order[0]]) || 0) >= 8, blush: (Number(c.social) || 0) >= 7,
+      skin: SKINS[Math.floor(r() * SKINS.length)], hairColor: HAIR_COLORS[Math.floor(r() * HAIR_COLORS.length)], hairStyle: HAIR_STYLES[Math.floor(r() * HAIR_STYLES.length)] };
+  }
+  function title(c) {
+    if (KEYS.every((k) => c[k] >= 4 && c[k] <= 6)) return "만능 올라운더";
+    const p = parts(c);
+    return TITLES[KEYS.filter((k) => k === p.top || k === p.second).join("+")];
+  }
+  function sprite(c) {
+    const p = parts(c), out = [];
+    const px = (x, y, w, h, f) => out.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + f + '"/>');
+    const OL = "#1F2540", H = p.hairColor, S = p.skin, MOUTH = "#9C4A3F", GOLD = "#FFC23D";
+    if (p.sparkle) { px(1, 0, 1, 3, GOLD); px(0, 1, 3, 1, GOLD); px(15, 9, 1, 1, GOLD); px(1, 13, 1, 1, GOLD); px(14, 0, 1, 1, GOLD); }
+    if (p.hairStyle === "long") px(2, 4, 12, 9, H);
+    px(3, 2, 10, 9, OL); px(4, 3, 8, 7, S);
+    switch (p.hairStyle) {
+      case "short": px(4, 1, 8, 1, OL); px(3, 2, 10, 2, H); px(3, 4, 1, 2, H); px(12, 4, 1, 2, H); break;
+      case "bob": px(4, 1, 8, 1, OL); px(3, 2, 10, 2, H); px(3, 4, 2, 6, H); px(11, 4, 2, 6, H); break;
+      case "spiky": px(3, 2, 10, 2, H); [3, 5, 7, 9, 11].forEach((x) => px(x, 1, 1, 1, H)); px(3, 4, 1, 1, H); px(12, 4, 1, 1, H); break;
+      case "part": px(4, 1, 8, 1, OL); px(3, 2, 10, 2, H); px(3, 4, 4, 1, H); px(3, 5, 1, 2, H); px(12, 4, 1, 2, H); break;
+      case "bun": px(4, 1, 8, 1, OL); px(6, 0, 4, 2, H); px(3, 2, 10, 2, H); px(3, 4, 1, 2, H); px(12, 4, 1, 2, H); break;
+      case "long": px(4, 1, 8, 1, OL); px(3, 2, 10, 2, H); px(3, 4, 1, 3, H); px(12, 4, 1, 3, H); break;
+      default: px(4, 1, 8, 1, OL); px(3, 2, 10, 1, H);
+    }
+    if (p.low === "social") { px(5, 6, 2, 1, OL); px(9, 6, 2, 1, OL); px(6, 8, 4, 1, MOUTH); }
+    else {
+      px(6, 6, 1, 1, OL); px(9, 6, 1, 1, OL);
+      if (p.low === "hp") { px(6, 7, 1, 1, "#A99BD6"); px(9, 7, 1, 1, "#A99BD6"); px(7, 8, 2, 1, MOUTH); }
+      else if (p.low === "intel") { px(7, 8, 2, 1, MOUTH); px(13, 0, 3, 1, "#F4775C"); px(15, 1, 1, 1, "#F4775C"); px(14, 2, 1, 1, "#F4775C"); px(14, 4, 1, 1, "#F4775C"); }
+      else { px(6, 9, 1, 1, MOUTH); px(7, 8, 2, 1, MOUTH); px(9, 9, 1, 1, MOUTH); px(13, 4, 1, 1, "#7FC8F8"); px(13, 5, 1, 2, "#7FC8F8"); }
+    }
+    if (p.blush) { px(5, 8, 1, 1, "#F4A6A6"); px(10, 8, 1, 1, "#F4A6A6"); }
+    const OUTFIT = { hp: ["#E0694E", "#B9503A"], intel: ["#F2F4FB", "#C9CEE0"], social: ["#F7B7C8", "#E48FA7"], mental: ["#5B5F7A", "#454962"] };
+    const [main, shade] = OUTFIT[p.top];
+    px(3, 11, 10, 5, main); px(4, 16, 8, 1, main); px(4, 12, 1, 4, shade); px(11, 12, 1, 4, shade);
+    px(3, 16, 1, 1, S); px(12, 16, 1, 1, S); px(5, 17, 2, 1, "#2B2F4A"); px(9, 17, 2, 1, "#2B2F4A");
+    if (p.top === "hp") { px(8, 11, 1, 6, "#FBE0D9"); px(3, 11, 1, 5, "#FFFFFF"); px(12, 11, 1, 5, "#FFFFFF"); px(3, 4, 10, 1, "#E0694E"); }
+    else if (p.top === "intel") { px(7, 11, 2, 4, "#2F4BA8"); px(5, 11, 2, 1, "#FFFFFF"); px(9, 11, 2, 1, "#FFFFFF"); px(5, 5, 2, 1, OL); px(9, 5, 2, 1, OL); px(7, 6, 2, 1, OL); if (p.low !== "social") { px(5, 6, 1, 1, "#BFD3FF"); px(10, 6, 1, 1, "#BFD3FF"); } }
+    else if (p.top === "social") { [5, 7, 9].forEach((x) => px(x, 13, 1, 1, "#FFFFFF")); [6, 8, 10].forEach((x) => px(x, 15, 1, 1, "#FFFFFF")); }
+    else { px(6, 11, 1, 2, "#FFFFFF"); px(9, 11, 1, 2, "#FFFFFF"); px(6, 14, 4, 2, shade); px(3, 1, 10, 1, "#3A3F5C"); px(2, 5, 2, 3, "#F4775C"); px(12, 5, 2, 3, "#F4775C"); }
+    if (p.second === "hp") { px(13, 11, 2, 1, "#9AA3BF"); px(13, 12, 2, 5, "#2E9E6B"); px(13, 13, 2, 1, "#D6EFE3"); }
+    else if (p.second === "intel") { px(12, 13, 4, 4, "#C7CCDD"); px(12, 13, 4, 1, "#9AA3BF"); px(13, 15, 2, 1, "#FFFFFF"); }
+    else if (p.second === "social") { px(12, 13, 2, 1, "#6B4A2E"); px(14, 13, 2, 1, "#6B4A2E"); px(12, 14, 2, 3, "#FFFFFF"); px(14, 14, 2, 3, "#FFFFFF"); px(12, 15, 2, 1, "#C98A1B"); px(14, 15, 2, 1, "#C98A1B"); }
+    else { px(14, 12, 1, 3, "#2E9E6B"); px(13, 13, 1, 1, "#2E9E6B"); px(15, 13, 1, 1, "#2E9E6B"); px(13, 15, 3, 2, "#C2462B"); }
+    return '<svg viewBox="0 0 16 18" shape-rendering="crispEdges" aria-hidden="true" style="display:block;width:100%;height:100%">' + out.join("") + "</svg>";
+  }
+  const BOSS_ART = ["..h......h..", "..hh....hh..", ".XXXXXXXXXX.", "XXXXXXXXXXXX", "XXwwXXXXwwXX", "XXwkXXXXwkXX", "XXXXXXXXXXXX", "XXmmmmmmmmXX", "XXmtmtmtmtXX", ".XXXXXXXXXX.", ".XX..XX..XX."];
+  const BOSS_COLORS = ["#5B7FD6", "#8A63D2", "#2E9E6B", "#E0694E", "#1F2540"];
+  function bossSprite(round) {
+    const body = BOSS_COLORS[(round - 1) % 5];
+    const fill = { X: body, h: round >= 5 ? "#FFC23D" : body, w: "#FFFFFF", k: "#1F2540", m: "#3A1F2B", t: "#FFFFFF" };
+    let out = "";
+    BOSS_ART.forEach((row, y) => [...row].forEach((ch, x) => { if (fill[ch]) out += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="' + fill[ch] + '"/>'; }));
+    return '<svg class="boss-art" viewBox="0 0 12 11" shape-rendering="crispEdges" aria-hidden="true">' + out + "</svg>";
+  }
+  const auraOf = (c) => COLOR[parts(c).top];
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  const statsText = (keys) => (keys ? keys.map((k) => LABEL[k]).join(" + ") : "비공개");
+  const rand = (n) => Math.floor(Math.random() * n);
+  function randomStats() { for (;;) { const a = [1, 1, 1, 1]; for (let k = 0; k < 16; k++) a[rand(4)]++; if (Math.max(...a) <= 10) return { hp: a[0], intel: a[1], social: a[2], mental: a[3] }; } }
+  const qrCache = {};
+  function qrSvg(text) {
+    if (qrCache[text]) return qrCache[text];
+    try { const q = window.qrcode(0, "M"); q.addData(text); q.make(); return (qrCache[text] = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true })); } catch (e) { return ""; }
+  }
+
+  // ── 상태: Supabase 가 보내 주는 그대로 그립니다 ───────────────────
+  // 진행·판정은 Supabase 데이터베이스 함수(supabase/raid-sim.sql)가 하고, 바뀔 때마다 Realtime 으로 모든 화면에 옵니다.
+  // 진행자 버튼은 진행자 비밀번호를 거쳐 raid-sim Edge Function 으로 갑니다.
+  // ?local 을 붙여 열거나 Supabase 에 연결할 수 없으면 js/raid-sim-engine.js 를 이 브라우저 안에서 돌립니다.
+  let MODE = "loading";     // "supabase" | "local"
+  let isHost = false;       // 판정 스탯까지 보이는 진행자 화면인지 (진행자 비밀번호 확인 뒤)
+  let connected = false;
+  let clockOffset = 0;      // 서버 시각 - 이 기기 시각 (타이머 보정)
+  const ready = { state: false, people: false };
+  let game = null;          // 진행 상태와 결과
+  const people = {};        // 자리 0..5 (이름, 조, 캐릭터)
+  const picks = {};         // r{라운드}t{조} → {pid, by, auto}
+  const drafts = {};        // 휴대폰마다 고치는 중인 스탯 (저장 전, 이 기기에만)
+  const editing = {};
+  const STORE_ME = "raid-sim-me";
+  let myPid = null;
+  try { const v = localStorage.getItem(STORE_ME); if (v !== null && v !== "") myPid = Number(v); } catch (e) { /* 기억 못 해도 동작 */ }
+  const now = () => Date.now() + clockOffset;
+  const CFG = window.RAID_SIM_CONFIG || null;   // raid-sim-config.js (워크샵 본 프로젝트와 따로)
+  let SB = null;            // Supabase 클라이언트
+  let password = null;      // 진행자 비밀번호. 메모리에만 두고, 새로고침하면 다시 입력합니다.
+  let setupError = "";      // raid-sim.sql 을 아직 안 돌렸을 때 등
+
+  function toast(msg) {
+    const el = document.getElementById("toast");
+    el.textContent = msg; el.hidden = false;
+    clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 3500);
+  }
+  // fresh: 방금 만든 상태라서 서버 시각으로 이 기기 시계를 보정해도 되는지
+  function apply(snap, fresh) {
+    if (!snap || !snap.people) return;
+    game = snap.game;
+    if (game) game.results = game.results || {};
+    Object.keys(people).forEach((k) => delete people[k]);
+    Object.values(snap.people || {}).forEach((p) => { people[p.id] = p; });
+    Object.keys(picks).forEach((k) => delete picks[k]);
+    Object.assign(picks, snap.picks || {});
+    BOSSES = snap.bosses || [];
+    if (fresh && snap.now) clockOffset = snap.now - Date.now();
+    ready.state = ready.people = true;
+    render();
+  }
+
+  // Supabase: 진행자 동작은 raid-sim Edge Function 으로 (비밀번호 확인)
+  async function callAdmin(op, arg) {
+    const res = await fetch(CFG.supabaseUrl + "/functions/v1/raid-sim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: CFG.supabaseKey, Authorization: "Bearer " + CFG.supabaseKey },
+      body: JSON.stringify({ password, op, arg: arg == null ? null : arg }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.ok) { const e = new Error(j.error || (res.status === 404 ? "raid-sim Edge Function 을 먼저 배포해 주세요" : "진행자 요청 실패 (" + res.status + ")")); e.status = res.status; throw e; }
+    return j.view;
+  }
+  async function hostAct(fn, arg) {
+    try { const v = await callAdmin(fn, arg); isHost = true; apply(v, true); return true; }
+    catch (e) {
+      if (e.status === 401) { password = null; isHost = false; lastHtml = ""; render(); }
+      toast(e.message); return false;
+    }
+  }
+  // 진행자 화면은 공개 상태가 바뀔 때마다 판정 스탯이 든 상태를 다시 받습니다 (몰리면 한 번만).
+  let hostRefreshTimer = null, hostRefreshing = false, hostRefreshAgain = false;
+  function refreshHost() {
+    clearTimeout(hostRefreshTimer);
+    hostRefreshTimer = setTimeout(async () => {
+      if (hostRefreshing) { hostRefreshAgain = true; return; }
+      hostRefreshing = true;
+      try { apply(await callAdmin("state"), true); } catch (e) { if (e.status === 401) { password = null; isHost = false; lastHtml = ""; render(); } }
+      hostRefreshing = false;
+      if (hostRefreshAgain) { hostRefreshAgain = false; refreshHost(); }
+    }, 120);
+  }
+  function onPublic(data, fresh) {
+    connected = true;
+    if (isHost) { if (fresh && data && data.now) clockOffset = data.now - Date.now(); refreshHost(); }
+    else apply(data, fresh);
+  }
+  // Supabase: 참여자 동작은 공개 키로 데이터베이스 함수를 바로 부릅니다.
+  async function playerAct(pid, a, data) {
+    try {
+      const { data: r, error } = await SB.rpc("raid_sim_act", { p_pid: pid, p_action: a, p_data: data || {} });
+      if (error) throw error;
+      if (!r || !r.ok) { toast((r && r.error) || "처리하지 못했어요"); return false; }
+      return true;
+    } catch (e) { toast("저장하지 못했어요. 인터넷 연결을 확인해 주세요."); return false; }
+  }
+  // 파일 모드: 같은 규칙을 이 브라우저 안에서 돌립니다.
+  let LOCAL = null;
+  function runLocal(fn) {
+    const err = fn(LOCAL.engine, LOCAL.S);
+    if (err) toast(err);
+    setTimeout(() => apply(LOCAL.engine.snapshot(LOCAL.S, true), true), 0);
+    return !err;
+  }
+  const backend = {
+    host: (fn, arg) => MODE === "supabase" ? hostAct(fn, arg) : runLocal((E, S) => E.host(S, fn, arg)),
+    act: (pid, a, data) => MODE === "supabase" ? playerAct(pid, a, data) : runLocal((E, S) => E.act(S, pid, a, data)),
+  };
+
+  // ── 화면 계산용 (판정은 Supabase 가 합니다) ──
+  const personList = () => Object.keys(people).map(Number).sort((a, b) => a - b).map((i) => people[i]);
+  const teamOf = (t) => personList().filter((p) => p.team === t);
+  const boss = () => BOSSES[game.round - 1] || {};
+  const pickOf = (r, t) => picks["r" + r + "t" + t];
+  function played(pid, before) {
+    for (let r = 1; r < before; r++) for (let t = 0; t < TEAMS.length; t++) { const k = pickOf(r, t); if (k && k.pid === pid) return true; }
+    return false;
+  }
+  const canPick = (pid, t) => !played(pid, game.round) || teamOf(t).every((m) => played(m.id, game.round));
+  const charOf = (p) => p.char || { hp: 5, intel: 5, social: 5, mental: 5, seed: p.seed || 1, isDefault: true };
+  function scoreboard() {
+    const res = game.results || {};
+    const counted = Object.keys(res).map(Number).filter((r) => r < game.round || (r === game.round && (game.phase === "revealed" || game.phase === "final")));
+    const rows = TEAMS.map((_, t) => {
+      let total = 0, power = 0, cleared = 0;
+      counted.forEach((r) => { const x = (res[r] || []).find((y) => y.team === t); if (x) { total += x.points || 0; power += x.power || 0; cleared += x.cleared ? 1 : 0; } });
+      return { team: t, total, power, cleared };
+    }).sort((a, b) => b.total - a.total || b.power - a.power);
+    rows.forEach((x, i) => { x.rank = i && rows[i - 1].total === x.total && rows[i - 1].power === x.power ? rows[i - 1].rank : i + 1; });
+    return rows;
+  }
+
+  function hostButtons() {
+    const b = [], add = (label, fn, cls) => b.push({ label, fn, cls });
+    if (!ready.state || !isHost) return b;
+    if (!game || !personList().length) { add("게임 준비하기", "setup", "go"); return b; }
+    if (game.stage === "lobby") add("캐릭터 만들기 시작", "make", "go");
+    else if (game.stage === "make") { add("조 내 공유로 넘기기", "share", "go"); add("안 만든 사람 랜덤 생성", "fillChars"); }
+    else if (game.stage === "share") { add("보스 레이드로 넘기기", "raid", "go"); add("안 만든 사람 랜덤 생성", "fillChars"); }
+    else if (game.phase === "idle" || !game.round) add("1번 보스 시작", "start:1", "go");
+    else if (game.phase === "meeting") { add("마감하기", "close", "go"); if (!game.hint) add("힌트 공개", "hint"); }
+    else if (game.phase === "closed") { add("결과 공개", "reveal", "go"); add(game.round + "라운드 다시", "start:" + game.round); }
+    else if (game.phase === "revealed") { if (game.round < BOSSES.length) { add((game.round + 1) + "번 보스 시작", "start:" + (game.round + 1), "go"); add("최종 순위", "final"); } else add("최종 순위", "final", "go"); }
+    add("처음부터", "reset", "quiet");
+    return b;
+  }
+  const stepWord = () => !game ? "준비 전" : game.stage === "lobby" ? "대기" : game.stage === "make" ? "1. 캐릭터 만들기" : game.stage === "share" ? "2. 조 내 공유"
+    : game.phase === "idle" || !game.round ? "3. 보스 레이드 규칙" : game.phase === "meeting" ? "보스 " + game.round + " · 회의" : game.phase === "closed" ? "보스 " + game.round + " · 마감"
+    : game.phase === "revealed" ? "보스 " + game.round + " · 결과" : "최종 순위";
+
+  // ── 참여자 동작 (스탯 고르기는 이 기기에서, 저장·다시 뽑기·출전자 선택은 Supabase 로) ──
+  async function personAct(pid, a, extra) {
+    const p = people[pid];
+    if (!p || !game) return;
+    const d = drafts[pid] || (drafts[pid] = { hp: 1, intel: 1, social: 1, mental: 1 });
+    if (a === "inc" || a === "dec") {
+      const used = KEYS.reduce((n, k) => n + d[k], 0);
+      if (a === "inc" && d[extra] < 10 && used < 20) d[extra]++;
+      if (a === "dec" && d[extra] > 1) d[extra]--;
+      render();
+    } else if (a === "randomDraft") { drafts[pid] = randomStats(); render(); }
+    else if (a === "save") { if (await backend.act(pid, "save", { stats: d })) { editing[pid] = false; render(); } }
+    else if (a === "edit") { editing[pid] = true; drafts[pid] = { hp: p.char.hp, intel: p.char.intel, social: p.char.social, mental: p.char.mental }; render(); }
+    else if (a === "cancel") { editing[pid] = false; render(); }
+    else if (a === "reroll") backend.act(pid, "reroll");
+    else if (a === "pick") backend.act(pid, "pick", { m: extra });
+  }
+  async function claim(pid, name) {
+    if (!people[pid]) return;
+    myPid = pid;
+    try { localStorage.setItem(STORE_ME, String(pid)); } catch (e) { /* 이 기기에 기억 못 함 */ }
+    render();
+    await backend.act(pid, "claim", { name });
+  }
+  function leaveSeat() { myPid = null; try { localStorage.removeItem(STORE_ME); } catch (e) { /* 무시 */ } render(); }
+
+  // ── 화면 ────────────────────────────────────────────────────────
+  const $ = (id) => document.getElementById(id);
+  const view = () => (location.hash === "#join" ? "join" : location.hash === "#screen" ? "screen" : "host");
+  function left(ms) { if (!(ms > 0)) return "0:00"; const s = Math.ceil(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+  function tick() {
+    document.querySelectorAll("[data-deadline]").forEach((el) => { const ms = Number(el.dataset.deadline) - now(); el.textContent = left(ms); el.classList.toggle("urgent", ms < 20000); });
+  }
+  setInterval(tick, 500);
+
+  const SAMPLE_CHARS = [{ hp: 8, intel: 3, social: 6, mental: 3, seed: 11 }, { hp: 2, intel: 9, social: 3, mental: 6, seed: 27 }, { hp: 5, intel: 3, social: 9, mental: 3, seed: 5 }, { hp: 3, intel: 6, social: 2, mental: 9, seed: 42 }];
+  function projHtml() {
+    if (!game) return '<div class="pv pv-center"><div class="h">보스 레이드 시뮬레이터</div><div class="sub">진행자 화면에서 "게임 준비하기"를 눌러 주세요</div></div>';
+    const qr = '<div class="pv-qr glass"><div class="q">' + qrSvg(JOIN_URL) + "</div><span>휴대폰으로<br>QR을 찍어 참여</span></div>";
+    if (game.stage === "lobby") {
+      const joined = personList().filter((p) => p.claimed).length;
+      return '<div class="pv pv-center"><div class="eyebrow">오프닝 아이스브레이킹</div><div class="h">나만의 픽셀 캐릭터<br>&amp; 보스 레이드</div><div class="sub">휴대폰으로 QR을 찍고 내 자리를 골라 주세요 · 입장 ' + joined + " / " + personList().length + '명</div><div class="pv-foot" style="margin-top:1cqw">' + qr + "</div></div>";
+    }
+    if (game.stage === "make") {
+      const made = personList().filter((p) => p.char && !p.char.isDefault).length;
+      return '<div class="pv"><div class="h">나만의 픽셀 캐릭터를 만들어 주세요</div><div class="sub">스탯 4개에 20점을 나눠요 · 스탯 하나는 1~10점 · 외형은 스탯에 따라 자동으로 생겨요</div>' +
+        '<div class="stat-cards">' + STATS.map((s, i) => '<div class="stat-card glass" style="--c:' + s.color + '"><div class="art">' + sprite(SAMPLE_CHARS[i]) + "</div><b>" + s.label + "</b><span>" + esc(s.desc) + "</span></div>").join("") + "</div>" +
+        '<div class="pv-foot"><div class="count glass"><span>캐릭터 완성</span><b>' + made + "</b><span>/ " + personList().length + "명</span></div>" + qr + "</div></div>";
+    }
+    if (game.stage === "share") return '<div class="pv"><div class="h">조원에게 내 캐릭터를 소개해 주세요</div><div class="sub">휴대폰에서 우리 조 캐릭터 카드를 함께 보세요</div>' +
+      '<ol class="qs"><li><b>내 칭호</b>와, 그 칭호가 맞는지 아닌지</li><li><b>가장 높은 스탯</b>: 이 점수를 준 에피소드 하나</li><li><b>가장 낮은 스탯</b>: 솔직한 고백 한 마디</li></ol>' +
+      '<div class="timer glass" style="margin-top:auto;align-self:flex-end" data-deadline="' + game.shareDeadline + '"></div></div>';
+    if (game.phase === "idle" || !game.round) return '<div class="pv pv-center"><div class="eyebrow">보스 레이드</div><div class="h">보스 ' + BOSSES.length + '명이 기다리고 있어요</div><div class="glass" style="padding:2cqw 3cqw"><ol class="rules">' +
+      "<li>라운드마다 조에서 <b>1명</b>이 출전해요. 한 사람은 한 번만 나갈 수 있어요.</li>" +
+      "<li>판정 스탯은 <b>비공개</b>. 보스 설명을 보고 조원과 추리해서 출전자를 고르세요.</li>" +
+      "<li>공격력(판정 스탯 합)이 <b>보스 체력 이상</b>이면 격파, 보상 점수를 받아요.</li>" +
+      "<li>라운드 공격력 1위 조는 <b>MVP +1점</b>. 돌발 이벤트 라운드에는 주사위가 굴러가요.</li></ol></div></div>";
+    const b = boss();
+    const head = '<div class="boss-row glass">' + bossSprite(game.round) + '<div><div class="eyebrow">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="boss-name">' + esc(b.name) + '</div><div class="boss-desc">' + esc(b.desc) + "</div>" +
+      '<div class="chips"><span>체력 ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + (b.event ? '<span class="hot">돌발 이벤트</span>' : "") + "</div></div></div>";
+    if (game.phase === "meeting") {
+      const n = TEAMS.filter((_, t) => pickOf(game.round, t)).length;
+      return '<div class="pv">' + head + '<div class="meet-foot">' +
+        (game.hint ? '<div class="hint glass"><em>힌트</em>' + esc(b.hint) + "</div>" : '<div class="hint glass"><em>회의</em>판정 스탯을 추리하고 출전자를 골라 주세요</div>') +
+        '<div class="timer glass" data-deadline="' + game.deadline + '"></div><div class="mini-count glass"><span>출전자 확정</span><b>' + n + "</b><span>/ " + TEAMS.length + "</span></div></div>" +
+        (b.event ? '<div class="event-note glass">주사위 1: 공격력 −2 · 2~5: 변화 없음 · 6: 공격력 +3</div>' : "") + "</div>";
+    }
+    const rows = game.results[game.round] || [];
+    if (game.phase === "closed") {
+      return '<div class="pv"><div class="h">마감! 출전자는 자리에서 일어나 주세요</div><div class="sub">' + esc(b.name) + " · 보스 체력 " + b.hp + '</div><div class="fighters">' +
+        rows.map((x) => '<div class="fighter glass"><div class="art">' + sprite(charOf(people[x.pid] || {})) + "</div><div><span>" + TEAMS[x.team] + (x.auto ? " · 랜덤" : "") + "</span><b>" + esc(x.name) + "</b></div></div>").join("") + "</div></div>";
+    }
+    if (game.phase === "revealed") {
+      const max = Math.max(b.hp + 4, ...rows.map((x) => x.power));
+      const sorted = rows.slice().sort((a, c) => a.power - c.power);
+      return '<div class="pv"><div><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + "</div></div>" +
+        '<div class="bars glass" style="--hp:' + (b.hp / max * 100) + '%"><div class="hp-note">점선 = 보스 체력 ' + b.hp + " · 점선을 넘으면 격파</div>" +
+        sorted.map((x, i) => '<div class="bar-row' + (x.cleared ? " win" : "") + '" style="animation-delay:' + (0.3 + i * 0.6) + 's"><div class="art">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + "</span></div>" +
+          '<div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i></div><div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? ' <span class="star">MVP</span>' : "") + "</span>" +
+          (x.dice ? '<span style="font-weight:500">주사위 ' + x.dice + (DICE_WORD[x.dice] ? " · " + DICE_WORD[x.dice] : "") + "</span>" : "") + "</div></div>").join("") + "</div>" +
+        '<div class="board">' + scoreboard().map((x) => "<span>" + x.rank + "위 " + TEAMS[x.team] + " " + x.total + "점</span>").join("") + "</div></div>";
+    }
+    return '<div class="pv"><div class="h" style="text-align:center">보스 레이드 최종 순위</div><div class="podium">' +
+      scoreboard().slice().sort((a, c) => (a.rank === 1 ? 1 : 0) - (c.rank === 1 ? 1 : 0) || c.rank - a.rank).map((x) => '<div class="r' + x.rank + '"><b>' + TEAMS[x.team] + "</b><span>" + x.total + "점 · 격파 " + x.cleared + '회</span><div class="block glass">' + x.rank + "위</div></div>").join("") + "</div></div>";
+  }
+
+  function adminHtml() {
+    if (!isHost) return '<p class="small">판정 스탯과 진행 버튼은 위에서 진행자 비밀번호로 로그인하면 보여요.</p>';
+    if (!game || !personList().length) return '<p class="small">위의 "게임 준비하기"를 누르면 참여자 자리 6개(A조·B조 3명씩)와 진행 상태가 만들어져요.</p>';
+    let html = "";
+    if (game.stage !== "boss" || !game.round) {
+      html += '<div class="secret">판정 스탯은 여기에만 보여요.<br>' + BOSSES.map((b, i) => (i + 1) + ". " + esc(b.name) + " → <b>" + statsText(b.stats) + "</b> · 체력 " + b.hp).join("<br>") + "</div>";
+    } else {
+      const b = boss(), rows = game.results[game.round] || [];
+      html += '<div class="secret">' + game.round + "번 보스 판정 스탯 <b>" + statsText(b.stats) + "</b> · 체력 " + b.hp + " · 보상 " + b.reward + "점<br>힌트: " + esc(b.hint) + "</div>";
+      html += '<table class="res-table"><thead><tr><th>조</th><th>출전자</th><th class="n">판정 합</th><th class="n">주사위</th><th class="n">공격력</th><th>결과</th></tr></thead><tbody>';
+      TEAMS.forEach((name, t) => {
+        const k = pickOf(game.round, t), p = k ? people[k.pid] : null, x = rows.find((y) => y.team === t);
+        const base = p ? b.stats.reduce((n, s) => n + charOf(p)[s], 0) : null;
+        html += "<tr><td><b>" + name + "</b></td><td>" + (p ? esc(p.name) + (k.auto ? ' <span class="small">(랜덤)</span>' : k.by != null && people[k.by] ? ' <span class="small">· ' + esc(people[k.by].name) + " 선택</span>" : "") : '<span class="small">선택 전</span>') + "</td>" +
+          '<td class="n">' + (base != null ? base : "") + '</td><td class="n">' + (x && x.dice ? x.dice : "") + '</td><td class="n"><b>' + (x ? x.power : "") + "</b></td><td" + (x && x.cleared ? ' class="ok"' : "") + ">" + (x ? (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? " MVP" : "") : "") + "</td></tr>";
+      });
+      html += "</tbody></table>";
+      html += '<div class="small">누적: ' + scoreboard().map((x) => x.rank + "위 " + TEAMS[x.team] + " " + x.total + "점").join(" · ") + "</div>";
+    }
+    html += '<div class="who-grid">' + personList().map((p) => '<div class="who"><div class="art">' + (p.char ? sprite(p.char) : "") + '</div><div><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b>" +
+      '<span class="small">' + TEAMS[p.team] + " · " + (p.char ? (p.char.isDefault ? "기본 캐릭터" : esc(title(p.char))) : "캐릭터 만드는 중") + "</span></div></div>").join("") + "</div>" +
+      '<span class="small">초록 점 = 휴대폰으로 자리를 고른 사람</span>' +
+      '<button type="button" class="btn quiet" data-host="resetSeats" style="align-self:flex-start;height:32px">참여자 자리 비우기</button>';
+    return html;
+  }
+
+  function miniStats(c) {
+    return '<div class="mstats">' + STATS.map((s) => "<span>" + s.label + '</span><i><b style="width:' + c[s.key] * 10 + "%;background:" + s.color + '"></b></i><span>' + c[s.key] + "</span>").join("") + "</div>";
+  }
+  function pcard(p, opts) {
+    const o = opts || {};
+    if (!p.char) return '<div class="pc empty"><div class="art"></div><div><div class="nm">' + esc(p.name) + '</div><div class="muted">캐릭터를 만드는 중</div></div></div>';
+    const tag = o.tag ? '<span class="tag">' + esc(o.tag) + "</span>" : "";
+    const inner = '<div class="art">' + sprite(p.char) + '</div><div><div class="ttl">' + esc(title(p.char)) + '</div><div class="nm">' + esc(p.name) + tag + "</div>" + miniStats(p.char) + "</div>";
+    if (o.button) return '<button type="button" class="pc' + (o.on ? " on" : "") + '" style="--aura:' + auraOf(p.char) + '" ' + o.button + ">" + inner + "</button>";
+    return '<div class="pc' + (o.big ? " big" : "") + '" style="--aura:' + auraOf(p.char) + '">' + inner + "</div>";
+  }
+  const rankHtml = (p) => '<div class="card">' + scoreboard().map((s) => '<div class="rank-row' + (s.team === p.team ? " mine" : "") + '"><b>' + s.rank + "위</b><span>" + TEAMS[s.team] + "</span><span>" + s.total + "점</span></div>").join("") + "</div>";
+  function phoneHtml(pid) {
+    const p = people[pid];
+    if (!game || !p) return '<h3>곧 시작해요</h3><div class="muted">진행자가 게임을 준비하고 있어요.</div>';
+    const team = teamOf(p.team);
+    if (game.stage === "lobby") return "<h3>곧 시작해요</h3>" + '<div class="card"><div class="t">우리 조 · ' + TEAMS[p.team] + '</div><div class="muted">' + team.map((m) => esc(m.name)).join(", ") + '</div></div><div class="muted">진행자가 시작하면 이 화면이 자동으로 바뀌어요.</div>';
+    if ((game.stage === "make" || game.stage === "share") && !game.locked && (!p.char || editing[pid])) {
+      const d = drafts[pid] || (drafts[pid] = { hp: 1, intel: 1, social: 1, mental: 1 });
+      const remain = 20 - KEYS.reduce((n, k) => n + d[k], 0);
+      return "<h3>나만의 픽셀 캐릭터</h3>" +
+        '<div class="card"><div class="remain' + (remain === 0 ? " done" : "") + '">남은 점수 ' + remain + " / 20</div>" +
+        STATS.map((s) => '<div class="stepper"><span style="color:' + s.color + '">' + s.label + '</span><button type="button" data-p="' + pid + '" data-a="dec" data-k="' + s.key + '" aria-label="' + s.label + ' 1점 빼기"' + (d[s.key] <= 1 ? " disabled" : "") + '>−</button><div class="bar"><b style="width:' + d[s.key] * 10 + "%;background:" + s.color + '"></b></div><span>' + d[s.key] + '</span><button type="button" data-p="' + pid + '" data-a="inc" data-k="' + s.key + '" aria-label="' + s.label + ' 1점 더하기"' + (d[s.key] >= 10 || remain <= 0 ? " disabled" : "") + ">+</button></div>").join("") +
+        '<div class="muted">스탯 하나는 1~10점, 합계 20점. 외형은 스탯에 따라 자동으로 정해져요.</div></div>' +
+        '<div class="card"><div class="t">미리보기</div>' + pcard({ name: p.name, char: Object.assign({ seed: p.seed }, d) }, { big: true }) + "</div>" +
+        '<button type="button" class="pbtn" data-p="' + pid + '" data-a="save"' + (remain !== 0 ? " disabled" : "") + ">" + (remain !== 0 ? "점수를 " + remain + "점 더 나눠 주세요" : p.char ? "이대로 저장" : "캐릭터 생성") + "</button>" +
+        '<button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="randomDraft">랜덤으로 나눠 보기</button>' +
+        (p.char ? '<button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="cancel">고치지 않고 돌아가기</button>' : "");
+    }
+    if (game.stage === "make" || game.stage === "share") {
+      let h = "<h3>나의 캐릭터</h3>" + pcard(p, { big: true });
+      if (!game.locked) h += '<div class="row"><button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="reroll"' + (p.rerolls >= 2 ? " disabled" : "") + ">다시 뽑기 (" + (2 - p.rerolls) + ")</button>" +
+        '<button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="edit">스탯 고치기</button></div>';
+      if (game.stage === "share") h += '<div class="card"><div class="t">조원에게 소개해 주세요 <span class="ptimer" data-deadline="' + game.shareDeadline + '" style="float:right;font-size:17px"></span></div><div class="muted">1) 내 칭호, 맞는지 아닌지<br>2) 가장 높은 스탯의 에피소드<br>3) 가장 낮은 스탯의 고백</div></div>';
+      h += '<div class="card"><div class="t">우리 조 캐릭터</div>' + team.filter((m) => m.id !== pid).map((m) => pcard(m)).join("") + "</div>";
+      return h;
+    }
+    if (game.phase === "idle" || !game.round) return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">라운드마다 조에서 1명 출전 · 한 사람은 한 번만<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 체력 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
+    const b = boss();
+    let h = '<div class="card"><div class="muted">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="t" style="font-size:16px">' + esc(b.name) + '</div><div class="muted">' + esc(b.desc) + "</div>" +
+      '<div class="phone-chips"><span>체력 ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + (b.event ? '<span class="hot">돌발 이벤트</span>' : "") + "</div>" +
+      (game.hint && game.phase === "meeting" ? '<div class="muted"><b>힌트</b> ' + esc(b.hint) + "</div>" : "") +
+      (game.phase === "meeting" ? '<div class="ptimer" data-deadline="' + game.deadline + '"></div>' : "") + "</div>";
+    const k = pickOf(game.round, p.team), pick = k ? people[k.pid] : null;
+    if (game.phase === "meeting") {
+      return h + '<div class="card"><div class="t">출전자 고르기</div><div class="muted">' + (pick ? "<b>" + esc(pick.name) + "</b> 님이 출전해요" + (k.by != null && people[k.by] ? " · " + esc(people[k.by].name) + " 님이 골랐어요" : "") : "아직 출전자가 없어요. 조원 누구나 고를 수 있어요.") + "</div>" +
+        team.map((m) => {
+          const ok = canPick(m.id, p.team);
+          const tag = !ok ? "출전함" : pick && pick.id === m.id ? "출전" : m.id === pid ? "나" : "";
+          return pcard(m, { tag, on: pick && pick.id === m.id, button: 'data-p="' + pid + '" data-a="pick" data-m="' + m.id + '"' + (ok ? "" : " disabled") });
+        }).join("") + '<div class="muted">마감 때 고른 사람이 최종이에요. 아무도 안 고르면 아직 안 나간 사람 중 랜덤.</div></div>';
+    }
+    const x = (game.results[game.round] || []).find((y) => y.team === p.team);
+    if (game.phase === "closed") return h + '<div class="card"><div class="t">' + (x ? esc(x.name) + " 님 출전!" : "마감") + '</div><div class="muted">' + (x && x.auto ? "아무도 안 골라서 랜덤으로 정해졌어요. " : "") + "앞쪽 화면에서 결과 공개를 기다려 주세요.</div></div>";
+    if (game.phase === "revealed" && x) {
+      return h + '<div class="card"><div class="outcome' + (x.cleared ? " win" : "") + '">' + (x.cleared ? "격파!" : "아쉽게 실패") + "</div>" +
+        "<div><b>" + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 체력 " + b.hp + "</div>" +
+        '<div class="muted">판정 스탯 ' + statsText(b.stats) + " 합 " + x.base + (x.dice ? " · 주사위 " + x.dice + (x.bonus ? " (" + (x.bonus > 0 ? "+" : "") + x.bonus + ")" : "") : "") + "</div>" +
+        '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + '</div><div class="muted">' + esc(b.reveal) + "</div></div>" + rankHtml(p);
+    }
+    return "<h3>최종 순위</h3>" + rankHtml(p);
+  }
+
+  function joinHtml() {
+    if (!ready.state || !ready.people) return '<div class="joinview"><div class="screen"><h3>불러오는 중…</h3></div></div>';
+    if (!game || !personList().length) return '<div class="joinview"><div class="screen"><h3>곧 시작해요</h3><div class="muted">진행자가 아직 게임을 준비하지 않았어요. 준비되면 이 화면이 자동으로 바뀌어요.</div></div></div>';
+    if (myPid == null || !people[myPid]) {
+      return '<div class="joinview"><div class="screen"><h3>보스 레이드에<br>참여해 주세요</h3>' +
+        '<div class="card"><div class="t">이름 (선택)</div><input class="namebox" id="name-in" maxlength="12" placeholder="화면에 보일 이름" autocomplete="off"><div class="muted">이름을 적고 아래에서 내 자리를 눌러 주세요. 비워 두면 자리 이름 그대로 써요.</div></div>' +
+        TEAMS.map((tn, t) => '<div class="card"><div class="t">' + tn + "</div>" + teamOf(t).map((m) => '<button type="button" class="slot' + (m.claimed ? " taken" : "") + '" data-claim="' + m.id + '"><span><b>' + esc(m.name) + '</b><br><span class="muted">' + (m.claimed ? "다른 기기가 사용 중 · 눌러서 이어받기" : "비어 있음") + '</span></span><span class="tag">고르기</span></button>').join("") + "</div>").join("") +
+        lostNote() + "</div></div>";
+    }
+    const p = people[myPid];
+    return '<div class="joinview"><div class="phone-bar"><b>' + esc(p.name) + "</b><span>" + TEAMS[p.team] + '</span><button type="button" class="btn quiet" data-leave style="height:28px;padding:0 8px;font-size:12px">자리 바꾸기</button></div><div class="screen" id="screen-me">' + phoneHtml(myPid) +
+      lostNote() + "</div></div>";
+  }
+
+  const lostNote = () => (MODE === "supabase" && !connected ? '<div class="notice">실시간 연결이 끊겼어요. 다시 연결하는 중…</div>' : "");
+  const liveWord = () => MODE === "loading" ? "연결하는 중…"
+    : MODE === "local" ? (setupError || "이 화면 안에서만 동작 (연습용)")
+    : !connected ? "실시간 연결이 끊김 · 다시 연결하는 중" : isHost ? "Supabase 실시간 연결 · 휴대폰과 같은 데이터" : "Supabase 실시간 연결 · 진행하려면 진행자 비밀번호";
+  const loginHtml = () => '<form class="login" data-login><input id="pw" type="password" placeholder="진행자 비밀번호" autocomplete="current-password"><button type="submit" class="btn go">진행자 로그인</button></form>';
+  function hostHtml() {
+    const preview = game && personList().length;
+    const needLogin = MODE === "supabase" && !isHost;
+    return '<header class="host"><div class="host-in"><div class="brand"><h1>보스 레이드 시뮬레이터</h1><span class="live' + (MODE === "supabase" && connected ? " on" : "") + '"><i></i>' + esc(liveWord()) + "</span></div>" +
+      '<span class="step">' + esc(stepWord()) + '</span><div class="actions">' + (needLogin ? loginHtml() : hostButtons().map((x) => '<button type="button" class="btn ' + (x.cls || "") + '" data-host="' + x.fn + '">' + esc(x.label) + "</button>").join("")) + "</div></div></header>" +
+      '<main class="wrap"><div class="top"><section><p class="sec-title">발표 화면 (프로젝터)' + (MODE === "supabase" ? ' · <a href="' + esc(location.href.split("#")[0]) + '#screen" target="_blank" rel="noopener">이 화면만 따로 열기</a>' : "") + '</p><div class="proj-box"><div class="proj">' + projHtml() + "</div></div></section>" +
+      '<div class="side"><section class="panel"><h2>참여자 링크 (휴대폰)</h2><div class="join-box"><div class="qr">' + qrSvg(JOIN_URL) + '</div><div style="display:flex;flex-direction:column;gap:8px;min-width:0"><div class="link">' + JOIN_URL + "</div>" +
+      '<div class="row" style="flex-wrap:wrap"><button type="button" class="btn" data-copy style="flex:0 0 auto">링크 복사</button><a class="btn" href="' + JOIN_URL + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;flex:0 0 auto">새 탭에서 열기</a></div>' +
+      '<span class="small">' + (MODE === "supabase" ? "휴대폰 데이터나 아무 Wi-Fi로 열면 돼요. 로그인은 필요 없어요." : "이 브라우저 안에서만 동작하는 연습 모드예요. 휴대폰과 연결하려면 ?local 없이 배포한 주소로 열어 주세요.") + "</span></div></div></section>" +
+      '<section class="panel"><h2>진행자 전용 (참여자에게는 안 보임)</h2>' + adminHtml() + "</section></div></div>" +
+      (preview ? '<section><p class="sec-title">휴대폰 6대 미리보기 · 여기서 눌러도 실제 휴대폰과 같은 데이터가 바뀌어요</p><div class="phones">' +
+      TEAMS.map((tn, t) => '<div class="team-group"><div class="team-label">' + tn + '</div><div class="team-phones">' + teamOf(t).map((p) =>
+        '<div class="phone"><div class="phone-bar"><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b><span>" + tn + '</span></div><div class="screen" id="screen-' + p.id + '">' + phoneHtml(p.id) + "</div></div>").join("") + "</div></div>").join("") +
+      "</div></section>" : "") + "</main>";
+  }
+
+  let lastHtml = "";
+  function render() {
+    const v = view();
+    const scrolls = {};
+    document.querySelectorAll(".screen[id]").forEach((el) => { scrolls[el.id] = el.scrollTop; });
+    const nameIn = $("name-in"), nameVal = nameIn ? nameIn.value : null, nameFocus = nameIn && document.activeElement === nameIn;
+    const pwIn = $("pw"), pwVal = pwIn ? pwIn.value : null, pwFocus = pwIn && document.activeElement === pwIn;
+    const html = v === "screen" ? '<div class="screen-only"><div class="proj-box"><div class="proj">' + projHtml() + "</div></div></div>" : v === "join" ? joinHtml() : hostHtml();
+    if (html === lastHtml) return;
+    lastHtml = html;
+    $("app").innerHTML = html;
+    document.querySelectorAll(".screen[id]").forEach((el) => { if (scrolls[el.id]) el.scrollTop = scrolls[el.id]; });
+    const ni = $("name-in");
+    if (ni && nameVal != null) { ni.value = nameVal; if (nameFocus) ni.focus(); }
+    const pi = $("pw");
+    if (pi && pwVal != null) { pi.value = pwVal; if (pwFocus) pi.focus(); }
+    tick();
+  }
+  addEventListener("hashchange", () => { lastHtml = ""; render(); });
+  let loggingIn = false;
+  document.addEventListener("submit", async (e) => {
+    if (!e.target.closest("[data-login]")) return;
+    e.preventDefault();
+    if (loggingIn) return;
+    loggingIn = true;
+    try { await login(); } finally { loggingIn = false; }
+  });
+
+  let hostBusy = false;
+  document.addEventListener("click", async (e) => {
+    const hb = e.target.closest("[data-host]");
+    if (hb) {
+      const [fn, arg] = hb.dataset.host.split(":");
+      if (!hostBusy) { hostBusy = true; hb.disabled = true; try { await backend.host(fn, arg ? Number(arg) : undefined); } finally { hostBusy = false; lastHtml = ""; render(); } }
+      return;
+    }
+    if (e.target.closest("[data-copy]")) {
+      try { await navigator.clipboard.writeText(JOIN_URL); toast("참여자 링크를 복사했어요"); }
+      catch (err) { const l = document.querySelector(".link"); if (l) { const r = document.createRange(); r.selectNodeContents(l); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } toast("링크를 선택해 두었어요. 복사해 주세요."); }
+      return;
+    }
+    const cb = e.target.closest("[data-claim]");
+    if (cb) { const ni = $("name-in"); claim(Number(cb.dataset.claim), ni ? ni.value : ""); return; }
+    if (e.target.closest("[data-leave]")) { leaveSeat(); return; }
+    const b = e.target.closest("[data-a]");
+    if (b && !b.disabled) personAct(Number(b.dataset.p), b.dataset.a, b.dataset.a === "pick" ? Number(b.dataset.m) : b.dataset.k);
+  });
+
+  // ── 시작: Supabase 에 연결 (안 되면 이 브라우저 안에서) ──────────────
+  async function loadPublic() {
+    const { data, error } = await SB.from("raid_sim_public").select("data, rev").eq("id", 1).maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("no row");
+    return data;
+  }
+  let lastRev = -1;
+  async function connectSupabase() {
+    SB = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    try {
+      const row = await loadPublic();
+      lastRev = row.rev;
+      MODE = "supabase";
+      onPublic(row.data, false);
+    } catch (e) {
+      if (/raid_sim_public|relation|schema cache|no row/i.test(String(e && e.message))) {
+        setupError = "Supabase 에 시뮬레이터 표가 없어요. SQL Editor 에서 supabase/raid-sim.sql 을 실행해 주세요.";
+      } else setupError = "Supabase 에 연결하지 못했어요 (" + ((e && e.message) || "오류") + ").";
+      return false;
+    }
+    SB.channel("raid-sim-" + Math.random().toString(36).slice(2, 8))
+      .on("postgres_changes", { event: "*", schema: "public", table: "raid_sim_public" }, (p) => {
+        if (p.new && p.new.data && p.new.rev > lastRev) { lastRev = p.new.rev; onPublic(p.new.data, true); }
+      })
+      .subscribe((status) => {
+        const was = connected;
+        connected = status === "SUBSCRIBED";
+        if (was !== connected) { lastHtml = ""; render(); }
+      });
+    // Realtime 이 잠깐 끊겨도 놓치지 않도록 10초마다 한 번 확인
+    setInterval(async () => {
+      try { const row = await loadPublic(); if (row.rev > lastRev) { lastRev = row.rev; onPublic(row.data, false); } } catch (e) { /* 다음에 */ }
+    }, 10000);
+    return true;
+  }
+  function startLocal() {
+    const s = document.createElement("script");
+    s.src = "js/raid-sim-engine.js";
+    s.onload = () => {
+      const E = window.RaidSimEngine, S = E.create();
+      E.host(S, "setup");
+      LOCAL = { engine: E, S };
+      MODE = "local"; isHost = true; connected = true;
+      apply(E.snapshot(S, true), true);
+    };
+    s.onerror = () => toast("js/raid-sim-engine.js 를 불러오지 못했어요. 저장소 폴더 안의 raid-sim.html 을 열어 주세요.");
+    document.head.appendChild(s);
+  }
+  async function login() {
+    const el = $("pw");
+    const pw = el ? el.value : "";
+    if (!pw) { toast("진행자 비밀번호를 입력해 주세요"); return; }
+    password = pw;
+    if (await hostAct("state")) toast("진행자로 들어왔어요");
+    else password = null;
+  }
+  async function boot() {
+    const wantLocal = new URLSearchParams(location.search).has("local");
+    if (!wantLocal && CFG && !CFG.supabaseKey) setupError = "raid-sim-config.js 에 Supabase 공개 키(supabaseKey)를 넣어 주세요.";
+    else if (!wantLocal && CFG && window.supabase && await connectSupabase()) return;
+    startLocal();
+    if (setupError) toast(setupError + " 지금은 이 브라우저 안에서만 동작해요.");
+  }
+  render();
+  boot();
+})();
+</script>
+</body>
+</html>
