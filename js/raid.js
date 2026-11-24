@@ -7,6 +7,8 @@
 // admin.html?demo=1 에서는 서버 없이 js/raid-sim-engine.js 로 이 브라우저 안에서만 동작합니다(휴대폰 미리보기 포함).
 window.WCRaid = (function () {
   "use strict";
+  // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
+  const V = "20261124b";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
 
@@ -955,7 +957,7 @@ window.WCRaid = (function () {
   function mount(el, kind) {
     if (!el) return null;
     const root = el.shadowRoot || el.attachShadow({ mode: "open" });
-    root.innerHTML = '<link rel="stylesheet" href="css/raid.css"><div class="rs rs-' + kind + '" data-body></div>';
+    root.innerHTML = '<link rel="stylesheet" href="css/raid.css?v=' + V + '"><div class="rs rs-' + kind + '" data-body></div>';
     const m = { el, root, kind, body: root.querySelector("[data-body]"), last: "" };
     root.addEventListener("click", (e) => onClick(e, m));
     root.addEventListener("input", (e) => onInput(e, m));
@@ -1006,7 +1008,7 @@ window.WCRaid = (function () {
   function startLocal() {
     return new Promise((done) => {
     const s = document.createElement("script");
-    s.src = "js/raid-sim-engine.js";
+    s.src = "js/raid-sim-engine.js?v=" + V;
     s.onload = () => {
       const E = window.RaidSimEngine, S = E.create();
       E.host(S, "setup");
