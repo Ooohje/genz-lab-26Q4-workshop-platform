@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="raid-sim-config.js"></script>
+<script src="js/raid-sim-bgm.js"></script>
 <style>
 /* 화면 세 가지: 진행자(기본) · 참여자(#join, 휴대폰) · 발표 화면(#screen, 프로젝터 전체 화면). 모두 같은 실시간 데이터를 봅니다.
    글꼴은 Pretendard 하나. 크기는 비율로: 발표 화면은 화면 너비(cqw), 휴대폰은 휴대폰 너비(cqw), 진행자 화면은 rem·%·fr. */
@@ -273,12 +274,42 @@ a { color: var(--blue); }
 
 /* 격파 실패: 게이지가 다 찬 뒤 캐릭터가 자기 칸 안에서 옆으로 쓰러지고 회색으로 */
 .bar-row.lose .art > svg { animation: fall 0.7s 3.4s ease-in both; }
-.pfight.lose .art > svg { animation: fall 0.7s 0.6s ease-in both; }
+.pfight.lose .art > svg { animation: lunge 0.5s 0.2s, fall 0.7s 1.3s ease-in both; }
 @keyframes fall {
   0% { transform: none; filter: none; }
   65% { transform: translateY(12%) rotate(100deg) scale(0.85); }
   100% { transform: translateY(12%) rotate(90deg) scale(0.85); filter: grayscale(1) opacity(0.55); }
 }
+
+/* 결과 공개: 보스 타격 연출 (게이지가 차는 0.8~3.4초 동안 보스가 맞고, 3.4초에 K.O. 또는 쓰러짐) */
+.reveal-top { display: grid; grid-template-columns: minmax(0, 1fr) 15cqw; gap: 2cqw; align-items: center; }
+.pv.many .reveal-top { grid-template-columns: minmax(0, 1fr) 10cqw; }
+.boss-hit { display: flex; flex-direction: column; align-items: center; gap: 0.5cqw; min-width: 0; }
+.boss-box { position: relative; width: 72%; }
+.boss-box .boss-art, .pboss .boss-art { animation: hit-shake 0.42s 0.8s 6; }
+.boss-hit.ko .boss-art { animation: hit-shake 0.42s 0.8s 6, boss-down 0.6s 3.4s forwards; }
+.ko-stamp { position: absolute; left: -15%; right: -15%; top: 28%; text-align: center; font-weight: 900; font-size: 2.6cqw; color: var(--coral-deep); letter-spacing: 0.04em;
+  text-shadow: 0.15cqw 0.15cqw 0 #fff; animation: stamp 0.4s 3.4s both; pointer-events: none; }
+.bhp { width: 100%; height: 1.1cqw; border-radius: 0.6cqw; background: rgba(31, 37, 64, 0.12); overflow: hidden; }
+.bhp i { display: block; height: 100%; width: 100%; border-radius: 0.6cqw; background: var(--coral-deep); animation: drain 2.6s 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.bhp-t { font-size: 1.15cqw; font-weight: 700; color: var(--coral-deep); white-space: nowrap; }
+.track .spark { position: absolute; top: 50%; width: 3.2cqw; aspect-ratio: 1; transform: translate(-50%, -50%) scale(0); pointer-events: none;
+  background: radial-gradient(circle, #fff 0 22%, var(--gold) 23% 100%); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  animation: spark 0.6s 3.3s both; }
+.bars.cols .track .spark, .bars.many .track .spark { width: 2cqw; }
+.bar-row.win .art > svg { animation: cheer 0.45s 3.4s 2; }
+@keyframes hit-shake { 0% { transform: none; filter: none; } 20% { transform: translateX(-6%) rotate(-3deg); filter: brightness(2.2); } 45% { transform: translateX(5%) rotate(2deg); } 70% { transform: translateX(-3%); } 100% { transform: none; filter: none; } }
+@keyframes boss-down { to { transform: translateY(8%) rotate(-10deg); filter: grayscale(1) opacity(0.55); } }
+@keyframes stamp { from { opacity: 0; transform: rotate(-12deg) scale(2.4); } to { opacity: 1; transform: rotate(-12deg) scale(1); } }
+@keyframes drain { to { width: var(--left); } }
+@keyframes spark { 0% { transform: translate(-50%, -50%) scale(0); opacity: 1; } 55% { transform: translate(-50%, -50%) scale(1.25); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.5) rotate(30deg); opacity: 0; } }
+@keyframes cheer { 50% { transform: translateY(-14%); } }
+@keyframes lunge { 45% { transform: translateX(28%) rotate(8deg); } }
+/* BGM 버튼 */
+.bgm-btn { border: 0.0625rem solid var(--line); background: var(--panel); color: var(--ink); border-radius: 0.8rem; padding: 0.1rem 0.6rem; font-size: 0.72rem; font-weight: 700; margin-left: 0.4rem; }
+.bgm-btn.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.bgm-float { position: fixed; right: 1.5vmin; bottom: 1.5vmin; z-index: 31; border: 0; border-radius: 2vmin; padding: 0.8vmin 1.6vmin; font-size: 1.8vmin; font-weight: 700; background: rgba(255, 255, 255, 0.14); color: #fff; opacity: 0.55; }
+.bgm-float:hover, .bgm-float:focus-visible { opacity: 1; }
 
 /* ── 휴대폰 (진행자 화면의 미리보기와 실제 휴대폰이 같은 모양. 크기는 휴대폰 너비의 %: cqw) ── */
 .phones { display: flex; flex-direction: column; gap: 1.25rem; }
@@ -339,7 +370,18 @@ a { color: var(--blue); }
 .slot.taken { opacity: 0.7; }
 .namebox { width: 100%; min-height: 11cqw; padding: 0 3cqw; border-radius: 2.6cqw; border: 0.4cqw solid #DCE0EE; font-size: max(1rem, 3.9cqw); background: #fff; color: #1F2540; }
 .screen .notice { border-radius: 3cqw; font-size: 3.3cqw; padding: 2.6cqw 3cqw; }
-.pfight { display: grid; grid-template-columns: 20% minmax(0, 1fr); gap: 3cqw; align-items: center; }
+.pfight { display: grid; grid-template-columns: 24% minmax(0, 1fr) 24%; gap: 2cqw; align-items: center; text-align: center; }
+.pfight .art > svg { animation: lunge 0.5s 0.2s; }
+.pvs { display: flex; flex-direction: column; align-items: center; }
+.pdmg { font-weight: 900; font-size: 9cqw; line-height: 1; color: var(--coral-deep); animation: pop 0.4s 0.45s both; }
+.pvs span { font-size: 3cqw; color: #6B7290; font-weight: 700; }
+.pboss { position: relative; }
+.pboss .boss-art { animation: hit-shake 0.42s 0.45s 2; }
+.pfight.win .pboss .boss-art { animation: hit-shake 0.42s 0.45s 2, boss-down 0.6s 1.3s forwards; }
+.pboss .ko-stamp { font-size: 6cqw; animation-delay: 1.3s; text-shadow: none; }
+.fold { display: flex; flex-direction: column; gap: 1cqw; }
+.fold:not(.open) .ftxt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.more { align-self: flex-start; border: 0; background: none; padding: 0; color: var(--blue); font-weight: 700; font-size: 3.2cqw; }
 .pdice .die { width: 16cqw; }
 .pdice .dice-row { gap: 2.6cqw; }
 .pdice .eff { font-weight: 800; font-size: 5.6cqw; }
@@ -798,10 +840,13 @@ a { color: var(--blue); }
       // 모든 조의 게이지가 동시에 올라가고(0.8초 뒤부터 2.6초), 다 찬 뒤 실패한 캐릭터가 자기 칸 안에서 쓰러집니다 (CSS)
       const max = Math.max(b.hp + 4, ...rows.map((x) => x.power));
       const sorted = rows.slice().sort((a, c) => a.team - c.team);
-      return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + "</div></div>" +
+      // 보스 HP 바는 가장 센 공격만큼 줄고, 한 조라도 격파하면 K.O.
+      const best = Math.max(...rows.map((x) => x.power)), left = Math.max(0, (b.hp - best) / b.hp * 100), ko = rows.some((x) => x.cleared);
+      return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-top"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + "</div></div>" +
+        '<div class="boss-hit' + (ko ? " ko" : "") + '"><div class="boss-box">' + bossSprite(game.round) + (ko ? '<b class="ko-stamp">K.O.</b>' : "") + '</div><div class="bhp"><i style="--left:' + left + '%"></i></div><div class="bhp-t">보스 HP ' + b.hp + "</div></div></div>" +
         '<div class="bars glass' + (rows.length > 6 ? " cols" + (rows.length > 14 ? " dense" : "") : rows.length > 4 ? " many" : "") + '" style="--hp:' + (b.hp / max * 100) + "%;--rows:" + Math.ceil(rows.length / 2) + '"><div class="hp-note"><i></i>보스 HP ' + b.hp + " · 점선을 넘으면 격파</div>" +
         sorted.map((x) => '<div class="bar-row' + (x.cleared ? " win" : " lose") + '"><div class="art">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + "</span></div>" +
-          '<div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i></div><div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? ' <span class="star">MVP</span>' : "") + "</span>" +
+          '<div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i><em class="spark" style="left:' + (Math.max(0, x.power) / max * 100) + '%"></em></div><div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? ' <span class="star">MVP</span>' : "") + "</span>" +
           (x.dice ? '<span class="dice-note">' + diceText(x) + "</span>" : "") + "</div></div>").join("") + "</div></div>";
     }
     if (TEAMS.length > 3) {
@@ -877,7 +922,7 @@ a { color: var(--blue); }
     }
     if (game.phase === "idle" || !game.round) return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">라운드마다 조에서 1명 출전 · 한 사람은 한 번만<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 HP 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
     const b = boss();
-    let h = '<div class="card"><div class="boss-mini">' + bossSprite(game.round) + '<div><div class="muted">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="t">' + esc(b.name) + '</div></div></div><div class="muted">' + esc(b.desc) + "</div>" +
+    let h = '<div class="card"><div class="boss-mini">' + bossSprite(game.round) + '<div><div class="muted">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="t">' + esc(b.name) + '</div></div></div>' + fold("d" + game.round, b.desc) +
       '<div class="phone-chips"><span class="hpc">HP ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + (b.event ? '<span class="hot">돌발 이벤트</span>' : "") + "</div>" +
       (game.hint && game.phase === "meeting" ? '<div class="muted"><b>힌트</b> ' + esc(b.hint) + "</div>" : "") +
       (game.phase === "meeting" ? '<div class="ptimer" data-deadline="' + game.deadline + '"></div>' : "") + "</div>";
@@ -900,12 +945,22 @@ a { color: var(--blue); }
     if (game.phase === "revealed" && x) {
       const f = people[x.pid];
       return h + '<div class="card"><div class="outcome' + (x.cleared ? " win" : "") + '">' + (x.cleared ? "격파!" : "아쉽게 실패") + "</div>" +
-        '<div class="pfight' + (x.cleared ? "" : " lose") + '"><div class="art">' + (f ? sprite(charOf(f)) : "") + "</div><div><b>" + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div></div>" +
+        '<div class="pfight' + (x.cleared ? " win" : " lose") + '"><div class="art">' + (f ? sprite(charOf(f)) : "") + '</div><div class="pvs"><b class="pdmg">' + x.power + '</b><span>공격력</span></div><div class="pboss">' + bossSprite(game.round) + (x.cleared ? '<b class="ko-stamp">K.O.</b>' : "") + "</div></div>" +
+        '<div class="muted"><b>' + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div>" +
         '<div class="muted">판정 스탯 ' + statsText(b.stats) + " 합 " + x.base + (x.dice ? " · " + diceText(x) + " (" + diceEff(b, x.dice) + ")" : "") + "</div>" +
-        '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + '</div><div class="muted">' + esc(b.reveal) + '</div><div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
+        '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + '</div>' + fold("r" + game.round, b.reveal) + '<div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
         '<div class="muted">누적 점수와 순위는 마지막에 공개돼요.</div>';
     }
     return "<h3>최종 순위</h3>" + rankHtml(p);
+  }
+
+  // 휴대폰의 긴 글: 처음엔 두 줄만, "더 보기"로 펼침
+  const moreOpen = new Set();
+  function fold(key, text) {
+    const t = esc(text);
+    if (String(text || "").length <= 60) return '<div class="muted">' + t + "</div>";
+    const open = moreOpen.has(key);
+    return '<div class="fold' + (open ? " open" : "") + '"><div class="muted ftxt">' + t + '</div><button type="button" class="more" data-more="' + key + '">' + (open ? "접기" : "더 보기") + "</button></div>";
   }
 
   let infoOpen = false;
@@ -1186,7 +1241,7 @@ a { color: var(--blue); }
       (canSettings() ? '<nav class="tabs" aria-label="진행자 화면"><button type="button" data-tab="run"' + (hostTab === "run" ? ' class="on" aria-current="page"' : "") + ">진행</button>" +
         '<button type="button" data-tab="settings"' + (hostTab === "settings" ? ' class="on" aria-current="page"' : "") + ">보스·규칙 설정</button></nav>" : "") +
       (hostTab === "settings" && canSettings() ? settingsHtml() :
-      '<main class="wrap"><div class="top"><section><p class="sec-title">발표 화면 (프로젝터)' + (MODE === "supabase" ? ' · <a href="' + esc(location.href.split("#")[0]) + '#screen" target="_blank" rel="noopener">이 화면만 따로 열기</a>' : "") + '</p><div class="proj-box"><div class="proj">' + projHtml() + "</div></div></section>" +
+      '<main class="wrap"><div class="top"><section><p class="sec-title">발표 화면 (프로젝터)' + (MODE === "supabase" ? ' · <a href="' + esc(location.href.split("#")[0]) + '#screen" target="_blank" rel="noopener">이 화면만 따로 열기</a>' : "") + '<button type="button" class="bgm-btn' + (bgmOn() ? " on" : "") + '" data-bgm>' + (bgmOn() ? "♪ BGM 끄기" : "♪ BGM 켜기") + "</button>" + '</p><div class="proj-box"><div class="proj">' + projHtml() + "</div></div></section>" +
       '<div class="side"><section class="panel"><h2>참여자 링크 (휴대폰)</h2><div class="join-box"><div class="qr">' + qrSvg(JOIN_URL) + '</div><div class="join-side"><div class="link">' + JOIN_URL + "</div>" +
       '<div class="row left"><button type="button" class="btn sm" data-copy>링크 복사</button><a class="btn sm" href="' + JOIN_URL + '" target="_blank" rel="noopener">새 탭에서 열기</a></div>' +
       '<span class="small">' + (MODE === "supabase" ? "휴대폰 데이터나 아무 Wi-Fi로 열면 돼요. 로그인은 필요 없어요." : "이 브라우저 안에서만 동작하는 연습 모드예요. 휴대폰과 연결하려면 ?local 없이 배포한 주소로 열어 주세요.") + "</span></div></div></section>" +
@@ -1195,6 +1250,22 @@ a { color: var(--blue); }
       TEAMS.map((tn, t) => '<div class="team-group"><div class="team-label">' + tn + '</div><div class="team-phones">' + teamOf(t).map((p) =>
         '<div class="phone"><div class="phone-bar"><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b><span>" + tn + '</span></div><div class="screen" id="screen-' + p.id + '">' + phoneHtml(p.id) + "</div></div>").join("") + "</div></div>").join("") +
       "</div></section>" : game && personList().length ? '<p class="small">참여자가 12명보다 많아서 휴대폰 미리보기는 숨겼어요. 각자 휴대폰으로 진행해 주세요.</p>' : "") + "</main>") + "</div>";
+  }
+
+  // BGM (js/raid-sim-bgm.js): 발표 화면 · 진행자 화면에서만. 단계에 맞는 곡, 결과 공개 때 타격·격파 효과음
+  const bgmOn = () => !!(window.RaidSimBgm && window.RaidSimBgm.enabled);
+  let sfxKey = "";
+  function syncBgm(v) {
+    const B = window.RaidSimBgm, g = game;
+    if (!B || v === "join") return;
+    B.setTrack(!g || g.stage !== "boss" || !g.round ? "lobby" : g.phase === "meeting" ? "meeting" : g.phase === "closed" ? "wait" : g.phase === "rolled" ? "dice" : g.phase === "revealed" ? "calm" : g.phase === "final" ? "victory" : "lobby");
+    const key = g && g.phase === "revealed" ? "r" + g.round : "";
+    if (key && key !== sfxKey) {
+      const rows = g.results[g.round] || [];
+      for (let i = 0; i < 6; i++) B.sfx("hit", 0.85 + i * 0.42);
+      B.sfx(rows.some((x) => x.cleared) ? "ko" : "fail", 3.4);
+    }
+    sfxKey = key;
   }
 
   let lastHtml = "";
@@ -1208,7 +1279,8 @@ a { color: var(--blue); }
     const ae = document.activeElement, af = ae && ae.dataset ? ae.dataset.f : null;
     let sel = null;
     try { if (af && ae.selectionStart != null) sel = [ae.selectionStart, ae.selectionEnd]; } catch (e) { /* 숫자 칸 */ }
-    const html = v === "screen" ? '<div class="screen-only"><div class="proj-box"><div class="proj">' + projHtml() + "</div></div></div>" : v === "join" ? joinHtml() : hostHtml();
+    const html = v === "screen" ? '<div class="screen-only"><div class="proj-box"><div class="proj">' + projHtml() + '</div></div><button type="button" class="bgm-float" data-bgm>' + (bgmOn() ? "♪ BGM 끄기" : "♪ BGM 켜기") + "</button></div>" : v === "join" ? joinHtml() : hostHtml();
+    syncBgm(v);
     if (html === lastHtml) return;
     lastHtml = html;
     $("app").innerHTML = html;
@@ -1247,6 +1319,9 @@ a { color: var(--blue); }
   let hostBusy = false;
   document.addEventListener("click", async (e) => {
     if (e.target.closest("[data-info]")) { infoOpen = true; lastHtml = ""; render(); return; }
+    if (e.target.closest("[data-bgm]")) { if (window.RaidSimBgm) { window.RaidSimBgm.toggle(); sfxKey = game && game.phase === "revealed" ? "r" + game.round : ""; } lastHtml = ""; render(); return; }
+    const mb = e.target.closest("[data-more]");
+    if (mb) { const k = mb.dataset.more; if (moreOpen.has(k)) moreOpen.delete(k); else moreOpen.add(k); lastHtml = ""; render(); return; }
     const ic = e.target.closest("[data-info-close]");
     if (ic && (ic.classList.contains("info-btn") || e.target === ic)) { infoOpen = false; lastHtml = ""; render(); return; }
     const tb = e.target.closest("[data-tab]");
