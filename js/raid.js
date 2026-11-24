@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261124c";
+  const V = "20261124d";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
 
@@ -350,6 +350,15 @@ window.WCRaid = (function () {
     clearTimeout(rollTimer);
     if (rolling()) rollTimer = setTimeout(() => { invalidate(); }, Math.max(50, ROLL_MS - (now() - game.rollAt)) + 60);
   }
+  // 휴대폰 결과 카드의 AI 서술: 오기 전에는 로딩 칸, 오면 같은 자리에 문장. 45초가 지나도 안 오면 칸을 거둠
+  const storyWait = {};
+  function storyBox(x) {
+    if (x.story) return '<div class="story">' + esc(x.story) + "</div>";
+    const k = game.round + "|" + x.pid + ":" + x.power;
+    if (!storyWait[k]) { storyWait[k] = Date.now(); setTimeout(invalidate, 45500); }
+    if (Date.now() - storyWait[k] > 45000) return "";
+    return '<div class="story loading" role="status"><span class="spark-ai">✦</span>AI가 이번 판을 풀이하는 중<span class="dots"><i>.</i><i>.</i><i>.</i></span></div>';
+  }
   // 우리 조 결과 문장 (휴대폰에만): 몇 점 모자랐는지, 받은 점수
   function myResultLine(x, b) {
     if (game.round === 0) return (x.cleared ? "보스 HP " + b.hp + " 돌파 → 격파!" : "보스 HP " + b.hp + "까지 " + (b.hp - x.power) + "점 부족") + " · 연습이라 점수에는 안 들어가요";
@@ -537,7 +546,7 @@ window.WCRaid = (function () {
       const f = people[x.pid];
       return h + '<div class="card"><div class="outcome' + (x.cleared ? " win" : "") + '">' + (x.cleared ? "격파!" : "아쉽게 실패") + "</div>" +
         '<div class="pfight' + (x.cleared ? " win" : " lose") + '"><div class="art">' + (f ? sprite(charOf(f)) : "") + '</div><div class="pvs"><b class="pdmg">' + x.power + '</b><span>공격력</span></div><div class="pboss">' + bossSprite(game.round) + (x.cleared ? '<b class="ko-stamp">K.O.</b>' : "") + "</div></div>" +
-        (x.story ? '<div class="story">' + esc(x.story) + "</div>" : "") +
+        storyBox(x) +
         '<div class="php"><i style="--left:' + Math.max(0, (b.hp - x.power) / b.hp * 100) + '%"></i></div>' +
         '<div class="php-t">' + (x.cleared ? "보스 HP " + b.hp + " → 0 · 격파!" : "보스 HP " + b.hp + " → " + (b.hp - x.power) + " 남음 · " + (b.hp - x.power) + "점만 더 있었으면!") + "</div>" +
         '<div class="muted"><b>' + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div>" +
