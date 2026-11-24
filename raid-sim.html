@@ -167,7 +167,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .bar-row.win .res b { color: var(--coral-deep); }
 .star { padding: 0.1cqw 0.7cqw; border-radius: 0.8cqw; background: var(--gold); font-size: 1.1cqw; font-weight: 900; }
 .hp-note { font-size: 1.3cqw; font-weight: 700; color: var(--coral-deep); }
-.board { display: flex; gap: 1cqw; }
+.board { display: flex; flex-wrap: wrap; gap: 0.6cqw 1cqw; }
 .board span { padding: 0.5cqw 1.4cqw; border-radius: 1cqw; background: rgba(255, 255, 255, 0.8); font-size: 1.4cqw; font-weight: 700; }
 .podium { flex: 1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 3cqw; align-items: end; padding: 0 10cqw; }
 .podium div { display: flex; flex-direction: column; gap: 1cqw; text-align: center; animation: rise 0.8s both; }
@@ -205,6 +205,26 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .pbtn.ghost { background: #EEF0F7; }
 .row { display: flex; gap: 6px; }
 .row > * { flex: 1; }
+.row.left > * { flex: 0 0 auto; }
+.fighters.many { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1cqw; }
+.fighters.many .fighter { grid-template-columns: 6cqw minmax(0, 1fr); gap: 0.8cqw; padding: 1cqw; }
+.fighters.many .fighter .art { width: 6cqw; }
+.fighters.many .fighter b { font-size: 2cqw; }
+.fighters.many .fighter span { font-size: 1.2cqw; }
+.bars.many { gap: 0.5cqw; padding: 1.2cqw 2cqw; }
+.bars.many .bar-row { grid-template-columns: 3.4cqw 13cqw minmax(0, 1fr) 17cqw; gap: 1cqw; }
+.bars.many .bar-row .art { width: 3.4cqw; }
+.bars.many .bar-row .nm b { font-size: 1.6cqw; display: inline; margin-right: 0.6cqw; }
+.bars.many .bar-row .nm span { font-size: 1.1cqw; }
+.bars.many .track { height: 1.6cqw; }
+.bars.many .res { flex-direction: row; align-items: baseline; gap: 0.6cqw; flex-wrap: wrap; }
+.bars.many .res b { font-size: 1.9cqw; }
+.bars.many .res span { font-size: 1.05cqw; }
+.rank-list { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: 0.8cqw 3cqw; padding: 2cqw 3cqw; }
+.rank-list .rk { display: grid; grid-template-columns: 6cqw minmax(0, 1fr) auto; align-items: baseline; gap: 1cqw; padding: 0.7cqw 1.2cqw; border-radius: 1cqw; font-size: 1.9cqw; font-weight: 700; }
+.rank-list .rk b { font-family: var(--f-display); font-weight: 400; font-size: 2.4cqw; }
+.rank-list .rk.top { background: rgba(255, 194, 61, 0.8); }
+.podium .r3 .block { height: 9cqw; }
 .pc { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border-radius: 12px; text-align: left; border: 2px solid transparent;
   background: linear-gradient(135deg, color-mix(in srgb, var(--aura) 16%, #fff), #fff); width: 100%; color: #1F2540; }
 .pc .art { width: 56px; aspect-ratio: 16 / 18; background: rgba(255, 255, 255, 0.8); border-radius: 8px; padding: 2px; }
@@ -244,7 +264,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 <body>
 <!-- 보스 레이드 시뮬레이터 (스탯 판정, AI 없음). 진행자 화면 · 발표 화면(#screen) · 참여자 휴대폰(#join)이
      시뮬레이터 전용 Supabase 프로젝트(raid-sim-config.js, supabase/raid-sim.sql)에 실시간으로 연결되고, 판정은 데이터베이스 함수가 합니다. 진행 버튼은 진행자 비밀번호로(Edge Function raid-sim).
-     ?local 을 붙여 열거나 Supabase 에 연결할 수 없으면 같은 화면이 이 브라우저 안에서만 동작합니다(휴대폰 6대 미리보기로 진행). -->
+     ?local 을 붙여 열거나 Supabase 에 연결할 수 없으면 같은 화면이 이 브라우저 안에서만 동작합니다(휴대폰 미리보기로 진행).
+     설정 탭에 참여자 명단(아이디·이름·조)을 넣으면 휴대폰에서 아이디만 입력해 자기 조로 들어갑니다. -->
 
 <div id="app"></div>
 <div class="toast" id="toast" role="status" hidden></div>
@@ -268,7 +289,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   const KEYS = STATS.map((s) => s.key);
   const LABEL = Object.fromEntries(STATS.map((s) => [s.key, s.label]));
   const COLOR = Object.fromEntries(STATS.map((s) => [s.key, s.color]));
-  const TEAMS = ["A조", "B조"];
+  let TEAM_NAMES = ["A조", "B조"];   // 조 이름 (명단이 있으면 명단의 조)
+  let TEAMS = TEAM_NAMES.slice();     // 화면(HTML)에 바로 넣는 조 이름 (이스케이프됨)
+  let JOIN_MODE = "seats";            // "roster": 휴대폰에서 아이디로 입장 · "seats": 6자리 중 고르기
   // 보스 정보는 Supabase(또는 js/raid-sim-engine.js)가 보내 줍니다. 판정 스탯은 결과 공개 전까지 진행자에게만 옵니다.
   let BOSSES = [];
   const DICE_WORD = { 1: "노트북 업데이트 시작", 6: "동기가 자료를 먼저 보내 줌" };
@@ -382,8 +405,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   const drafts = {};        // 휴대폰마다 고치는 중인 스탯 (저장 전, 이 기기에만)
   const editing = {};
   const STORE_ME = "raid-sim-me";
-  let myPid = null;
-  try { const v = localStorage.getItem(STORE_ME); if (v !== null && v !== "") myPid = Number(v); } catch (e) { /* 기억 못 해도 동작 */ }
+  const STORE_ME_NAME = "raid-sim-me-name";   // 명단 판에서 다른 명단으로 바뀌었는지 알아보려고
+  let myPid = null, myName = null;
+  try { const v = localStorage.getItem(STORE_ME); if (v !== null && v !== "") myPid = Number(v); myName = localStorage.getItem(STORE_ME_NAME); } catch (e) { /* 기억 못 해도 동작 */ }
   const now = () => Date.now() + clockOffset;
   const CFG = window.RAID_SIM_CONFIG || null;   // raid-sim-config.js (워크샵 본 프로젝트와 따로)
   let SB = null;            // Supabase 클라이언트
@@ -405,6 +429,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     Object.keys(picks).forEach((k) => delete picks[k]);
     Object.assign(picks, snap.picks || {});
     BOSSES = snap.bosses || [];
+    TEAM_NAMES = Array.isArray(snap.teams) && snap.teams.length ? snap.teams.map(String) : ["A조", "B조"];
+    TEAMS = TEAM_NAMES.map((t) => esc(t));
+    JOIN_MODE = snap.mode === "roster" ? "roster" : "seats";
     RULES = Object.assign({}, DEFAULT_RULES, snap.config || {});
     if (fresh && snap.now) clockOffset = snap.now - Date.now();
     ready.state = ready.people = true;
@@ -454,6 +481,19 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       if (!r || !r.ok) { toast((r && r.error) || "처리하지 못했어요"); return false; }
       return true;
     } catch (e) { toast("저장하지 못했어요. 인터넷 연결을 확인해 주세요."); return false; }
+  }
+  // 명단으로 만든 판: 아이디 → 내 자리 { ok, pid } 또는 { error }
+  async function loginId(uid) {
+    if (MODE === "supabase") {
+      try {
+        const { data: r, error } = await SB.rpc("raid_sim_login", { p_uid: uid });
+        if (error) throw error;
+        return r || {};
+      } catch (e) { return { error: "입장하지 못했어요. 인터넷 연결을 확인해 주세요." }; }
+    }
+    const r = LOCAL.engine.login(LOCAL.S, uid);
+    setTimeout(() => apply(LOCAL.engine.snapshot(LOCAL.S, true), true), 0);
+    return r.error ? { ok: false, error: r.error } : { ok: true, pid: r.pid, name: r.name };
   }
   // 파일 모드: 같은 규칙을 이 브라우저 안에서 돌립니다.
   let LOCAL = null;
@@ -533,7 +573,17 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     render();
     await backend.act(pid, "claim", { name });
   }
-  function leaveSeat() { myPid = null; try { localStorage.removeItem(STORE_ME); } catch (e) { /* 무시 */ } render(); }
+  function leaveSeat() { myPid = null; myName = null; try { localStorage.removeItem(STORE_ME); localStorage.removeItem(STORE_ME_NAME); } catch (e) { /* 무시 */ } render(); }
+  async function joinById(uid) {
+    const v = String(uid || "").trim();
+    if (!v) { toast("아이디를 적어 주세요"); return; }
+    const r = await loginId(v);
+    if (!r.ok) { toast(r.error || "입장하지 못했어요"); return; }
+    myPid = r.pid; myName = r.name || null;
+    if (people[myPid]) people[myPid].claimed = true;   // 서버 소식이 오기 전에 다시 그려도 입장 상태 유지
+    try { localStorage.setItem(STORE_ME, String(myPid)); if (myName) localStorage.setItem(STORE_ME_NAME, myName); } catch (e) { /* 이 기기에 기억 못 함 */ }
+    lastHtml = ""; render();
+  }
 
   // ── 화면 ────────────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
@@ -551,7 +601,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const qr = '<div class="pv-qr glass"><div class="q">' + qrSvg(JOIN_URL) + "</div><span>휴대폰으로<br>QR을 찍어 참여</span></div>";
     if (game.stage === "lobby") {
       const joined = personList().filter((p) => p.claimed).length;
-      return '<div class="pv pv-center"><div class="eyebrow">오프닝 아이스브레이킹</div><div class="h">나만의 픽셀 캐릭터<br>&amp; 보스 레이드</div><div class="sub">휴대폰으로 QR을 찍고 내 자리를 골라 주세요 · 입장 ' + joined + " / " + personList().length + '명</div><div class="pv-foot" style="margin-top:1cqw">' + qr + "</div></div>";
+      return '<div class="pv pv-center"><div class="eyebrow">오프닝 아이스브레이킹</div><div class="h">나만의 픽셀 캐릭터<br>&amp; 보스 레이드</div><div class="sub">휴대폰으로 QR을 찍고 ' + (JOIN_MODE === "roster" ? "아이디를 입력해" : "내 자리를 골라") + ' 주세요 · 입장 ' + joined + " / " + personList().length + '명</div><div class="pv-foot" style="margin-top:1cqw">' + qr + "</div></div>";
     }
     if (game.stage === "make") {
       const made = personList().filter((p) => p.char && !p.char.isDefault).length;
@@ -579,26 +629,30 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     }
     const rows = game.results[game.round] || [];
     if (game.phase === "closed") {
-      return '<div class="pv"><div class="h">마감! 이번 라운드 출전자</div><div class="sub">' + esc(b.name) + " · 보스 체력 " + b.hp + '</div><div class="fighters">' +
+      return '<div class="pv"><div class="h">마감! 이번 라운드 출전자</div><div class="sub">' + esc(b.name) + " · 보스 체력 " + b.hp + '</div><div class="fighters' + (rows.length > 4 ? " many" : "") + '"' + (rows.length <= 4 ? ' style="grid-template-columns:repeat(' + rows.length + ',minmax(0,1fr))"' : "") + ">" +
         rows.map((x) => '<div class="fighter glass"><div class="art">' + sprite(charOf(people[x.pid] || {})) + "</div><div><span>" + TEAMS[x.team] + (x.auto ? " · 랜덤" : "") + "</span><b>" + esc(x.name) + "</b></div></div>").join("") + "</div></div>";
     }
     if (game.phase === "revealed") {
       const max = Math.max(b.hp + 4, ...rows.map((x) => x.power));
       const sorted = rows.slice().sort((a, c) => a.power - c.power);
       return '<div class="pv"><div><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + "</div></div>" +
-        '<div class="bars glass" style="--hp:' + (b.hp / max * 100) + '%"><div class="hp-note">점선 = 보스 체력 ' + b.hp + " · 점선을 넘으면 격파</div>" +
+        '<div class="bars glass' + (rows.length > 4 ? " many" : "") + '" style="--hp:' + (b.hp / max * 100) + '%"><div class="hp-note">점선 = 보스 체력 ' + b.hp + " · 점선을 넘으면 격파</div>" +
         sorted.map((x, i) => '<div class="bar-row' + (x.cleared ? " win" : "") + '" style="animation-delay:' + (0.3 + i * 0.6) + 's"><div class="art">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + "</span></div>" +
           '<div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i></div><div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? ' <span class="star">MVP</span>' : "") + "</span>" +
           (x.dice ? '<span style="font-weight:500">' + diceText(x) + (DICE_WORD[x.dice] ? " · " + DICE_WORD[x.dice] : "") + "</span>" : "") + "</div></div>").join("") + "</div>" +
         '<div class="board">' + scoreboard().map((x) => "<span>" + x.rank + "위 " + TEAMS[x.team] + " " + x.total + "점</span>").join("") + "</div></div>";
     }
-    return '<div class="pv"><div class="h" style="text-align:center">보스 레이드 최종 순위</div><div class="podium">' +
+    if (TEAMS.length > 3) {
+      return '<div class="pv"><div class="h" style="text-align:center">보스 레이드 최종 순위</div><div class="rank-list glass">' +
+        scoreboard().map((x) => '<div class="rk' + (x.rank === 1 ? " top" : "") + '"><b>' + x.rank + "위</b><span>" + TEAMS[x.team] + "</span><span>" + x.total + "점 · 격파 " + x.cleared + "회</span></div>").join("") + "</div></div>";
+    }
+    return '<div class="pv"><div class="h" style="text-align:center">보스 레이드 최종 순위</div><div class="podium" style="grid-template-columns:repeat(' + TEAMS.length + ',1fr)">' +
       scoreboard().slice().sort((a, c) => (a.rank === 1 ? 1 : 0) - (c.rank === 1 ? 1 : 0) || c.rank - a.rank).map((x) => '<div class="r' + x.rank + '"><b>' + TEAMS[x.team] + "</b><span>" + x.total + "점 · 격파 " + x.cleared + '회</span><div class="block glass">' + x.rank + "위</div></div>").join("") + "</div></div>";
   }
 
   function adminHtml() {
     if (!isHost) return '<p class="small">판정 스탯과 진행 버튼은 위에서 진행자 비밀번호로 로그인하면 보여요.</p>';
-    if (!game || !personList().length) return '<p class="small">위의 "게임 준비하기"를 누르면 참여자 자리 6개(A조·B조 3명씩)와 진행 상태가 만들어져요.</p>';
+    if (!game || !personList().length) return '<p class="small">위의 "게임 준비하기"를 누르면 진행 상태가 만들어져요. 보스·규칙 설정 탭에 명단을 넣었으면 명단대로, 아니면 참여자 자리 6개(A조·B조 3명씩)로 만들어져요.</p>';
     let html = "";
     if (game.stage !== "boss" || !game.round) {
       html += '<div class="secret">판정 스탯은 여기에만 보여요.<br>' + BOSSES.map((b, i) => (i + 1) + ". " + esc(b.name) + " → <b>" + statsText(b.stats) + "</b> · 체력 " + b.hp).join("<br>") + "</div>";
@@ -617,8 +671,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     }
     html += '<div class="who-grid">' + personList().map((p) => '<div class="who"><div class="art">' + (p.char ? sprite(p.char) : "") + '</div><div><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b>" +
       '<span class="small">' + TEAMS[p.team] + " · " + (p.char ? (p.char.isDefault ? "기본 캐릭터" : esc(title(p.char))) : "캐릭터 만드는 중") + "</span></div></div>").join("") + "</div>" +
-      '<span class="small">초록 점 = 휴대폰으로 자리를 고른 사람</span>' +
-      '<button type="button" class="btn quiet" data-host="resetSeats" style="align-self:flex-start;height:32px">참여자 자리 비우기</button>';
+      '<span class="small">초록 점 = 휴대폰으로 들어온 사람 · ' + personList().length + "명 중 " + personList().filter((p) => p.claimed).length + "명" + (JOIN_MODE === "roster" ? " · 명단 판 (아이디로 입장)" : "") + "</span>" +
+      '<button type="button" class="btn quiet" data-host="resetSeats" style="align-self:flex-start;height:32px">' + (JOIN_MODE === "roster" ? "입장 표시 지우기" : "참여자 자리 비우기") + "</button>";
     return html;
   }
 
@@ -688,6 +742,15 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   function joinHtml() {
     if (!ready.state || !ready.people) return '<div class="joinview"><div class="screen"><h3>불러오는 중…</h3></div></div>';
     if (!game || !personList().length) return '<div class="joinview"><div class="screen"><h3>곧 시작해요</h3><div class="muted">진행자가 아직 게임을 준비하지 않았어요. 준비되면 이 화면이 자동으로 바뀌어요.</div></div></div>';
+    // 명단이 바뀌어 같은 번호가 다른 사람이 됐으면 다시 입장
+    if (JOIN_MODE === "roster" && myPid != null && people[myPid] && myName && people[myPid].name !== myName) myPid = null;
+    // 조는 명단대로 고정: 참여자는 바꿀 수 없고, 진행자가 "입장 표시 지우기"를 누르면 아이디부터 다시 입력
+    if (JOIN_MODE === "roster" && myPid != null && people[myPid] && people[myPid].claimed === false) myPid = null;
+    if ((myPid == null || !people[myPid]) && JOIN_MODE === "roster") {
+      return '<div class="joinview"><div class="screen"><h3>보스 레이드에<br>참여해 주세요</h3>' +
+        '<form class="card" data-idlogin><div class="t">아이디</div><input class="namebox" id="uid-in" maxlength="40" placeholder="명단에 있는 아이디" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false">' +
+        '<div class="muted">아이디를 입력하면 이름과 조가 명단대로 정해져요. 조는 바꿀 수 없어요.</div><button type="submit" class="pbtn">입장하기</button></form>' + lostNote() + "</div></div>";
+    }
     if (myPid == null || !people[myPid]) {
       return '<div class="joinview"><div class="screen"><h3>보스 레이드에<br>참여해 주세요</h3>' +
         '<div class="card"><div class="t">이름 (선택)</div><input class="namebox" id="name-in" maxlength="12" placeholder="화면에 보일 이름" autocomplete="off"><div class="muted">이름을 적고 아래에서 내 자리를 눌러 주세요. 비워 두면 자리 이름 그대로 써요.</div></div>' +
@@ -695,7 +758,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
         lostNote() + "</div></div>";
     }
     const p = people[myPid];
-    return '<div class="joinview"><div class="phone-bar"><b>' + esc(p.name) + "</b><span>" + TEAMS[p.team] + '</span><button type="button" class="btn quiet" data-leave style="height:28px;padding:0 8px;font-size:12px">자리 바꾸기</button></div><div class="screen" id="screen-me">' + phoneHtml(myPid) +
+    return '<div class="joinview"><div class="phone-bar"><b>' + esc(p.name) + "</b><span>" + TEAMS[p.team] + "</span>" + (JOIN_MODE === "roster" ? "" : '<button type="button" class="btn quiet" data-leave style="height:28px;padding:0 8px;font-size:12px">자리 바꾸기</button>') + '</div><div class="screen" id="screen-me">' + phoneHtml(myPid) +
       lostNote() + "</div></div>";
   }
 
@@ -706,6 +769,40 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   try { if (localStorage.getItem(STORE_TAB) === "settings") hostTab = "settings"; } catch (e) { /* 기억 못 해도 동작 */ }
   let setDraft = null;
   let setBusy = false;
+  let rosterText = null;    // 명단 칸에 적는 중인 내용 (null 이면 지금 명단)
+  // 명단 글 → [{uid, name, team}]. 한 줄에 "아이디, 이름, 조" (쉼표 또는 탭). 조가 숫자뿐이면 "1조"처럼 붙임.
+  function parseRoster(text) {
+    const rows = [], errs = [];
+    let first = true;
+    String(text || "").split(/\r?\n/).forEach((line, i) => {
+      const raw = line.trim();
+      if (!raw) return;
+      const cols = raw.split(/\t|,/).map((c) => c.trim());
+      const isHeader = first && /^(아이디|id|knox ?id|사번|이름|name)$/i.test(cols[0]);   // 맨 첫 줄이 머리글이면 건너뜀
+      first = false;
+      if (isHeader) return;
+      if (cols.length < 3 || !cols[0] || !cols[1] || !cols[2]) { errs.push(i + 1 + "번째 줄: 아이디, 이름, 조 3칸이 필요해요"); return; }
+      rows.push({ uid: cols[0].toLowerCase(), name: cols[1], team: /^\d+$/.test(cols[2]) ? cols[2] + "조" : cols[2] });
+    });
+    // 조 순서: 숫자를 고려한 가나다순 (1조, 2조, … 10조)
+    const teams = [...new Set(rows.map((r) => r.team))].sort((a, b) => a.localeCompare(b, "ko", { numeric: true }));
+    rows.sort((a, b) => teams.indexOf(a.team) - teams.indexOf(b.team));
+    const dup = [...new Set(rows.map((r) => r.uid).filter((u, i, a) => a.indexOf(u) !== i))];
+    if (dup.length) errs.push("아이디가 두 번 나와요: " + dup.join(", "));
+    if (rows.length && teams.length < 2) errs.push("조가 2개 이상이어야 해요");
+    if (teams.length > 20) errs.push("조는 20개까지예요");
+    if (rows.length > 300) errs.push("명단은 300명까지예요");
+    rows.forEach((r, i) => { if (r.uid.length > 40 || r.name.length > 20 || r.team.length > 20) errs.push(i + 1 + "번째 사람: 아이디는 40자, 이름·조는 20자까지예요"); });
+    return { rows, teams, errs };
+  }
+  const currentRosterText = () => (JOIN_MODE === "roster" ? personList().filter((p) => p.uid).map((p) => [p.uid, p.name, TEAM_NAMES[p.team]].join(", ")).join("\n") : "");
+  function rosterSummary() {
+    const r = parseRoster(rosterText != null ? rosterText : currentRosterText());
+    if (!r.rows.length && !r.errs.length) return "명단이 비어 있어요 → 6자리(A조·B조 3명씩) 연습판";
+    return "<b>" + r.rows.length + "명 · 조 " + r.teams.length + "개</b> (" + r.teams.map((t) => esc(t) + " " + r.rows.filter((x) => x.team === t).length + "명").join(", ") + ")" +
+      (r.errs.length ? '<br><b style="color:var(--coral-deep)">' + r.errs.slice(0, 5).map(esc).join("<br>") + "</b>" : "") +
+      (rosterText != null && rosterText !== currentRosterText() ? '<br><span style="color:var(--coral-deep)">아직 적용하지 않았어요. "명단 적용"을 눌러 주세요.</span>' : "");
+  }
   const CFG_FIELDS = [
     { k: "statTotal", label: "스탯 합계", unit: "점", note: "캐릭터가 스탯 5개에 나눠 쓰는 점수", rule: true },
     { k: "statMin", label: "스탯 최소", unit: "점", rule: true },
@@ -734,6 +831,14 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const ruleLocked = !!game && game.stage !== "lobby";
     let h = '<main class="wrap settings">';
     if (roundBusy()) h += '<div class="notice">지금 ' + game.round + "라운드가 진행 중이에요. 보스는 결과 공개 뒤에 저장할 수 있어요. 규칙(시간·MVP·운)은 지금도 저장돼요.</div>";
+    const lobby = !game || game.stage === "lobby";
+    h += '<section class="panel"><h2>참여자 명단</h2><p class="small">한 줄에 한 사람씩 <b>아이디, 이름, 조</b>를 적어 주세요. 엑셀에서 세 칸을 복사해 붙여 넣어도 돼요. 조에 숫자만 적으면 "1조"처럼 붙여요.<br>' +
+      "명단을 적용하면 참여자는 휴대폰에서 <b>아이디만 입력</b>하면 자기 이름과 조로 들어가요. 비워 두면 6자리(A조·B조 3명씩) 연습판이에요.</p>" +
+      '<label class="f"><span>명단</span><textarea rows="8" data-f="roster" spellcheck="false" placeholder="knox01, 김민지, 1조&#10;knox02, 이서준, 1조&#10;knox03, 박지우, 2조"' + (lobby ? "" : " disabled") + ">" + esc(rosterText != null ? rosterText : currentRosterText()) + "</textarea></label>" +
+      '<div class="small" data-roster-sum>' + rosterSummary() + "</div>" +
+      '<div class="row left"><button type="button" class="btn go" data-set="roster"' + (lobby ? "" : " disabled") + ">명단 적용</button>" +
+      (JOIN_MODE === "roster" ? '<button type="button" class="btn quiet" data-set="rosterClear"' + (lobby ? "" : " disabled") + ">명단 비우기 (6자리 연습판으로)</button>" : "") + "</div>" +
+      (lobby ? "" : '<p class="small">명단은 대기 단계에서만 바꿀 수 있어요. 진행 탭에서 "처음부터"를 누르면 바꿀 수 있어요.</p>') + "</section>";
     h += '<section class="panel"><h2>게임 규칙</h2><div class="cfg-grid">' + CFG_FIELDS.map((f) =>
       '<label class="f"><span>' + f.label + '</span><span class="num"><input type="number" inputmode="numeric" step="1" data-f="c.' + f.k + '" value="' + esc(d.config[f.k]) + '"' + (f.rule && ruleLocked ? " disabled" : "") + "><em>" + f.unit + "</em></span>" +
       (f.note ? "<small>" + esc(f.note) + "</small>" : "") + "</label>").join("") + "</div>" +
@@ -786,6 +891,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   document.addEventListener("input", (e) => {
     const el = e.target;
     if (!el.dataset || !el.dataset.f || el.type === "checkbox") return;
+    if (el.dataset.f === "roster") { rosterText = el.value; const m = document.querySelector("[data-roster-sum]"); if (m) m.innerHTML = rosterSummary(); return; }
     if (setField(el)) { const m = document.querySelector("[data-dirty]"); if (m) m.textContent = "저장하지 않은 변경이 있어요"; }
   });
   document.addEventListener("change", (e) => {
@@ -834,6 +940,19 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const L = setDraft && setDraft.bosses;
     if (what === "save") { await saveSettings(); return; }
     if (what === "revert") { setDraft = null; return; }
+    if (what === "roster") {
+      const r = parseRoster(rosterText != null ? rosterText : currentRosterText());
+      if (r.errs.length) { toast(r.errs[0]); return; }
+      if (!r.rows.length) { toast('명단이 비어 있어요. 6자리로 돌아가려면 "명단 비우기"를 눌러 주세요'); return; }
+      if (!confirm(r.rows.length + "명 · 조 " + r.teams.length + "개로 새 판을 만들까요? 지금 자리·캐릭터·결과는 초기화돼요.")) return;
+      if (await backend.host("saveRoster", null, r.rows)) { rosterText = null; toast("명단을 적용했어요. 참여자는 휴대폰에서 아이디만 입력하면 돼요"); }
+      return;
+    }
+    if (what === "rosterClear") {
+      if (!confirm("명단을 비우고 6자리(A조·B조 3명씩) 연습판으로 돌아갈까요? 지금 자리·캐릭터·결과는 초기화돼요.")) return;
+      if (await backend.host("saveRoster", null, [])) { rosterText = null; toast("6자리 연습판으로 돌아갔어요"); }
+      return;
+    }
     if (what === "defaults") {
       if (!confirm("보스를 기본 5명으로 되돌릴까요? 고친 보스 내용이 모두 사라져요.")) return;
       if (await backend.host("resetBosses")) { setDraft = null; toast("보스를 기본값으로 되돌렸어요"); }
@@ -854,7 +973,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     : !connected ? "실시간 연결이 끊김 · 다시 연결하는 중" : isHost ? "Supabase 실시간 연결 · 휴대폰과 같은 데이터" : "Supabase 실시간 연결 · 진행하려면 진행자 비밀번호";
   const loginHtml = () => '<form class="login" data-login><input id="pw" type="password" placeholder="진행자 비밀번호" autocomplete="current-password"><button type="submit" class="btn go">진행자 로그인</button></form>';
   function hostHtml() {
-    const preview = game && personList().length;
+    const preview = game && personList().length && personList().length <= 12;
     const needLogin = MODE === "supabase" && !isHost;
     return '<header class="host"><div class="host-in"><div class="brand"><h1>보스 레이드 시뮬레이터</h1><span class="live' + (MODE === "supabase" && connected ? " on" : "") + '"><i></i>' + esc(liveWord()) + "</span></div>" +
       '<span class="step">' + esc(stepWord()) + '</span><div class="actions">' + (needLogin ? loginHtml() : hostTab === "settings" && canSettings() ? "" : hostButtons().map((x) => '<button type="button" class="btn ' + (x.cls || "") + '" data-host="' + x.fn + '">' + esc(x.label) + "</button>").join("")) + "</div></div></header>" +
@@ -866,10 +985,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       '<div class="row" style="flex-wrap:wrap"><button type="button" class="btn" data-copy style="flex:0 0 auto">링크 복사</button><a class="btn" href="' + JOIN_URL + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;flex:0 0 auto">새 탭에서 열기</a></div>' +
       '<span class="small">' + (MODE === "supabase" ? "휴대폰 데이터나 아무 Wi-Fi로 열면 돼요. 로그인은 필요 없어요." : "이 브라우저 안에서만 동작하는 연습 모드예요. 휴대폰과 연결하려면 ?local 없이 배포한 주소로 열어 주세요.") + "</span></div></div></section>" +
       '<section class="panel"><h2>진행자 전용 (참여자에게는 안 보임)</h2>' + adminHtml() + "</section></div></div>" +
-      (preview ? '<section><p class="sec-title">휴대폰 6대 미리보기 · 여기서 눌러도 실제 휴대폰과 같은 데이터가 바뀌어요</p><div class="phones">' +
+      (preview ? '<section><p class="sec-title">휴대폰 ' + personList().length + '대 미리보기 · 여기서 눌러도 실제 휴대폰과 같은 데이터가 바뀌어요</p><div class="phones">' +
       TEAMS.map((tn, t) => '<div class="team-group"><div class="team-label">' + tn + '</div><div class="team-phones">' + teamOf(t).map((p) =>
         '<div class="phone"><div class="phone-bar"><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b><span>" + tn + '</span></div><div class="screen" id="screen-' + p.id + '">' + phoneHtml(p.id) + "</div></div>").join("") + "</div></div>").join("") +
-      "</div></section>" : "") + "</main>");
+      "</div></section>" : game && personList().length ? '<p class="small">참여자가 12명보다 많아서 휴대폰 미리보기는 숨겼어요. 각자 휴대폰으로 진행해 주세요.</p>' : "") + "</main>");
   }
 
   let lastHtml = "";
@@ -878,6 +997,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const scrolls = {};
     document.querySelectorAll(".screen[id]").forEach((el) => { scrolls[el.id] = el.scrollTop; });
     const nameIn = $("name-in"), nameVal = nameIn ? nameIn.value : null, nameFocus = nameIn && document.activeElement === nameIn;
+    const uidIn = $("uid-in"), uidVal = uidIn ? uidIn.value : null, uidFocus = uidIn && document.activeElement === uidIn;
     const pwIn = $("pw"), pwVal = pwIn ? pwIn.value : null, pwFocus = pwIn && document.activeElement === pwIn;
     const ae = document.activeElement, af = ae && ae.dataset ? ae.dataset.f : null;
     let sel = null;
@@ -889,6 +1009,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     document.querySelectorAll(".screen[id]").forEach((el) => { if (scrolls[el.id]) el.scrollTop = scrolls[el.id]; });
     const ni = $("name-in");
     if (ni && nameVal != null) { ni.value = nameVal; if (nameFocus) ni.focus(); }
+    const ui = $("uid-in");
+    if (ui && uidVal != null) { ui.value = uidVal; if (uidFocus) ui.focus(); }
     const pi = $("pw");
     if (pi && pwVal != null) { pi.value = pwVal; if (pwFocus) pi.focus(); }
     if (af) {
@@ -900,6 +1022,13 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   addEventListener("hashchange", () => { lastHtml = ""; render(); });
   let loggingIn = false;
   document.addEventListener("submit", async (e) => {
+    if (e.target.closest("[data-idlogin]")) {
+      e.preventDefault();
+      if (loggingIn) return;
+      loggingIn = true;
+      try { const el = $("uid-in"); await joinById(el ? el.value : ""); } finally { loggingIn = false; }
+      return;
+    }
     if (!e.target.closest("[data-login]")) return;
     e.preventDefault();
     if (loggingIn) return;

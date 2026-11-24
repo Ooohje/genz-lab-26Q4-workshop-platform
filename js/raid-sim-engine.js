@@ -8,7 +8,7 @@
   "use strict";
 
   const KEYS = ["hp", "intel", "social", "mental", "luck"];
-  const TEAMS = ["A조", "B조"];
+  const TEAMS = ["A조", "B조"];   // 명단이 없을 때 (6자리 연습판)
   const DEFAULT_NAMES = ["참여자 1", "참여자 2", "참여자 3", "참여자 4", "참여자 5", "참여자 6"];
   const SEATS = DEFAULT_NAMES.length;
   const DEFAULT_CONFIG = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, shareMin: 8, mvpBonus: 1, luckStep: 4 };
@@ -54,6 +54,27 @@
     if (!isInt(c.luckStep, 0, 30)) return "운 주사위 기준은 0~30점이에요 (0이면 끔)";
     return null;
   }
+  // 명단 [{uid, name, team}] 확인 (빈 배열 = 6자리 연습판)
+  function checkRoster(list) {
+    if (!Array.isArray(list)) return "명단 형식이 잘못됐어요";
+    if (!list.length) return null;
+    if (list.length > 300) return "명단은 300명까지예요";
+    const uids = new Set(), teams = new Set();
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i], pre = i + 1 + "번째 사람: ";
+      if (!r || typeof r !== "object") return pre + "형식이 잘못됐어요";
+      const u = String(r.uid == null ? "" : r.uid).trim().toLowerCase(), n = String(r.name == null ? "" : r.name).trim(), t = String(r.team == null ? "" : r.team).trim();
+      if (!u || u.length > 40) return pre + "아이디는 1~40자예요";
+      if (uids.has(u)) return pre + "아이디 " + u + " 가 두 번 나와요";
+      uids.add(u);
+      if (!n || n.length > 20) return pre + "이름은 1~20자예요";
+      if (!t || t.length > 20) return pre + "조 이름은 1~20자예요";
+      teams.add(t);
+    }
+    if (teams.size < 2) return "조가 2개 이상이어야 해요";
+    if (teams.size > 20) return "조는 20개까지예요";
+    return null;
+  }
   function checkBosses(list) {
     if (!Array.isArray(list) || list.length < 1 || list.length > 10) return "보스는 1~10명이어야 해요";
     for (let i = 0; i < list.length; i++) {
@@ -72,13 +93,13 @@
     return null;
   }
 
-  // S = { game, people: {0..5}, picks: {"r{라운드}t{조}": {pid, by, auto}}, config, bosses }
-  const create = () => ({ game: null, people: {}, picks: {}, config: clone(DEFAULT_CONFIG), bosses: clone(DEFAULT_BOSSES) });
+  // S = { game, people: {0..}, picks: {"r{라운드}t{조}": {pid, by, auto}}, teams: [조 이름], mode: "seats"|"roster", roster, config, bosses }
+  const create = () => ({ game: null, people: {}, picks: {}, teams: TEAMS.slice(), mode: "seats", roster: [], config: clone(DEFAULT_CONFIG), bosses: clone(DEFAULT_BOSSES) });
   const personList = (S) => Object.keys(S.people).map(Number).sort((a, b) => a - b).map((i) => S.people[i]);
   const teamOf = (S, t) => personList(S).filter((p) => p.team === t);
   const pickOf = (S, r, t) => S.picks["r" + r + "t" + t];
   function played(S, pid, before) {
-    for (let r = 1; r < before; r++) for (let t = 0; t < TEAMS.length; t++) { const k = pickOf(S, r, t); if (k && k.pid === pid) return true; }
+    for (let r = 1; r < before; r++) for (let t = 0; t < S.teams.length; t++) { const k = pickOf(S, r, t); if (k && k.pid === pid) return true; }
     return false;
   }
   const canPick = (S, pid, t) => !played(S, pid, S.game.round) || teamOf(S, t).every((m) => played(S, m.id, S.game.round));
@@ -93,14 +114,14 @@
   }
   function closeRound(S) {
     const g = S.game, r = g.round, b = S.bosses[r - 1], cfg = S.config;
-    for (let t = 0; t < TEAMS.length; t++) {
+    for (let t = 0; t < S.teams.length; t++) {
       if (pickOf(S, r, t)) continue;
       // 안 고른 조는 아직 안 나간 사람 중 랜덤
       const pool = teamOf(S, t).filter((m) => !played(S, m.id, r));
       const list = pool.length ? pool : teamOf(S, t);
       S.picks["r" + r + "t" + t] = { pid: list[rand(list.length)].id, by: null, auto: true };
     }
-    const rows = TEAMS.map((_, t) => {
+    const rows = S.teams.map((_, t) => {
       const k = pickOf(S, r, t), p = S.people[k.pid], c = charOf(S, p);
       const base = b.stats.reduce((n, s) => n + (c[s] || 0), 0);
       // 돌발 이벤트: 운이 높으면 주사위를 더 굴려 가장 좋은 눈
@@ -126,11 +147,30 @@
 
   // ── 진행자 동작 ── 실패하면 사유(문자열)를 돌려줍니다.
   const HOST = {
+    // 새 판: 명단이 있으면 명단대로(조는 명단에 처음 나온 순서), 없으면 6자리
     setup(S) {
       S.people = {};
-      for (let i = 0; i < SEATS; i++) S.people[i] = { id: i, name: DEFAULT_NAMES[i], team: i < SEATS / 2 ? 0 : 1, char: null, seed: newSeed(), rerolls: 0, claimed: false };
+      if (S.roster.length) {
+        S.teams = [];
+        S.roster.forEach((r, i) => {
+          if (!S.teams.includes(r.team)) S.teams.push(r.team);
+          S.people[i] = { id: i, uid: r.uid, name: r.name, team: S.teams.indexOf(r.team), char: null, seed: newSeed(), rerolls: 0, claimed: false };
+        });
+        S.mode = "roster";
+      } else {
+        for (let i = 0; i < SEATS; i++) S.people[i] = { id: i, name: DEFAULT_NAMES[i], team: i < SEATS / 2 ? 0 : 1, char: null, seed: newSeed(), rerolls: 0, claimed: false };
+        S.teams = TEAMS.slice();
+        S.mode = "seats";
+      }
       S.picks = {};
       S.game = initialGame();
+    },
+    saveRoster(S, _, data) {
+      if (S.game && S.game.stage !== "lobby") return "명단은 대기 단계에서만 바꿀 수 있어요. 진행 탭에서 \"처음부터\"를 누른 뒤 적용해 주세요";
+      const err = checkRoster(data);
+      if (err) return err;
+      S.roster = data.map((r) => ({ uid: String(r.uid).trim().toLowerCase(), name: String(r.name).trim(), team: String(r.team).trim() }));
+      HOST.setup(S);
     },
     make(S) { if (S.game.stage !== "lobby") return "대기 단계에서만 시작할 수 있어요"; S.game.stage = "make"; },
     fillChars(S) {
@@ -162,7 +202,7 @@
       personList(S).forEach((p) => { p.char = null; p.rerolls = 0; });
       S.game = initialGame();
     },
-    resetSeats(S) { personList(S).forEach((p) => { p.name = DEFAULT_NAMES[p.id]; p.claimed = false; }); },
+    resetSeats(S) { personList(S).forEach((p) => { if (!p.uid) p.name = DEFAULT_NAMES[p.id]; p.claimed = false; }); },
     saveConfig(S, _, data) {
       if (!data || typeof data !== "object") return "규칙 형식이 잘못됐어요";
       const next = Object.assign({}, S.config);
@@ -188,7 +228,7 @@
       S.bosses = clone(DEFAULT_BOSSES);
     },
   };
-  const NO_GAME_OK = ["setup", "saveConfig", "saveBosses", "resetBosses"];
+  const NO_GAME_OK = ["setup", "saveConfig", "saveBosses", "resetBosses", "saveRoster"];
   function host(S, fn, arg, data) {
     if (!Object.prototype.hasOwnProperty.call(HOST, fn)) return "알 수 없는 동작이에요";
     if (!NO_GAME_OK.includes(fn) && (!S.game || !personList(S).length)) return "먼저 게임을 준비해 주세요";
@@ -201,6 +241,7 @@
     if (!g || !p) return "자리를 찾을 수 없어요";
     const d = data || {};
     if (a === "claim") {
+      if (S.mode === "roster") return "아이디로 입장해 주세요";
       const clean = String(d.name || "").replace(/\s+/g, " ").trim().slice(0, 12);
       p.claimed = true;
       if (clean) p.name = clean;
@@ -233,6 +274,17 @@
     return "알 수 없는 동작이에요";
   }
 
+  // 명단으로 만든 판: 아이디로 자리를 찾아 줍니다. { pid, name } 또는 { error }
+  function login(S, uid) {
+    if (S.mode !== "roster" || !S.game) return { error: "지금은 아이디 입장을 쓰지 않아요. 자리를 골라 주세요" };
+    const v = String(uid || "").trim().toLowerCase();
+    if (!v) return { error: "아이디를 적어 주세요" };
+    const p = personList(S).find((x) => x.uid === v);
+    if (!p) return { error: "명단에 없는 아이디예요. 진행자에게 알려 주세요" };
+    p.claimed = true;
+    return { pid: p.id, name: p.name };
+  }
+
   // 화면에 보낼 상태. 진행자가 아니면 결과 공개 전 라운드의 판정 스탯과 공격력을 뺍니다.
   function snapshot(S, isHost) {
     const g = S.game ? clone(S.game) : null;
@@ -249,10 +301,12 @@
         if (!open(Number(k))) g.results[k] = g.results[k].map((x) => ({ team: x.team, pid: x.pid, name: x.name, auto: x.auto }));
       });
     }
-    return { game: g, people: clone(S.people), picks: clone(S.picks), bosses, config: clone(S.config), isHost: !!isHost, now: Date.now() };
+    const people = clone(S.people);
+    if (!isHost) Object.values(people).forEach((p) => { delete p.uid; });   // 참여자 화면에는 아이디를 보내지 않음
+    return { game: g, people, picks: clone(S.picks), teams: S.teams.slice(), mode: S.mode, bosses, config: clone(S.config), isHost: !!isHost, now: Date.now() };
   }
 
-  const api = { KEYS, TEAMS, DEFAULT_CONFIG, DEFAULT_BOSSES, create, host, act, snapshot, randomStats, defaultStats, checkConfig, checkBosses };
+  const api = { KEYS, TEAMS, DEFAULT_CONFIG, DEFAULT_BOSSES, create, host, act, login, snapshot, randomStats, defaultStats, checkConfig, checkBosses, checkRoster };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.RaidSimEngine = api;
 })(typeof window !== "undefined" ? window : this);
