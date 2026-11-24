@@ -281,7 +281,16 @@
   });
   stage.addEventListener("click", () => { if (view === "ai") setView("orig"); });
 
+  // 보스 레이드 중에는 시뮬레이터 발표 화면(raid-sim.html#screen)을 띄우고, 다른 프로그램으로 바뀌면 이 화면으로 돌아옵니다.
+  function goRaid(s) {
+    if (!s || s.program !== "raid") return false;
+    const q = new URLSearchParams(location.search).get("s");
+    location.replace("raid-sim.html?from=screen" + (q ? "&s=" + encodeURIComponent(q) : "") + "#screen");
+    return true;
+  }
+
   function applySession(next) {
+    if (goRaid(next)) return;
     const prev = session;
     session = next;
     if (prev && next.rev !== prev.rev) return resync(); // 숨기기·초기화 → 단어를 다시 읽기
@@ -323,6 +332,7 @@
       $("msg").textContent = "세션을 불러오지 못했어요. config.js와 접속 코드를 확인해 주세요.";
       return;
     }
+    if (goRaid(session)) return;
     lastAiAt = session.ai_updated_at; // 이미 있던 결과는 자동으로 띄우지 않고 버튼으로 봅니다
     // screen.html?view=ai 로 열면 AI 정리 결과부터 보여 줍니다.
     if (new URLSearchParams(location.search).get("view") === "ai" && session.ai_groups) view = "ai";

@@ -136,6 +136,18 @@ AI 정리와 단어 추가·마감 차단은 3단계에서 화면을 붙인 뒤 
 
 참여자에게는 본인 조와 후보에서 뺀 조가 보이지 않습니다. 후보에서 뺀 조의 사람은 모든 후보 조에 투표할 수 있습니다.
 
+## 보스 레이드 켜기 (오프닝)
+
+워크샵과 **같은 프로젝트**에 설치합니다. 위의 플랫폼 기능(platform.sql)을 먼저 켜 두세요.
+
+1. SQL Editor에 [`raid-sim.sql`](raid-sim.sql)을 통째로 붙여 넣고 **Run**. (시뮬레이터 표·함수가 생기고, 메인 관제 프로그램 목록에 `raid`(보스 레이드)가 더해집니다. 여러 번 실행해도 안전합니다. "destructive operation" 경고가 나오면 그대로 실행하세요.)
+2. Edge Functions > **Deploy a new function** > 이름 `raid-sim` > Code에 [`functions/raid-sim/index.ts`](functions/raid-sim/index.ts)를 붙여 넣고 **Deploy**. 함수 설정에서 **Verify JWT(JWT 확인)를 끕니다**(비밀번호로 확인).
+3. Edge Functions > `admin` > Code에 [`functions/admin/index.ts`](functions/admin/index.ts)를 다시 붙여 넣고 **Deploy** (메인 관제의 "보스 레이드" 버튼).
+4. 비밀번호: 따로 정하지 않으면 **관리자 비밀번호(`ADMIN_PASSWORD`)를 그대로** 씁니다. 보스 레이드만 다른 비밀번호를 쓰려면 Secrets에 `RAID_SIM_PASSWORD`를 넣습니다.
+
+확인: `raid-sim.html`을 열어 관리자 비밀번호로 로그인 → **게임 준비하기** → 설정 탭 참여자 명단에 워크샵 명단이 보이면 됩니다.
+참여자 명단은 `participants` · `teams`(명단 · 조 탭)를 그대로 읽습니다. 다른 프로젝트의 명단을 읽어야 할 때만 secret `WORKSHOP_SUPABASE_URL` · `WORKSHOP_SERVICE_ROLE_KEY`를 넣습니다.
+
 ## 로그아웃하면 입장 취소되게 하기
 
 SQL Editor에 `supabase/leave.sql`을 통째로 붙여 넣고 Run 합니다. 참여자가 자기 이름을 눌러 로그아웃하면 관리 화면의 입장 인원에서 빠집니다. 석식·우수팀 투표는 그대로 남습니다. Edge Function은 다시 배포하지 않아도 됩니다.

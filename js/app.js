@@ -7,7 +7,7 @@
 (function () {
   const { db, getSession, subscribe, toast } = window.WC;
   const $ = (id) => document.getElementById(id);
-  const PROGRAMS = ["lobby", "wordcloud", "dinner", "teamvote", "end"];
+  const PROGRAMS = ["lobby", "wordcloud", "dinner", "teamvote", "raid", "end"];
   const KEY = "wc-knox-id";
   const params = new URLSearchParams(location.search);
   // ?p=dinner 처럼 열면 진행 중인 프로그램과 상관없이 그 화면을 보여 줍니다(석식 투표 링크를 따로 돌릴 때).
@@ -39,6 +39,11 @@
 
   function render() {
     const view = currentView();
+    // 보스 레이드는 시뮬레이터(raid-sim.html)에서 합니다. 같은 Knox ID로 자동 입장하고, 진행자가 다른 프로그램을 고르면 이 화면으로 돌아옵니다.
+    if (view === "raid") {
+      location.replace("raid-sim.html?from=join" + (params.get("s") ? "&s=" + encodeURIComponent(params.get("s")) : "") + "#join");
+      return;
+    }
     document.querySelectorAll(".view").forEach((el) => { el.hidden = el.id !== "view-" + view; });
     window.WCJoin.setActive(view === "wordcloud");
 

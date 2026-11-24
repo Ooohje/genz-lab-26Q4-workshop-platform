@@ -13,7 +13,7 @@ alter table public.sessions add column if not exists roster_rev integer not null
 
 alter table public.sessions drop constraint if exists sessions_program_check;
 alter table public.sessions add  constraint sessions_program_check
-  check (program in ('lobby', 'wordcloud', 'dinner', 'teamvote', 'end'));
+  check (program in ('lobby', 'wordcloud', 'dinner', 'teamvote', 'raid', 'end'));
 -- 프로그램을 추가하려면: 위 목록, js/app.js 의 PROGRAMS, 관리 화면 버튼에 같은 이름을 넣습니다.
 
 -- 2) 조와 참가자 ---------------------------------------------------------

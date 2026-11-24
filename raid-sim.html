@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="raid-sim-config.js"></script>
+<script src="config.js"></script>
 <script src="js/raid-sim-bgm.js"></script>
 <style>
 /* 화면 세 가지: 진행자(기본) · 참여자(#join, 휴대폰) · 발표 화면(#screen, 프로젝터 전체 화면). 모두 같은 실시간 데이터를 봅니다.
@@ -434,7 +434,7 @@ a { color: var(--blue); }
 </head>
 <body>
 <!-- 보스 레이드 시뮬레이터 (스탯 판정, AI 없음). 진행자 화면 · 발표 화면(#screen) · 참여자 휴대폰(#join)이
-     시뮬레이터 전용 Supabase 프로젝트(raid-sim-config.js, supabase/raid-sim.sql)에 실시간으로 연결되고, 판정은 데이터베이스 함수가 합니다. 진행 버튼은 진행자 비밀번호로(Edge Function raid-sim).
+     워크샵 플랫폼과 같은 Supabase 프로젝트(config.js, supabase/raid-sim.sql)에 실시간으로 연결되고, 판정은 데이터베이스 함수가 합니다. 진행 버튼은 진행자 비밀번호로(Edge Function raid-sim).
      ?local 을 붙여 열거나 Supabase 에 연결할 수 없으면 같은 화면이 이 브라우저 안에서만 동작합니다(휴대폰 미리보기로 진행).
      설정 탭에 참여자 명단(아이디·이름·조)을 넣으면 휴대폰에서 아이디만 입력해 자기 조로 들어갑니다. -->
 
@@ -445,7 +445,11 @@ a { color: var(--blue); }
 (function () {
   "use strict";
   // 참여자에게 보내는 주소. 이 페이지를 연 주소 그대로에 #join 을 붙입니다.
-  const JOIN_URL = location.href.split("#")[0] + "#join";
+  // 워크샵 플랫폼과 같이 쓸 때는 플랫폼 참여 주소(Knox ID로 입장 → 보스 레이드 프로그램이면 자동으로 이 화면), ?local 연습 모드는 이 화면의 #join
+  const SESSION_Q = (() => { const q = new URLSearchParams(location.search).get("s"); return q ? "?s=" + encodeURIComponent(q) : ""; })();
+  const JOIN_URL = window.WORDCLOUD_CONFIG && !new URLSearchParams(location.search).has("local")
+    ? location.href.split("#")[0].split("?")[0].replace(/raid-sim\.html$/, "") + SESSION_Q
+    : location.href.split("#")[0] + "#join";
 
   const STATS = [
     { key: "hp", label: "체력", desc: "오래 버티는 힘, 몸으로 밀어붙이는 추진력", color: "#E0694E" },
@@ -584,7 +588,7 @@ a { color: var(--blue); }
   let myPid = null, myName = null;
   try { const v = localStorage.getItem(STORE_ME); if (v !== null && v !== "") myPid = Number(v); myName = localStorage.getItem(STORE_ME_NAME); } catch (e) { /* 기억 못 해도 동작 */ }
   const now = () => Date.now() + clockOffset;
-  const CFG = window.RAID_SIM_CONFIG || null;   // raid-sim-config.js (워크샵 본 프로젝트와 따로)
+  const CFG = window.WORDCLOUD_CONFIG || null;   // config.js (워크샵 플랫폼과 같은 Supabase 프로젝트)
   let SB = null;            // Supabase 클라이언트
   let password = null;      // 진행자 비밀번호. 메모리에만 두고, 새로고침하면 다시 입력합니다.
   let setupError = "";      // raid-sim.sql 을 아직 안 돌렸을 때 등
@@ -1023,6 +1027,7 @@ a { color: var(--blue); }
     // 조는 명단대로 고정: 참여자는 바꿀 수 없고, 진행자가 "입장 표시 지우기"를 누르면 아이디부터 다시 입력
     if (JOIN_MODE === "roster" && myPid != null && people[myPid] && people[myPid].claimed === false) myPid = null;
     if ((myPid == null || !people[myPid]) && JOIN_MODE === "roster") {
+      setTimeout(tryAutoLogin, 0);
       return '<div class="joinview"><div class="pwrap"><div class="screen"><h3>보스 레이드에<br>참여해 주세요</h3>' +
         '<form class="card" data-idlogin><div class="t">아이디</div><input class="namebox" id="uid-in" maxlength="40" placeholder="명단에 있는 아이디" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false">' +
         '<div class="muted">아이디를 입력하면 이름과 조가 명단대로 정해져요. 조는 바꿀 수 없어요.</div><button type="submit" class="pbtn">입장하기</button></form>' +
@@ -1075,7 +1080,7 @@ a { color: var(--blue); }
   const currentRosterText = () => (JOIN_MODE === "roster" ? personList().filter((p) => p.uid).map((p) => [p.uid, p.name, TEAM_NAMES[p.team]].join("	")).join("\n") : "");
   function rosterSummary() {
     const r = parseRoster(rosterText != null ? rosterText : currentRosterText());
-    if (!r.rows.length && !r.errs.length) return "명단이 비어 있어요 → 6자리(A조·B조 3명씩) 연습판";
+    if (!r.rows.length && !r.errs.length) return MODE === "supabase" ? "직접 넣은 명단이 없어요 → 워크샵 명단(관리 화면 '명단 · 조')을 그대로 써요 (Chief Crew 조 제외)" : "명단이 비어 있어요 → 6자리(A조·B조 3명씩) 연습판";
     return "<b>" + r.rows.length + "명 · 조 " + r.teams.length + "개</b> (" + r.teams.map((t) => esc(t) + " " + r.rows.filter((x) => x.team === t).length + "명").join(", ") + ")" +
       (r.errs.length ? '<br><b style="color:var(--coral-deep)">' + r.errs.slice(0, 5).map(esc).join("<br>") + "</b>" : "") +
       (rosterText != null && rosterText !== currentRosterText() ? '<br><span style="color:var(--coral-deep)">아직 적용하지 않았어요. "명단 적용"을 눌러 주세요.</span>' : "");
@@ -1113,12 +1118,12 @@ a { color: var(--blue); }
     if (roundBusy()) h += '<div class="notice">지금 ' + game.round + "라운드가 진행 중이에요. 보스는 결과 공개 뒤에 저장할 수 있어요. 규칙(시간·MVP·운)은 지금도 저장돼요.</div>";
     const lobby = !game || game.stage === "lobby";
     h += '<section class="panel"><h2>참여자 명단</h2><p class="small">한 줄에 한 사람씩 <b>아이디, 이름, 조</b>를 적어 주세요. 엑셀에서 세 칸을 복사해 붙여 넣어도 돼요. 조에 숫자만 적으면 "1조"처럼 붙여요.<br>' +
-      "명단을 적용하면 참여자는 휴대폰에서 <b>아이디만 입력</b>하면 자기 이름과 조로 들어가요. 비워 두면 6자리(A조·B조 3명씩) 연습판이에요.</p>" +
+      "명단을 적용하면 참여자는 휴대폰에서 <b>아이디만 입력</b>하면 자기 이름과 조로 들어가요. 비워 두면 " + (MODE === "supabase" ? "<b>워크샵 명단(관리 화면 '명단 · 조')</b>을 그대로 써요(Chief Crew 조 제외). 워크샵 명단을 바꿨으면 '워크샵 명단으로 다시 맞추기'를 눌러 주세요." : "6자리(A조·B조 3명씩) 연습판이에요.") + "</p>" +
       '<label class="f"><span>명단</span><textarea rows="8" data-f="roster" spellcheck="false" placeholder="knox01, 김민지, 1조&#10;knox02, 이서준, 1조&#10;knox03, 박지우, 2조"' + (lobby ? "" : " disabled") + ">" + esc(rosterText != null ? rosterText : currentRosterText()) + "</textarea></label>" +
       '<div class="small" data-roster-sum>' + rosterSummary() + "</div>" +
       '<div class="row left">' + (MODE === "supabase" ? '<button type="button" class="btn" data-set="rosterImport"' + (lobby ? "" : " disabled") + ">워크샵 명단 불러오기</button>" : "") +
       '<button type="button" class="btn go" data-set="roster"' + (lobby ? "" : " disabled") + ">명단 적용</button>" +
-      (JOIN_MODE === "roster" ? '<button type="button" class="btn quiet" data-set="rosterClear"' + (lobby ? "" : " disabled") + ">명단 비우기 (6자리 연습판으로)</button>" : "") + "</div>" +
+      (JOIN_MODE === "roster" ? '<button type="button" class="btn quiet" data-set="rosterClear"' + (lobby ? "" : " disabled") + ">" + (MODE === "supabase" ? "워크샵 명단으로 다시 맞추기" : "명단 비우기 (6자리 연습판으로)") + "</button>" : "") + "</div>" +
       (lobby ? "" : '<p class="small">명단은 대기 단계에서만 바꿀 수 있어요. 진행 탭에서 "처음부터"를 누르면 바꿀 수 있어요.</p>') + "</section>";
     h += '<section class="panel"><h2>게임 규칙</h2><div class="cfg-grid">' + CFG_FIELDS.map((f) =>
       '<label class="f"><span>' + f.label + '</span><span class="num"><input type="number" inputmode="numeric" step="1" data-f="c.' + f.k + '" value="' + esc(d.config[f.k]) + '"' + (f.rule && ruleLocked ? " disabled" : "") + "><em>" + f.unit + "</em></span>" +
@@ -1297,8 +1302,9 @@ a { color: var(--blue); }
       return;
     }
     if (what === "rosterClear") {
-      if (!confirm("명단을 비우고 6자리(A조·B조 3명씩) 연습판으로 돌아갈까요? 지금 자리·캐릭터·결과는 초기화돼요.")) return;
-      if (await backend.host("saveRoster", null, [])) { rosterText = null; toast("6자리 연습판으로 돌아갔어요"); }
+      const ws = MODE === "supabase";
+      if (!confirm(ws ? "워크샵 명단(관리 화면 '명단 · 조')으로 다시 맞출까요? 지금 자리·캐릭터·결과는 초기화돼요." : "명단을 비우고 6자리(A조·B조 3명씩) 연습판으로 돌아갈까요? 지금 자리·캐릭터·결과는 초기화돼요.")) return;
+      if (await backend.host("saveRoster", null, [])) { rosterText = null; toast(ws ? "워크샵 명단으로 맞췄어요" : "6자리 연습판으로 돌아갔어요"); }
       return;
     }
     if (what === "defaults") {
@@ -1335,7 +1341,7 @@ a { color: var(--blue); }
   const liveWord = () => MODE === "loading" ? "연결하는 중…"
     : MODE === "local" ? (setupError || "이 화면 안에서만 동작 (연습용)")
     : !connected ? "실시간 연결이 끊김 · 다시 연결하는 중" : isHost ? "Supabase 실시간 연결 · 휴대폰과 같은 데이터" : "Supabase 실시간 연결 · 진행하려면 진행자 비밀번호";
-  const loginHtml = () => '<form class="login" data-login><input id="pw" type="password" placeholder="진행자 비밀번호" autocomplete="current-password"><button type="submit" class="btn go">진행자 로그인</button></form>';
+  const loginHtml = () => '<form class="login" data-login><input id="pw" type="password" placeholder="관리자 비밀번호" autocomplete="current-password"><button type="submit" class="btn go">진행자 로그인</button></form>';
   function hostHtml() {
     const preview = game && personList().length && personList().length <= 12;
     const needLogin = MODE === "supabase" && !isHost;
@@ -1479,6 +1485,37 @@ a { color: var(--blue); }
     return data;
   }
   let lastRev = -1;
+  // 워크샵 플랫폼에서 넘어온 화면(?from=join · ?from=screen)은 진행자가 메인 관제에서 "보스 레이드"가 아닌 프로그램을 고르면
+  // 참여 화면(./) · 발표 화면(screen.html)으로 돌아갑니다.
+  async function watchPlatform() {
+    const from = new URLSearchParams(location.search).get("from");
+    if (!from || !CFG || !CFG.sessionCode) return;
+    const code = new URLSearchParams(location.search).get("s") || CFG.sessionCode;
+    const check = (sess) => {
+      if (!sess || !("program" in sess) || sess.program === "raid") return;
+      if (view() === "join") location.replace("./" + SESSION_Q);
+      else if (view() === "screen") location.replace("screen.html" + SESSION_Q);
+    };
+    try {
+      const { data } = await SB.from("sessions").select("*").eq("code", code).maybeSingle();
+      if (!data) return;
+      check(data);
+      SB.channel("raid-sim-session-" + Math.random().toString(36).slice(2, 8))
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sessions", filter: "id=eq." + data.id }, (p) => check(p.new))
+        .subscribe();
+      setInterval(async () => { try { const r = await SB.from("sessions").select("*").eq("id", data.id).maybeSingle(); check(r.data); } catch (e) { /* 다음에 */ } }, 15000);
+    } catch (e) { /* 플랫폼 표가 없으면 시뮬레이터만 */ }
+  }
+  // 워크샵 참여 화면에서 넣은 Knox ID(같은 사이트의 wc-knox-id)로 한 번 자동 입장
+  let autoTried = false;
+  function tryAutoLogin() {
+    if (autoTried || JOIN_MODE !== "roster" || loggingIn) return;
+    let id = null;
+    try { id = localStorage.getItem("wc-knox-id"); } catch (e) { /* 무시 */ }
+    autoTried = true;
+    if (id) joinById(id);
+  }
+
   async function connectSupabase() {
     SB = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
     try {
@@ -1486,6 +1523,7 @@ a { color: var(--blue); }
       lastRev = row.rev;
       MODE = "supabase";
       onPublic(row.data, false);
+      watchPlatform();
     } catch (e) {
       if (/raid_sim_public|relation|schema cache|no row/i.test(String(e && e.message))) {
         setupError = "Supabase 에 시뮬레이터 표가 없어요. SQL Editor 에서 supabase/raid-sim.sql 을 실행해 주세요.";
@@ -1530,7 +1568,7 @@ a { color: var(--blue); }
   }
   async function boot() {
     const wantLocal = new URLSearchParams(location.search).has("local");
-    if (!wantLocal && CFG && !CFG.supabaseKey) setupError = "raid-sim-config.js 에 Supabase 공개 키(supabaseKey)를 넣어 주세요.";
+    if (!wantLocal && CFG && !CFG.supabaseKey) setupError = "config.js 에 Supabase 공개 키(supabaseKey)를 넣어 주세요.";
     else if (!wantLocal && CFG && window.supabase && await connectSupabase()) return;
     startLocal();
     if (setupError) toast(setupError + " 지금은 이 브라우저 안에서만 동작해요.");

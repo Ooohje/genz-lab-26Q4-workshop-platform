@@ -8,7 +8,7 @@
 
 alter table public.sessions drop constraint if exists sessions_program_check;
 alter table public.sessions add  constraint sessions_program_check
-  check (program in ('lobby', 'wordcloud', 'dinner', 'teamvote', 'end'));
+  check (program in ('lobby', 'wordcloud', 'dinner', 'teamvote', 'raid', 'end'));
 
 -- 2) 투표 후보에서 빼는 조 (발표하지 않는 조) --------------------------------
 --    관리 화면의 우수팀 투표 탭에서 조마다 켜고 끌 수 있습니다.

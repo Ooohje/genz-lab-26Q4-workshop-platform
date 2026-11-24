@@ -168,7 +168,7 @@ const normalize = (s: string) => s.replace(/\s+/g, "").toLowerCase();
 type Group = { label: string; count: number; members: string[] };
 
 // 메인 관제에서 고를 수 있는 프로그램 (platform.sql 의 check 목록, js/app.js 의 PROGRAMS 와 같아야 합니다)
-const PROGRAMS = ["lobby", "wordcloud", "dinner", "teamvote", "end"];
+const PROGRAMS = ["lobby", "wordcloud", "dinner", "teamvote", "raid", "end"];
 
 // 명단·조·석식 선택을 읽어 옵니다.
 // deno-lint-ignore no-explicit-any

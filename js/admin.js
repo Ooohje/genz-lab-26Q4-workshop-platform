@@ -54,6 +54,7 @@
     const suffix = params.get("s") ? "?s=" + encodeURIComponent(params.get("s")) : "";
     $("link-screen").href = "screen.html" + suffix;
     $("link-join").href = "./" + suffix;
+    $("link-raid").href = "raid-sim.html" + suffix;
     await resync();
     // 메인 관제·명단·석식 탭(js/admin-platform.js)에 연결
     PLATFORM.entered({
