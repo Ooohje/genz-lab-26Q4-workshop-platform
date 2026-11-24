@@ -579,7 +579,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     }
     const rows = game.results[game.round] || [];
     if (game.phase === "closed") {
-      return '<div class="pv"><div class="h">마감! 출전자는 자리에서 일어나 주세요</div><div class="sub">' + esc(b.name) + " · 보스 체력 " + b.hp + '</div><div class="fighters">' +
+      return '<div class="pv"><div class="h">마감! 이번 라운드 출전자</div><div class="sub">' + esc(b.name) + " · 보스 체력 " + b.hp + '</div><div class="fighters">' +
         rows.map((x) => '<div class="fighter glass"><div class="art">' + sprite(charOf(people[x.pid] || {})) + "</div><div><span>" + TEAMS[x.team] + (x.auto ? " · 랜덤" : "") + "</span><b>" + esc(x.name) + "</b></div></div>").join("") + "</div></div>";
     }
     if (game.phase === "revealed") {
