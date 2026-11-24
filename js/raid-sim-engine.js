@@ -16,7 +16,9 @@
   const DEFAULT_CONFIG = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, shareMin: 8, mvpBonus: 1, luckPower: 35,
     roulette: [{ kind: "power", value: -2 }, { kind: "power", value: -1 }, { kind: "power", value: 1 }, { kind: "clear", value: 1 }, { kind: "fail", value: 1 }, { kind: "power", value: 3 }],
     practiceBoss: { name: "연습 보스: 월요일 아침 '만원 지하철'", desc: "월요일 아침 8시, 지하철 문이 열리자 사람들이 밀려든다. 손잡이 하나 잡기도 힘든 이 전쟁을 버텨야 회사에 도착한다. 연습 판이니 부담 없이 붙어 보자!",
-      hp: 10, stats: ["hp", "luck"], hint: "버티거나, 운 좋게 앉거나.", reveal: "만원 지하철을 이긴 건 끝까지 서서 버티는 체력, 그리고 마침 앞자리가 비는 운이었습니다. 머리를 써도 지하철은 빨리 오지 않아요." } };
+      hp: 10, stats: ["hp", "luck"], hint: "버티거나, 운 좋게 앉거나.", reveal: "만원 지하철을 이긴 건 끝까지 서서 버티는 체력, 그리고 마침 앞자리가 비는 운이었습니다. 머리를 써도 지하철은 빨리 오지 않아요." },
+    // 첫 화면 · 규칙 화면 문구 (비어 있으면 기본 문구)
+    lobbyTitle: "", lobbySub: "", rulesTitle: "", rulesLines: [] };
   const SPIN_KINDS = ["power", "clear", "fail", "none"];
   // stats · hint · reveal 은 결과 공개 전까지 참여자에게 보내지 않습니다 (snapshot 참고).
   const DEFAULT_BOSSES = [
@@ -71,6 +73,8 @@
     if (!isInt(c.shareMin, 1, 60)) return "조 내 공유 시간은 1~60분이에요";
     if (!isInt(c.mvpBonus, 0, 20)) return "MVP 점수는 0~20점이에요";
     if (!isInt(c.luckPower, 0, 100)) return "운 효과 세기는 0~100이에요 (0이면 운과 상관없이 모든 칸이 같은 확률)";
+    for (const k of ["lobbyTitle", "lobbySub", "rulesTitle"]) if (typeof c[k] !== "string" || c[k].length > 200) return "화면 문구는 200자 이하예요";
+    if (!Array.isArray(c.rulesLines) || c.rulesLines.length > 12 || c.rulesLines.some((x) => typeof x !== "string" || x.length > 200)) return "규칙 줄은 12줄, 한 줄 200자까지예요";
     if (!Array.isArray(c.roulette) || c.roulette.length < 2 || c.roulette.length > 10) return "룰렛 칸은 2~10개예요";
     if (c.roulette.some((x) => !x || typeof x !== "object" || !SPIN_KINDS.includes(x.kind) || !isInt(x.value, -50, 50))) return "룰렛 칸의 효과 값은 -50~50이에요";
     return checkBoss(Object.assign({ reward: 0, event: true, diceLow: 0, diceHigh: 0 }, c.practiceBoss), "연습 보스: ");
@@ -228,6 +232,31 @@
       g.phase = "revealed";
     },
     final(S) { if (S.game.phase !== "revealed") return "결과 공개 뒤에 최종 순위를 띄울 수 있어요"; S.game.phase = "final"; },
+    // 한 단계 전으로 (supabase/raid-sim.sql 의 'back' 과 같음)
+    back(S) {
+      const g = S.game, r = g.round, roundOf = (key) => Number((key.match(/^r(\d+)t\d+$/) || [])[1]);
+      if (g.stage === "lobby") return "더 이전 단계가 없어요";
+      if (g.stage === "make") { g.stage = "lobby"; return; }
+      if (g.stage === "share") { Object.assign(g, { stage: "make", shareDeadline: null }); return; }
+      if (g.phase === "idle") { Object.assign(g, { stage: "share", locked: false, shareDeadline: Date.now() + S.config.shareMin * 60000 }); return; }
+      if (g.phase === "meeting") {
+        Object.keys(S.picks).forEach((k) => { if (roundOf(k) >= r) delete S.picks[k]; });
+        Object.keys(g.results).forEach((k) => { if (Number(k) >= r) delete g.results[k]; });
+        if (r === 0 || !g.results[r - 1]) Object.assign(g, { round: 0, phase: "idle", hint: false, deadline: null });
+        else Object.assign(g, { round: r - 1, phase: "revealed", hint: false, deadline: null });
+        return;
+      }
+      if (g.phase === "closed") {
+        Object.keys(S.picks).forEach((k) => { if (roundOf(k) === r && S.picks[k].auto) delete S.picks[k]; });
+        delete g.results[r];
+        Object.assign(g, { phase: "meeting", deadline: Date.now() + S.config.meetingSec * 1000 });
+        return;
+      }
+      if (g.phase === "rolled") { Object.assign(g, { phase: "closed", rollAt: null }); return; }
+      if (g.phase === "revealed") { const b = bossAt(S, r); g.phase = b && b.event ? "rolled" : "closed"; return; }
+      if (g.phase === "final") { g.phase = "revealed"; return; }
+      return "돌아갈 수 없어요";
+    },
     reset(S) {
       S.picks = {};
       personList(S).forEach((p) => { p.char = null; p.rerolls = 0; });
@@ -247,6 +276,7 @@
       next.roulette = next.roulette.map((x) => ({ kind: x.kind, value: x.value }));
       const p = next.practiceBoss;
       next.practiceBoss = { name: p.name.trim(), desc: p.desc, hp: p.hp, stats: p.stats.slice(), hint: p.hint, reveal: p.reveal };
+      next.rulesLines = next.rulesLines.map((x) => x.trim()).filter(Boolean);
       S.config = clone(next);
     },
     saveBosses(S, _, data) {

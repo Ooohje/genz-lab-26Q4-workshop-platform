@@ -124,7 +124,7 @@
     while (next < ctx.currentTime + 0.15) { scheduleStep(tr, step, next, dur); step++; next += dur; }
   }
   function start(name) {
-    cur = name; step = 0;
+    cur = TRACKS[name] ? name : null; step = 0;
     if (ctx) next = ctx.currentTime + 0.06;
   }
 
@@ -141,8 +141,9 @@
       return enabled;
     },
     // 지금 단계에 맞는 곡 (같은 곡이면 이어서)
+    // "none" 이면 곡을 멈춤 (효과음은 그대로)
     setTrack(name) {
-      if (!TRACKS[name] || want === name) return;
+      if ((!TRACKS[name] && name !== "none") || want === name) return;
       want = name;
       if (enabled && ctx) start(name);
     },
