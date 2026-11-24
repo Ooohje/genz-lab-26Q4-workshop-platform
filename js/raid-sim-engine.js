@@ -1,8 +1,10 @@
 // 보스 레이드 시뮬레이터의 규칙과 진행 상태 (스탯 판정, AI 없음).
 // raid-sim.html 의 연습 모드(?local 또는 Supabase 에 연결할 수 없을 때)에서 브라우저가 직접 씁니다. Supabase 판정은 supabase/raid-sim.sql (규칙이 같아야 합니다).
 //   캐릭터 스탯 5개: 체력 · 지력 · 친화력 · 멘탈 · 운
-//   공격력 = 판정 스탯 합 (+돌발 이벤트 주사위: 1이면 보스의 diceLow, 6이면 diceHigh). 보스 HP 이상이면 격파 → 보상 점수.
-//   운: 돌발 이벤트 라운드에 운 luckStep 점마다 주사위를 1개 더 굴려 가장 좋은 눈을 씁니다 (luckStep 0이면 끔, 최대 5개).
+//   공격력 = 판정 스탯 합 (+돌발 이벤트 주사위). 보스 HP 이상이면 격파 → 보상 점수.
+//   돌발 이벤트 주사위(1개)의 눈별 효과: 1 공격력 diceLow · 2 공격력 −1 · 3 공격력 +1 · 4 격파하면 +1점 · 5 실패해도 +1점 · 6 공격력 diceHigh
+//   운: 운이 높을수록 큰 눈이 잘 나옵니다. 눈 k 의 가중치 = r^(k-1), r = (1 + luckPower/100)^t, t = (운 − 스탯 최소) / (스탯 최대 − 스탯 최소).
+//       운이 최소면 모든 눈 1/6, luckPower 35 에서 운이 최대면 6이 약 31%. luckPower 0 이면 운과 상관없이 1/6.
 //   라운드 공격력 1위 조는 MVP 점수. 순위는 총점, 같으면 공격력 합.
 (function (root) {
   "use strict";
@@ -11,7 +13,7 @@
   const TEAMS = ["A조", "B조"];   // 명단이 없을 때 (6자리 연습판)
   const DEFAULT_NAMES = ["참여자 1", "참여자 2", "참여자 3", "참여자 4", "참여자 5", "참여자 6"];
   const SEATS = DEFAULT_NAMES.length;
-  const DEFAULT_CONFIG = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, shareMin: 8, mvpBonus: 1, luckStep: 4 };
+  const DEFAULT_CONFIG = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, shareMin: 8, mvpBonus: 1, luckPower: 35 };
   // stats · hint · reveal 은 결과 공개 전까지 참여자에게 보내지 않습니다 (snapshot 참고).
   const DEFAULT_BOSSES = [
     {"name":"무한 회의 루프 '리:미팅'","desc":"회의가 끝나면 '방금 회의를 정리하는 회의'가 소환된다. 벌써 세 번째 회의, 의자는 딱딱하고 결론은 또 다음 회의로 미뤄진다. 이 보스는 쓰러뜨리는 게 아니라 끝날 때까지 버텨야 사라진다.","hp":11,"reward":1,"event":false,"diceLow":-2,"diceHigh":3,"stats":["hp","mental"],"hint":"끝까지 남는 사람이 이긴다.","reveal":"끝없는 회의를 이긴 건 말솜씨가 아니라 버티는 힘이었습니다. 몇 시간째 이어지는 회의를 견딜 체력, 결론 없는 말들에 지치지 않을 멘탈이 필요했어요. 지력으로 정리해 보려 해도 회의는 또 다른 회의를 낳을 뿐이었습니다."},
@@ -39,6 +41,21 @@
     const t = (cfg || DEFAULT_CONFIG).statTotal, n = KEYS.length;
     return Object.fromEntries(KEYS.map((k, i) => [k, Math.floor(t / n) + (i < t % n ? 1 : 0)]));
   }
+  // 돌발 이벤트 주사위: 운이 높을수록 큰 눈 쪽으로 기울어진 주사위 1개
+  function luckWeights(cfg, luck) {
+    const span = cfg.statMax - cfg.statMin;
+    const t = span > 0 ? Math.min(1, Math.max(0, ((Number(luck) || 0) - cfg.statMin) / span)) : 0;
+    const r = Math.pow(1 + (cfg.luckPower || 0) / 100, t);
+    return [1, 2, 3, 4, 5, 6].map((k) => Math.pow(r, k - 1));
+  }
+  function rollDie(cfg, luck) {
+    const w = luckWeights(cfg, luck), total = w.reduce((a, b) => a + b, 0);
+    let u = Math.random() * total;
+    for (let k = 0; k < 6; k++) { u -= w[k]; if (u < 0) return k + 1; }
+    return 6;
+  }
+  // 눈별 공격력 변화 (4·5는 점수 효과라 공격력은 그대로)
+  const diceBonus = (b, d) => (d === 1 ? b.diceLow : d === 2 ? -1 : d === 3 ? 1 : d === 6 ? b.diceHigh : 0);
   const initialGame = () => ({ v: 1, stage: "lobby", round: 0, phase: "idle", hint: false, deadline: null, shareDeadline: null, locked: false, results: {} });
 
   // 규칙·보스 확인. 문제가 없으면 null, 있으면 이유. (supabase/raid-sim.sql 의 raid_sim_check_config · raid_sim_check_bosses 와 같음)
@@ -51,7 +68,7 @@
     if (!isInt(c.meetingSec, 30, 1800)) return "회의 시간은 30~1800초예요";
     if (!isInt(c.shareMin, 1, 60)) return "조 내 공유 시간은 1~60분이에요";
     if (!isInt(c.mvpBonus, 0, 20)) return "MVP 점수는 0~20점이에요";
-    if (!isInt(c.luckStep, 0, 30)) return "운 주사위 기준은 0~30점이에요 (0이면 끔)";
+    if (!isInt(c.luckPower, 0, 100)) return "운 효과 세기는 0~100이에요 (0이면 운과 상관없이 1/6)";
     return null;
   }
   // 명단 [{uid, name, team}] 확인 (빈 배열 = 6자리 연습판)
@@ -127,22 +144,16 @@
     const rows = S.teams.map((_, t) => {
       const k = pickOf(S, r, t), p = S.people[k.pid], c = charOf(S, p);
       const base = b.stats.reduce((n, s) => n + (c[s] || 0), 0);
-      // 돌발 이벤트: 운이 높으면 주사위를 더 굴려 가장 좋은 눈
+      // 돌발 이벤트: 운으로 기울어진 주사위 1개
       let dice = null, bonus = 0, rolls = null;
-      if (b.event) {
-        const count = Math.min(5, 1 + (cfg.luckStep > 0 ? Math.floor((c.luck || 0) / cfg.luckStep) : 0));
-        rolls = [];
-        for (let i = 0; i < count; i++) {
-          const d = 1 + rand(6), v = d === 1 ? b.diceLow : d === 6 ? b.diceHigh : 0;
-          rolls.push(d);
-          if (dice === null || v > bonus || (v === bonus && d > dice)) { dice = d; bonus = v; }
-        }
-      }
-      const power = base + bonus;
-      return { team: t, pid: p.id, name: p.name, base, dice, rolls, bonus, power, cleared: power >= b.hp, auto: !!k.auto };
+      if (b.event) { dice = rollDie(cfg, c.luck); rolls = [dice]; bonus = diceBonus(b, dice); }
+      const power = base + bonus, cleared = power >= b.hp;
+      // 4: 격파하면 +1점, 5: 실패해도 +1점
+      const extra = (dice === 4 && cleared) || (dice === 5 && !cleared) ? 1 : 0;
+      return { team: t, pid: p.id, name: p.name, base, dice, rolls, bonus, power, cleared, extra, auto: !!k.auto };
     });
     const max = Math.max(...rows.map((x) => x.power));
-    rows.forEach((x) => { x.mvp = x.power === max; x.points = (x.cleared ? b.reward : 0) + (x.mvp ? cfg.mvpBonus : 0); });
+    rows.forEach((x) => { x.mvp = x.power === max; x.points = (x.cleared ? b.reward : 0) + (x.mvp ? cfg.mvpBonus : 0) + x.extra; });
     g.results[r] = rows;
     g.phase = "closed";
     g.deadline = null;
@@ -322,7 +333,7 @@
     return { game: g, people, picks: clone(S.picks), teams: S.teams.slice(), mode: S.mode, bosses, config: clone(S.config), isHost: !!isHost, now: Date.now() };
   }
 
-  const api = { KEYS, TEAMS, DEFAULT_CONFIG, DEFAULT_BOSSES, create, host, act, login, snapshot, randomStats, defaultStats, checkConfig, checkBosses, checkRoster };
+  const api = { luckWeights, rollDie, KEYS, TEAMS, DEFAULT_CONFIG, DEFAULT_BOSSES, create, host, act, login, snapshot, randomStats, defaultStats, checkConfig, checkBosses, checkRoster };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.RaidSimEngine = api;
 })(typeof window !== "undefined" ? window : this);

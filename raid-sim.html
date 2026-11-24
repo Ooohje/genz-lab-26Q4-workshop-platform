@@ -387,7 +387,7 @@ a { color: var(--blue); }
     { key: "luck", label: "운", desc: "예상 못 한 변수가 내 편이 되는 힘", color: "#C98A1B" },
   ];
   // 게임 규칙 (진행자가 "보스·규칙 설정" 탭에서 바꿈). Supabase(또는 js/raid-sim-engine.js)가 보내 줍니다.
-  const DEFAULT_RULES = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, shareMin: 8, mvpBonus: 1, luckStep: 4 };
+  const DEFAULT_RULES = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, shareMin: 8, mvpBonus: 1, luckPower: 35 };
   let RULES = Object.assign({}, DEFAULT_RULES);
   const KEYS = STATS.map((s) => s.key);
   const LABEL = Object.fromEntries(STATS.map((s) => [s.key, s.label]));
@@ -397,7 +397,16 @@ a { color: var(--blue); }
   let JOIN_MODE = "seats";            // "roster": 휴대폰에서 아이디로 입장 · "seats": 6자리 중 고르기
   // 보스 정보는 Supabase(또는 js/raid-sim-engine.js)가 보내 줍니다. 판정 스탯은 결과 공개 전까지 진행자에게만 옵니다.
   let BOSSES = [];
-  const DICE_WORD = { 1: "노트북 업데이트 시작", 6: "동기가 자료를 먼저 보내 줌" };
+  // 돌발 이벤트 주사위 눈별 카드 (판정은 js/raid-sim-engine.js · supabase/raid-sim.sql 과 같음)
+  const DICE_NAME = { 1: "노트북 업데이트", 2: "회의 하나 더", 3: "커피 수혈", 4: "칭찬 릴레이", 5: "보험 처리", 6: "동기가 자료를 먼저 보내 줌" };
+  const diceEff = (b, d) => d === 1 ? "공격력 " + sign(b.diceLow) : d === 2 ? "공격력 −1" : d === 3 ? "공격력 +1" : d === 4 ? "격파하면 +1점" : d === 5 ? "실패해도 +1점" : "공격력 " + sign(b.diceHigh);
+  const diceRules = (b) => [1, 2, 3, 4, 5, 6].map((d) => d + " " + diceEff(b, d)).join(" · ");
+  // 운에 따른 눈별 확률 (엔진의 luckWeights 와 같은 식)
+  function luckProbs(luck) {
+    const span = RULES.statMax - RULES.statMin, t = span > 0 ? Math.min(1, Math.max(0, (luck - RULES.statMin) / span)) : 0;
+    const r = Math.pow(1 + (RULES.luckPower || 0) / 100, t), w = [0, 1, 2, 3, 4, 5].map((k) => Math.pow(r, k)), sum = w.reduce((a, c) => a + c, 0);
+    return w.map((x) => Math.round(x / sum * 100));
+  }
 
   // ── 픽셀 캐릭터 (js/raid-common.js 와 같은 그림) ───────────────
   function rng(seed) {
@@ -485,8 +494,8 @@ a { color: var(--blue); }
   const defaultStats = () => Object.fromEntries(KEYS.map((k, i) => [k, Math.floor(RULES.statTotal / KEYS.length) + (i < RULES.statTotal % KEYS.length ? 1 : 0)]));
   const blankDraft = () => Object.fromEntries(KEYS.map((k) => [k, RULES.statMin]));
   const sign = (n) => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n);
-  const diceText = (x) => !x.dice ? "" : "주사위 " + (x.rolls && x.rolls.length > 1 ? x.rolls.join("·") + " 중 " + x.dice : x.dice);
-  const luckNote = () => (RULES.luckStep > 0 ? "운 " + RULES.luckStep + "점마다 주사위 +1개 (가장 좋은 눈)" : "");
+  const diceText = (x) => !x.dice ? "" : "주사위 " + x.dice + " " + DICE_NAME[x.dice];
+  const luckNote = () => (RULES.luckPower > 0 ? "운이 높을수록 큰 눈이 잘 나와요" : "");
   const qrCache = {};
   function qrSvg(text) {
     if (qrCache[text]) return qrCache[text];
@@ -712,22 +721,19 @@ a { color: var(--blue); }
     let used = false;
     return '<div class="dice-row">' + rolls.map((d) => { const best = !used && d === x.dice; if (best) used = true; return '<span class="die' + (best ? " best" : rolls.length > 1 ? " dim" : "") + '">' + dieSvg(d) + "</span>"; }).join("") + "</div>";
   }
-  const diceEffect = (x) => rolling() ? "굴리는 중…" : "주사위 " + x.dice + " → 공격력 " + sign(x.bonus || 0) + (DICE_WORD[x.dice] ? " · " + DICE_WORD[x.dice] : "");
+  const diceEffect = (x) => rolling() ? "굴리는 중…" : x.dice + " " + DICE_NAME[x.dice] + "<br>" + diceEff(boss(), x.dice);
+  const diceGood = (x) => !rolling() && x.dice >= 3;
   setInterval(() => { document.querySelectorAll("[data-roll]").forEach((el) => { el.innerHTML = dieSvg(1 + rand(6)); }); }, 110);
   let rollTimer = null;
   function scheduleRollEnd() {
     clearTimeout(rollTimer);
     if (rolling()) rollTimer = setTimeout(() => { lastHtml = ""; render(); }, Math.max(50, ROLL_MS - (now() - game.rollAt)) + 60);
   }
-  // 4) 결과 문장: 판정 스탯과 보스 HP, 격파·실패한 조, MVP
-  function resultLine(rows, b) {
-    const name = (x) => TEAMS[x.team];
-    const won = rows.filter((x) => x.cleared), lost = rows.filter((x) => !x.cleared), mvp = rows.filter((x) => x.mvp);
-    const out = [statsText(b.stats) + " 합이 보스 HP " + b.hp + " 이상이어야 했어요."];
-    out.push(won.length ? (won.length === rows.length ? "모든 조가" : won.map(name).join("·") + "는") + " 격파해서 +" + b.reward + "점" : "격파한 조가 없어요");
-    if (lost.length && won.length) out.push(lost.map((x) => name(x) + " " + (b.hp - x.power) + "점 부족").join(", ") + "으로 실패");
-    if (lost.length && !won.length) out.push(lost.map((x) => name(x) + " " + (b.hp - x.power) + "점 부족").join(", "));
-    if (mvp.length) out.push("MVP " + mvp.map(name).join("·") + " (공격력 " + mvp[0].power + ", +" + RULES.mvpBonus + "점)");
+  // 우리 조 결과 문장 (휴대폰에만): 몇 점 모자랐는지, 받은 점수
+  function myResultLine(x, b) {
+    const out = [x.cleared ? "보스 HP " + b.hp + " 돌파 → 격파 +" + b.reward + "점" : "보스 HP " + b.hp + "까지 " + (b.hp - x.power) + "점 부족 → 0점"];
+    if (x.extra) out.push(DICE_NAME[x.dice] + " +1점");
+    if (x.mvp) out.push("MVP +" + RULES.mvpBonus + "점");
     return out.join(" · ");
   }
 
@@ -765,7 +771,7 @@ a { color: var(--blue); }
       "<li>판정 스탯은 <b>비공개</b>. 보스 설명을 보고 조원과 추리해서 출전자를 고르세요.</li>" +
       "<li>공격력(판정 스탯 합)이 <b>보스 HP 이상이면 격파</b> → 그 보스의 보상 점수(" + rewardRange() + "), <b>실패하면 0점</b>.</li>" +
       "<li>라운드 공격력 1위 조는 <b>MVP " + sign(RULES.mvpBonus) + "점</b> (격파 못 해도, 동점이면 모두).</li>" +
-      "<li>돌발 이벤트 보스는 주사위를 굴려요. <b>1이면 감점, 6이면 가산</b>." + (RULES.luckStep > 0 ? " <b>운</b>이 높으면 주사위를 더 굴려 가장 좋은 눈을 써요." : "") + "</li>" +
+      "<li>돌발 이벤트 보스는 주사위를 굴려요. <b>눈마다 효과</b>가 달라요(공격력 또는 점수)." + (RULES.luckPower > 0 ? " <b>운</b>이 높을수록 큰 눈이 잘 나와요." : "") + "</li>" +
       "<li>점수를 모두 더한 <b>총점 순위는 마지막에 공개</b>돼요.</li></ol></div></div>";
     const b = boss();
     const head = '<div class="boss-row glass">' + bossSprite(game.round) + '<div><div class="eyebrow">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="boss-name">' + esc(b.name) + '</div><div class="boss-desc">' + esc(b.desc) + "</div>" +
@@ -775,7 +781,7 @@ a { color: var(--blue); }
       return '<div class="pv">' + head + '<div class="meet-foot">' +
         (game.hint ? '<div class="hint glass"><em>힌트</em>' + esc(b.hint) + "</div>" : '<div class="hint glass"><em>회의</em>판정 스탯을 추리하고 출전자를 골라 주세요</div>') +
         '<div class="timer glass" data-deadline="' + game.deadline + '"></div><div class="mini-count glass"><span>출전자 확정</span><b>' + n + "</b><span>/ " + TEAMS.length + "</span></div></div>" +
-        (b.event ? '<div class="event-note glass">주사위 1: 공격력 ' + sign(b.diceLow) + " · 2~5: 변화 없음 · 6: 공격력 " + sign(b.diceHigh) + (luckNote() ? " · " + luckNote() : "") + "</div>" : "") + "</div>";
+        (b.event ? '<div class="event-note glass">돌발 이벤트 주사위 ' + diceRules(b) + (luckNote() ? " · " + luckNote() : "") + "</div>" : "") + "</div>";
     }
     const rows = game.results[game.round] || [];
     if (game.phase === "closed") {
@@ -784,19 +790,19 @@ a { color: var(--blue); }
     }
     if (game.phase === "rolled") {
       return '<div class="pv"><div><div class="eyebrow">' + esc(b.name) + '</div><div class="h">돌발 이벤트! 주사위를 굴려요</div>' +
-        '<div class="sub">1: 공격력 ' + sign(b.diceLow) + " · 2~5: 변화 없음 · 6: 공격력 " + sign(b.diceHigh) + (luckNote() ? " · " + luckNote() : "") + "</div></div>" +
+        '<div class="sub">' + diceRules(b) + (luckNote() ? " · " + luckNote() : "") + "</div></div>" +
         '<div class="dice-grid' + (rows.length > 12 ? " many dense" : rows.length > 4 ? " many" : "") + '" style="--n:' + (rows.length > 12 ? 7 : Math.min(rows.length, 6)) + '">' + rows.map((x) =>
-          '<div class="dice-team glass"><div class="dwho">' + TEAMS[x.team] + "<b>" + esc(x.name) + "</b></div>" + diceRow(x) + '<div class="eff' + (!rolling() && x.bonus > 0 ? " up" : "") + '">' + diceEffect(x) + "</div></div>").join("") + "</div></div>";
+          '<div class="dice-team glass"><div class="dwho">' + TEAMS[x.team] + "<b>" + esc(x.name) + "</b></div>" + diceRow(x) + '<div class="eff' + (diceGood(x) ? " up" : "") + '">' + diceEffect(x) + "</div></div>").join("") + "</div></div>";
     }
     if (game.phase === "revealed") {
       // 모든 조의 게이지가 동시에 올라가고(0.8초 뒤부터 2.6초), 다 찬 뒤 실패한 캐릭터가 자기 칸 안에서 쓰러집니다 (CSS)
       const max = Math.max(b.hp + 4, ...rows.map((x) => x.power));
       const sorted = rows.slice().sort((a, c) => a.team - c.team);
-      return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + '</div><div class="result-line">' + esc(resultLine(rows, b)) + "</div></div>" +
+      return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + "</div></div>" +
         '<div class="bars glass' + (rows.length > 6 ? " cols" + (rows.length > 14 ? " dense" : "") : rows.length > 4 ? " many" : "") + '" style="--hp:' + (b.hp / max * 100) + "%;--rows:" + Math.ceil(rows.length / 2) + '"><div class="hp-note"><i></i>보스 HP ' + b.hp + " · 점선을 넘으면 격파</div>" +
         sorted.map((x) => '<div class="bar-row' + (x.cleared ? " win" : " lose") + '"><div class="art">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + "</span></div>" +
           '<div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i></div><div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? ' <span class="star">MVP</span>' : "") + "</span>" +
-          (x.dice ? '<span class="dice-note">' + diceText(x) + (DICE_WORD[x.dice] ? " · " + DICE_WORD[x.dice] : "") + "</span>" : "") + "</div></div>").join("") + "</div></div>";
+          (x.dice ? '<span class="dice-note">' + diceText(x) + "</span>" : "") + "</div></div>").join("") + "</div></div>";
     }
     if (TEAMS.length > 3) {
       return '<div class="pv"><div class="h" style="text-align:center">보스 레이드 최종 순위</div><div class="rank-list glass" style="--rows:' + Math.ceil(TEAMS.length / 2) + '">' +
@@ -820,7 +826,7 @@ a { color: var(--blue); }
         const k = pickOf(game.round, t), p = k ? people[k.pid] : null, x = rows.find((y) => y.team === t);
         const base = p ? b.stats.reduce((n, s) => n + (charOf(p)[s] || 0), 0) : null;
         html += "<tr><td><b>" + name + "</b></td><td>" + (p ? esc(p.name) + (k.auto ? ' <span class="small">(랜덤)</span>' : k.by != null && people[k.by] ? ' <span class="small">· ' + esc(people[k.by].name) + " 선택</span>" : "") : '<span class="small">선택 전</span>') + "</td>" +
-          '<td class="n">' + (base != null ? base : "") + '</td><td class="n">' + (x && x.dice ? (x.rolls && x.rolls.length > 1 ? x.rolls.join("·") + "→" : "") + x.dice + " (" + sign(x.bonus) + ")" : "") + '</td><td class="n"><b>' + (x ? x.power : "") + "</b></td><td" + (x && x.cleared ? ' class="ok"' : "") + ">" + (x ? (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? " MVP" : "") : "") + "</td></tr>";
+          '<td class="n">' + (base != null ? base : "") + '</td><td class="n">' + (x && x.dice ? x.dice + " " + DICE_NAME[x.dice] + " (" + diceEff(b, x.dice) + ")" : "") + '</td><td class="n"><b>' + (x ? x.power : "") + "</b></td><td" + (x && x.cleared ? ' class="ok"' : "") + ">" + (x ? (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? " MVP" : "") : "") + "</td></tr>";
       });
       html += "</tbody></table>";
       html += '<div class="small">누적: ' + scoreboard().map((x) => x.rank + "위 " + TEAMS[x.team] + " " + x.total + "점").join(" · ") + "</div>";
@@ -855,7 +861,7 @@ a { color: var(--blue); }
       return "<h3>나만의 픽셀 캐릭터</h3>" +
         '<div class="card"><div class="remain' + (remain === 0 ? " done" : "") + '">남은 점수 ' + remain + " / " + RULES.statTotal + "</div>" +
         STATS.map((s) => '<div class="stepper"><span style="color:' + s.color + '">' + s.label + '</span><button type="button" data-p="' + pid + '" data-a="dec" data-k="' + s.key + '" aria-label="' + s.label + ' 1점 빼기"' + (d[s.key] <= RULES.statMin ? " disabled" : "") + '>−</button><div class="bar"><b style="width:' + Math.min(100, d[s.key] / RULES.statMax * 100) + "%;background:" + s.color + '"></b></div><span>' + d[s.key] + '</span><button type="button" data-p="' + pid + '" data-a="inc" data-k="' + s.key + '" aria-label="' + s.label + ' 1점 더하기"' + (d[s.key] >= RULES.statMax || remain <= 0 ? " disabled" : "") + ">+</button></div>").join("") +
-        '<div class="muted">스탯 하나는 ' + RULES.statMin + "~" + RULES.statMax + "점, 합계 " + RULES.statTotal + "점. 외형은 스탯에 따라 자동으로 정해져요." + (RULES.luckStep > 0 ? " <b>운</b>이 높으면 돌발 이벤트 때 주사위를 더 굴려요." : "") + "</div></div>" +
+        '<div class="muted">스탯 하나는 ' + RULES.statMin + "~" + RULES.statMax + "점, 합계 " + RULES.statTotal + "점. 외형은 스탯에 따라 자동으로 정해져요." + (RULES.luckPower > 0 ? " <b>운</b>이 높을수록 돌발 이벤트 주사위에서 큰 눈이 잘 나와요." : "") + "</div></div>" +
         '<div class="card"><div class="t">미리보기</div>' + pcard({ name: p.name, char: Object.assign({ seed: p.seed }, d) }, { big: true }) + "</div>" +
         '<button type="button" class="pbtn" data-p="' + pid + '" data-a="save"' + (remain !== 0 ? " disabled" : "") + ">" + (remain !== 0 ? "점수를 " + remain + "점 더 나눠 주세요" : p.char ? "이대로 저장" : "캐릭터 생성") + "</button>" +
         '<button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="randomDraft">랜덤으로 나눠 보기</button>' +
@@ -889,14 +895,14 @@ a { color: var(--blue); }
     // 9) 우리 조 주사위만
     if (game.phase === "rolled" && x) {
       return h + '<div class="card pdice"><div class="t">돌발 이벤트 주사위 · ' + TEAMS[p.team] + "</div><div class=\"muted\">" + esc(x.name) + " 님이 굴려요</div>" + diceRow(x) +
-        '<div class="eff' + (!rolling() && x.bonus > 0 ? " up" : "") + '">' + diceEffect(x) + '</div><div class="muted">1: 공격력 ' + sign(b.diceLow) + " · 2~5: 변화 없음 · 6: 공격력 " + sign(b.diceHigh) + "</div></div>";
+        '<div class="eff' + (diceGood(x) ? " up" : "") + '">' + diceEffect(x) + '</div><div class="muted">' + diceRules(b) + "</div></div>";
     }
     if (game.phase === "revealed" && x) {
       const f = people[x.pid];
       return h + '<div class="card"><div class="outcome' + (x.cleared ? " win" : "") + '">' + (x.cleared ? "격파!" : "아쉽게 실패") + "</div>" +
         '<div class="pfight' + (x.cleared ? "" : " lose") + '"><div class="art">' + (f ? sprite(charOf(f)) : "") + "</div><div><b>" + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div></div>" +
-        '<div class="muted">판정 스탯 ' + statsText(b.stats) + " 합 " + x.base + (x.dice ? " · " + diceText(x) + (x.bonus ? " (" + sign(x.bonus) + ")" : "") : "") + "</div>" +
-        '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + '</div><div class="muted">' + esc(b.reveal) + '</div><div class="muted"><b>' + esc(resultLine(game.results[game.round] || [], b)) + "</b></div></div>" +
+        '<div class="muted">판정 스탯 ' + statsText(b.stats) + " 합 " + x.base + (x.dice ? " · " + diceText(x) + " (" + diceEff(b, x.dice) + ")" : "") + "</div>" +
+        '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + '</div><div class="muted">' + esc(b.reveal) + '</div><div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
         '<div class="muted">누적 점수와 순위는 마지막에 공개돼요.</div>';
     }
     return "<h3>최종 순위</h3>" + rankHtml(p);
@@ -904,25 +910,22 @@ a { color: var(--blue); }
 
   let infoOpen = false;
   function infoHtml() {
-    const ev = BOSSES.map((b, i) => (b.event ? i + 1 + "번 보스: 1 → 공격력 " + sign(b.diceLow) + ", 6 → " + sign(b.diceHigh) : "")).filter(Boolean);
-    let luck = "";
-    if (RULES.luckStep > 0) {
-      const parts = [];
-      for (let c = 1; c <= 5; c++) {
-        const lo = Math.max(RULES.statMin, (c - 1) * RULES.luckStep), hi = c === 5 ? RULES.statMax : Math.min(RULES.statMax, c * RULES.luckStep - 1);
-        if (lo > RULES.statMax) break;
-        if (lo <= hi) parts.push("운 " + (lo === hi ? lo : lo + "~" + hi) + ": " + c + "개");
-      }
-      luck = "<br>운 " + RULES.luckStep + "점마다 주사위를 1개 더 굴리고, 그중 <b>가장 좋은 눈</b>을 써요 (" + parts.join(" · ") + ").";
-    }
+    const evB = BOSSES.filter((b) => b.event), b0 = evB[0] || { diceLow: -2, diceHigh: 3 };
+    const odd = evB.some((b) => b.diceLow !== b0.diceLow || b.diceHigh !== b0.diceHigh);
     const die = (n) => '<span class="mini-die">' + dieSvg(n) + "</span>";
+    const cards = [1, 2, 3, 4, 5, 6].map((d) => die(d) + "<b>" + DICE_NAME[d] + "</b> " + diceEff(b0, d)).join("<br>");
+    let luck = "";
+    if (RULES.luckPower > 0) {
+      const mid = Math.round((RULES.statMin + RULES.statMax) / 2), row = (L) => "운 " + L + ": " + luckProbs(L).map((v, k) => k + 1 + "→" + v + "%").join(" ");
+      luck = "<br><br>주사위는 1개예요. <b>운이 높을수록 큰 눈</b>이 잘 나와요.<br>" + [RULES.statMin, mid, RULES.statMax].filter((v, i, a) => a.indexOf(v) === i).map(row).join("<br>");
+    }
     return '<div class="modal-back" data-info-close><div class="modal" role="dialog" aria-modal="true" aria-label="점수 규칙"><div class="modal-head"><h3>점수는 이렇게 매겨요</h3><button type="button" class="info-btn x" data-info-close aria-label="닫기">✕</button></div>' +
       '<div class="card"><div class="t">공격력</div><div class="muted">출전자의 <b>판정 스탯 합</b>이 공격력이에요. 어떤 스탯이 판정되는지는 비공개이고, 결과 공개 때 알려 줘요. 돌발 이벤트 보스는 여기에 주사위 결과가 더해져요.</div></div>' +
       '<div class="card"><div class="t">격파 / 실패</div><div class="muted">공격력이 <b>보스 HP 이상이면 격파</b> → 그 보스의 보상 점수를 받아요. 모자라면 <b>실패 → 0점</b>.<br>' + BOSSES.map((b, i) => i + 1 + "번 " + b.reward + "점").join(" · ") + "</div></div>" +
       '<div class="card"><div class="t">MVP</div><div class="muted">라운드마다 공격력이 가장 높은 조가 <b>' + sign(RULES.mvpBonus) + "점</b>을 더 받아요. 격파하지 못해도 받을 수 있고, 동점이면 모두 받아요.</div></div>" +
-      '<div class="card"><div class="t">돌발 이벤트 주사위</div><div class="muted">' + die(1) + "1이 나오면 공격력이 줄고, " + die(2) + "~" + die(5) + "2~5는 그대로, " + die(6) + "6이 나오면 공격력이 늘어요." +
-        (ev.length ? "<br>" + ev.join("<br>") : "<br>지금은 돌발 이벤트 보스가 없어요.") + luck + "</div></div>" +
-      '<div class="card"><div class="t">순위</div><div class="muted">라운드 점수(격파 보상 + MVP)를 모두 더한 <b>총점</b> 순이에요. 총점이 같으면 공격력 합이 높은 조가 위예요. 누적 점수와 순위는 <b>마지막에 공개</b>돼요.</div></div>' +
+      '<div class="card"><div class="t">돌발 이벤트 주사위</div><div class="muted">' + cards +
+        (odd ? "<br>(1·6의 공격력 변화는 보스마다 달라요)" : "") + (evB.length ? "" : "<br>지금은 돌발 이벤트 보스가 없어요.") + luck + "</div></div>" +
+      '<div class="card"><div class="t">순위</div><div class="muted">라운드 점수(격파 보상 + MVP + 주사위 점수)를 모두 더한 <b>총점</b> 순이에요. 총점이 같으면 공격력 합이 높은 조가 위예요. 누적 점수와 순위는 <b>마지막에 공개</b>돼요.</div></div>' +
       '<div class="card"><div class="t">출전</div><div class="muted">라운드마다 조에서 <b>1명</b>이 나가요. 한 사람은 한 번만 나갈 수 있고(모두 나갔으면 다시 가능), ' + (JOIN_MODE === "roster" ? "아이디로 입장한 사람만 고를 수 있어요. " : "") + "아무도 안 고르면 마감 때 아직 안 나간 사람 중 랜덤이에요.</div></div></div></div>";
   }
   const infoBtn = '<button type="button" class="info-btn" data-info aria-label="점수 규칙 보기">i</button>';
@@ -999,7 +1002,7 @@ a { color: var(--blue); }
     { k: "shareMin", label: "조 내 공유 시간", unit: "분" },
     { k: "meetingSec", label: "보스 회의 시간", unit: "초" },
     { k: "mvpBonus", label: "MVP 점수", unit: "점", note: "라운드 공격력 1위 조가 받는 점수" },
-    { k: "luckStep", label: "운 주사위 기준", unit: "점", note: "운이 이 점수마다 돌발 이벤트 주사위 +1개 (가장 좋은 눈, 최대 5개). 0이면 끔" },
+    { k: "luckPower", label: "운 효과 세기", unit: "", note: "운이 높을수록 주사위가 큰 눈 쪽으로 기우는 정도 (0~100). 35면 운 최고일 때 6이 약 31%, 0이면 운과 상관없이 모두 1/6" },
   ];
   const BOSS_KEYS = ["name", "desc", "hp", "reward", "event", "diceLow", "diceHigh", "stats", "hint", "reveal"];
   const bossOut = (b) => Object.fromEntries(BOSS_KEYS.map((k) => [k, k === "stats" ? (b.stats || []).slice() : k === "event" ? !!b.event : b[k] == null ? (k === "diceLow" ? -2 : k === "diceHigh" ? 3 : "") : b[k]]));
@@ -1052,7 +1055,7 @@ a { color: var(--blue); }
         '<div class="f"><span>판정 스탯 (공격력 = 고른 스탯의 합)</span><div class="checks">' + STATS.map((s) =>
           '<label class="chk"><input type="checkbox" ' + f("stat." + s.key) + (b.stats.includes(s.key) ? " checked" : "") + '><span style="color:' + s.color + '">' + s.label + "</span></label>").join("") + "</div></div>" +
         '<div class="f"><label class="chk"><input type="checkbox" ' + f("event") + (b.event ? " checked" : "") + "><span>돌발 이벤트 (주사위)</span></label>" +
-        (b.event ? '<div class="f-row">' + num("diceLow", "주사위 1이 나오면 공격력") + num("diceHigh", "주사위 6이 나오면 공격력") + "</div><small>2~5는 변화 없음. " + esc(luckNote() || "운 주사위는 꺼져 있어요") + "</small>" : "") + "</div>" +
+        (b.event ? '<div class="f-row">' + num("diceLow", "주사위 1이 나오면 공격력") + num("diceHigh", "주사위 6이 나오면 공격력") + "</div><small>2 공격력 −1 · 3 공격력 +1 · 4 격파하면 +1점 · 5 실패해도 +1점 (고정). " + esc(luckNote() || "운 효과는 꺼져 있어요") + "</small>" : "") + "</div>" +
         '<label class="f"><span>힌트 (진행자가 "힌트 공개"를 누르면 보임)</span><input type="text" maxlength="200" ' + f("hint") + ' value="' + esc(b.hint) + '"></label>' +
         '<label class="f"><span>결과 공개 때 설명</span><textarea rows="2" maxlength="300" ' + f("reveal") + ">" + esc(b.reveal) + "</textarea></label></div>";
     });
@@ -1134,9 +1137,13 @@ a { color: var(--blue); }
       let rows;
       try { rows = await callAdmin("importRoster"); }
       catch (e) { toast(e.message); return; }
-      if (!rows || !rows.length) { toast("워크샵 명단에 조가 정해진 사람이 없어요"); return; }
+      // Chief Crew 는 보스 레이드에 참여하지 않으므로 그 조는 뺍니다
+      const isCrew = (r) => /chief|치프/i.test(String(r.team || ""));
+      const crew = (rows || []).filter(isCrew).length;
+      rows = (rows || []).filter((r) => !isCrew(r));
+      if (!rows.length) { toast("워크샵 명단에 조가 정해진 사람이 없어요"); return; }
       rosterText = rows.map((r) => [r.uid, r.name, r.team].join("\t")).join("\n");
-      toast("워크샵 명단 " + rows.length + "명을 불러왔어요. 확인하고 \"명단 적용\"을 눌러 주세요");
+      toast("워크샵 명단 " + rows.length + "명을 불러왔어요" + (crew ? " (Chief Crew " + crew + "명 제외)" : "") + ". 확인하고 \"명단 적용\"을 눌러 주세요");
       return;
     }
     if (what === "roster") {
