@@ -18,7 +18,9 @@
     practiceBoss: { name: "연습 보스: 월요일 아침 '만원 지하철'", desc: "월요일 아침 8시, 지하철 문이 열리자 사람들이 밀려든다. 손잡이 하나 잡기도 힘든 이 전쟁을 버텨야 회사에 도착한다. 연습 판이니 부담 없이 붙어 보자!",
       hp: 10, stats: ["hp", "luck"], hint: "버티거나, 운 좋게 앉거나.", reveal: "만원 지하철을 이긴 건 끝까지 서서 버티는 체력, 그리고 마침 앞자리가 비는 운이었습니다. 머리를 써도 지하철은 빨리 오지 않아요." },
     // 첫 화면 · 규칙 화면 문구 (비어 있으면 기본 문구)
-    lobbyTitle: "", lobbySub: "", rulesTitle: "", rulesLines: [] };
+    lobbyTitle: "", lobbySub: "", rulesTitle: "", rulesLines: [],
+    // i 창(점수 규칙) 문구 (비어 있으면 기본 문구)
+    infoTitle: "", infoSections: [] };
   const SPIN_KINDS = ["power", "clear", "fail", "none"];
   // stats · hint · reveal 은 결과 공개 전까지 참여자에게 보내지 않습니다 (snapshot 참고).
   const DEFAULT_BOSSES = [
@@ -75,6 +77,9 @@
     if (!isInt(c.luckPower, 0, 100)) return "운 효과 세기는 0~100이에요 (0이면 운과 상관없이 모든 칸이 같은 확률)";
     for (const k of ["lobbyTitle", "lobbySub", "rulesTitle"]) if (typeof c[k] !== "string" || c[k].length > 200) return "화면 문구는 200자 이하예요";
     if (!Array.isArray(c.rulesLines) || c.rulesLines.length > 12 || c.rulesLines.some((x) => typeof x !== "string" || x.length > 200)) return "규칙 줄은 12줄, 한 줄 200자까지예요";
+    if (typeof c.infoTitle !== "string" || c.infoTitle.length > 60) return "i 창 제목은 60자까지예요";
+    if (!Array.isArray(c.infoSections) || c.infoSections.length > 12 ||
+      c.infoSections.some((x) => !x || typeof x.title !== "string" || !x.title.trim() || x.title.length > 40 || typeof x.body !== "string" || x.body.length > 800)) return "i 창은 12칸까지, 칸 제목 40자 · 내용 800자까지예요";
     if (!Array.isArray(c.roulette) || c.roulette.length < 2 || c.roulette.length > 10) return "룰렛 칸은 2~10개예요";
     if (c.roulette.some((x) => !x || typeof x !== "object" || !SPIN_KINDS.includes(x.kind) || !isInt(x.value, -50, 50))) return "룰렛 칸의 효과 값은 -50~50이에요";
     return checkBoss(Object.assign({ reward: 0, event: true, diceLow: 0, diceHigh: 0 }, c.practiceBoss), "연습 보스: ");
@@ -277,6 +282,7 @@
       const p = next.practiceBoss;
       next.practiceBoss = { name: p.name.trim(), desc: p.desc, hp: p.hp, stats: p.stats.slice(), hint: p.hint, reveal: p.reveal };
       next.rulesLines = next.rulesLines.map((x) => x.trim()).filter(Boolean);
+      next.infoSections = next.infoSections.map((x) => ({ title: x.title.trim(), body: x.body.trim() }));
       S.config = clone(next);
     },
     saveBosses(S, _, data) {

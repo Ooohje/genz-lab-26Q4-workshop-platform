@@ -103,7 +103,7 @@ language sql immutable as $$
                             "desc": "월요일 아침 8시, 지하철 문이 열리자 사람들이 밀려든다. 손잡이 하나 잡기도 힘든 이 전쟁을 버텨야 회사에 도착한다. 연습 판이니 부담 없이 붙어 보자!",
                             "hp": 10, "stats": ["hp", "luck"], "hint": "버티거나, 운 좋게 앉거나.",
                             "reveal": "만원 지하철을 이긴 건 끝까지 서서 버티는 체력, 그리고 마침 앞자리가 비는 운이었습니다. 머리를 써도 지하철은 빨리 오지 않아요."},
-           "lobbyTitle": "", "lobbySub": "", "rulesTitle": "", "rulesLines": []}'::jsonb
+           "lobbyTitle": "", "lobbySub": "", "rulesTitle": "", "rulesLines": [], "infoTitle": "", "infoSections": []}'::jsonb
 $$;
 
 create or replace function public.raid_sim_cfg() returns jsonb
@@ -139,6 +139,13 @@ begin
   if jsonb_typeof(c->'rulesLines') is distinct from 'array' or jsonb_array_length(c->'rulesLines') > 12
      or exists (select 1 from jsonb_array_elements(c->'rulesLines') x where jsonb_typeof(x) <> 'string' or length(x #>> '{}') > 200) then
     return '규칙 줄은 12줄, 한 줄 200자까지예요';
+  end if;
+  if jsonb_typeof(c->'infoTitle') is distinct from 'string' or length(c->>'infoTitle') > 60 then return 'i 창 제목은 60자까지예요'; end if;
+  if jsonb_typeof(c->'infoSections') is distinct from 'array' or jsonb_array_length(c->'infoSections') > 12
+     or exists (select 1 from jsonb_array_elements(c->'infoSections') x
+                where jsonb_typeof(x) <> 'object' or jsonb_typeof(x->'title') <> 'string' or jsonb_typeof(x->'body') <> 'string'
+                   or length(btrim(x->>'title')) not between 1 and 40 or length(x->>'body') > 800) then
+    return 'i 창은 12칸까지, 칸 제목 40자 · 내용 800자까지예요';
   end if;
   if jsonb_typeof(c->'roulette') is distinct from 'array' or jsonb_array_length(c->'roulette') not between 2 and 10 then return '룰렛 칸은 2~10개예요'; end if;
   if exists (select 1 from jsonb_array_elements(c->'roulette') x

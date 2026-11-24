@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261124b";
+  const V = "20261124c";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
 
@@ -558,14 +558,35 @@ window.WCRaid = (function () {
   }
 
   let infoOpen = false;
+  // i 창(점수 규칙): 설정 탭에서 고친 문구가 있으면 그것, 없으면 기본 문구. {보상} {룰렛} {MVP} 는 지금 설정 값으로 바뀝니다.
+  const DEFAULT_INFO_TITLE = "점수는 이렇게 매겨요";
+  const defaultInfoSections = () => [
+    { title: "공격력", body: "출전자의 **판정 스탯 합**이 공격력이에요. 어떤 스탯이 판정되는지는 비공개이고, 결과 공개 때 알려 줘요. 돌발 이벤트가 터지면 여기에 룰렛 결과가 더해져요." },
+    { title: "격파 / 실패", body: "공격력이 **보스 HP 이상이면 격파** → 그 보스의 보상 점수를 받아요. 모자라면 **실패 → 0점**.\n{보상}" },
+    { title: "MVP", body: "라운드마다 공격력이 가장 높은 조가 **{MVP}점**을 더 받아요. 격파하지 못해도 받을 수 있고, 동점이면 모두 받아요." },
+    { title: "돌발 이벤트 룰렛", body: "룰렛에 걸린 칸의 효과를 받아요.\n{룰렛}" },
+    { title: "순위", body: "라운드 점수(격파 보상 + MVP + 룰렛 점수)를 모두 더한 **총점** 순이에요. 총점이 같으면 공격력 합이 높은 조가 위예요. 누적 점수와 순위는 **마지막에 공개**돼요." },
+    { title: "출전", body: "연습 라운드는 점수와 출전 기록에 들어가지 않아요. 라운드마다 조에서 **1명**이 나가요. 한 사람은 한 번만 나갈 수 있고(모두 나갔으면 다시 가능), 입장한 사람만 고를 수 있어요. 아무도 안 고르면 마감 때 아직 안 나간 사람 중 랜덤이에요." },
+  ];
+  const fillInfo = (t) => String(t || "")
+    .replace(/\{보상\}/g, BOSSES.map((b, i) => i + 1 + "번 " + b.reward + "점").join(" · "))
+    .replace(/\{룰렛\}/g, (RULES.roulette || []).map(effLabel).join("\n"))
+    .replace(/\{MVP\}/g, sign(RULES.mvpBonus));
   function infoHtml() {
-    return '<div class="modal-back" data-info-close><div class="modal" role="dialog" aria-modal="true" aria-label="점수 규칙"><div class="modal-head"><h3>점수는 이렇게 매겨요</h3><button type="button" class="info-btn x" data-info-close aria-label="닫기">✕</button></div>' +
-      '<div class="card"><div class="t">공격력</div><div class="muted">출전자의 <b>판정 스탯 합</b>이 공격력이에요. 어떤 스탯이 판정되는지는 비공개이고, 결과 공개 때 알려 줘요. 돌발 이벤트가 터지면 여기에 룰렛 결과가 더해져요.</div></div>' +
-      '<div class="card"><div class="t">격파 / 실패</div><div class="muted">공격력이 <b>보스 HP 이상이면 격파</b> → 그 보스의 보상 점수를 받아요. 모자라면 <b>실패 → 0점</b>.<br>' + BOSSES.map((b, i) => i + 1 + "번 " + b.reward + "점").join(" · ") + "</div></div>" +
-      '<div class="card"><div class="t">MVP</div><div class="muted">라운드마다 공격력이 가장 높은 조가 <b>' + sign(RULES.mvpBonus) + "점</b>을 더 받아요. 격파하지 못해도 받을 수 있고, 동점이면 모두 받아요.</div></div>" +
-      '<div class="card"><div class="t">돌발 이벤트 룰렛</div><div class="muted">룰렛에 걸린 칸의 효과를 받아요.<br>' + (RULES.roulette || []).map((e) => esc(effLabel(e))).join("<br>") + "</div></div>" +
-      '<div class="card"><div class="t">순위</div><div class="muted">라운드 점수(격파 보상 + MVP + 룰렛 점수)를 모두 더한 <b>총점</b> 순이에요. 총점이 같으면 공격력 합이 높은 조가 위예요. 누적 점수와 순위는 <b>마지막에 공개</b>돼요.</div></div>' +
-      '<div class="card"><div class="t">출전</div><div class="muted">연습 라운드는 점수와 출전 기록에 들어가지 않아요. 라운드마다 조에서 <b>1명</b>이 나가요. 한 사람은 한 번만 나갈 수 있고(모두 나갔으면 다시 가능), ' + (JOIN_MODE === "roster" ? "아이디로 입장한 사람만 고를 수 있어요. " : "") + "아무도 안 고르면 마감 때 아직 안 나간 사람 중 랜덤이에요.</div></div></div></div>";
+    const secs = RULES.infoSections && RULES.infoSections.length ? RULES.infoSections : defaultInfoSections();
+    return '<div class="modal-back" data-info-close><div class="modal" role="dialog" aria-modal="true" aria-label="점수 규칙"><div class="modal-head"><h3>' + esc(RULES.infoTitle || DEFAULT_INFO_TITLE) + '</h3><button type="button" class="info-btn x" data-info-close aria-label="닫기">✕</button></div>' +
+      secs.map((x) => '<div class="card"><div class="t">' + esc(x.title) + '</div><div class="muted">' + richText(fillInfo(x.body)) + "</div></div>").join("") + "</div></div>";
+  }
+  // 설정 칸 글 ↔ 칸 목록: "## 제목" 줄로 칸을 나눔
+  const infoToText = (secs) => secs.map((x) => "## " + x.title + "\n" + x.body).join("\n\n");
+  function textToInfo(text) {
+    const out = [];
+    String(text || "").split(/\r?\n/).forEach((line) => {
+      const m = line.match(/^##\s*(.*)$/);
+      if (m) out.push({ title: m[1].trim(), body: [] });
+      else if (out.length) out[out.length - 1].body.push(line);
+    });
+    return out.map((x) => ({ title: x.title, body: x.body.join("\n").trim() })).filter((x) => x.title || x.body);
   }
   const infoBtn = '<button type="button" class="info-btn" data-info aria-label="점수 규칙 보기">i</button>';
   // ── 보스·규칙 설정 탭 (진행자만) ─────────────────────────────────
@@ -589,7 +610,8 @@ window.WCRaid = (function () {
       config: Object.fromEntries(CFG_FIELDS.map((f) => [f.k, String(RULES[f.k])])),
       bosses: BOSSES.map((b) => { const o = bossOut(b); ["hp", "reward", "diceLow", "diceHigh"].forEach((k) => { o[k] = String(o[k]); }); return o; }),
       roulette: (RULES.roulette || []).map((x) => ({ kind: x.kind, value: String(x.value) })),
-      texts: { lobbyTitle: RULES.lobbyTitle || "", lobbySub: RULES.lobbySub || "", rulesTitle: RULES.rulesTitle || "", rulesLines: (RULES.rulesLines || []).join("\n") },
+      texts: { lobbyTitle: RULES.lobbyTitle || "", lobbySub: RULES.lobbySub || "", rulesTitle: RULES.rulesTitle || "", rulesLines: (RULES.rulesLines || []).join("\n"),
+        infoTitle: RULES.infoTitle || "", infoText: infoToText(RULES.infoSections || []) },
       practice: (() => { const p = RULES.practiceBoss || {}; return { name: p.name || "", desc: p.desc || "", hp: String(p.hp == null ? 10 : p.hp), stats: (p.stats || []).slice(), hint: p.hint || "", reveal: p.reveal || "" }; })() };
   }
   const newBoss = () => ({ name: "새 보스", desc: "", hp: "12", reward: "2", event: false, diceLow: "-2", diceHigh: "3", stats: ["hp", "mental"], hint: "", reveal: "" });
@@ -617,6 +639,12 @@ window.WCRaid = (function () {
       '<label class="f"><span>규칙 화면 제목</span><input type="text" maxlength="200" ' + tf("rulesTitle") + ' placeholder="' + esc(defaultRulesTitle()) + '" value="' + esc(T.rulesTitle) + '"></label>' +
       '<label class="f"><span>규칙 (한 줄에 한 항목, 12줄까지)</span><textarea rows="8" ' + tf("rulesLines") + ' placeholder="' + esc(defaultRuleLines().join("\n")) + '">' + esc(T.rulesLines) + "</textarea></label>" +
       '<div class="row left"><button type="button" class="btn sm" data-set="rulesFill">기본 규칙 문구를 불러와서 고치기</button></div></section>';
+    h += '<section class="panel"><h2>i 창 (점수 규칙) 문구</h2><p class="small">휴대폰 위쪽 <b>i</b> 버튼을 누르면 나오는 창이에요. <b>비워 두면 기본 문구</b>가 나와요. ' +
+      "<b>## 제목</b> 줄로 칸을 나누고 그 아래에 내용을 써요(12칸까지). **굵게**, 줄바꿈 그대로. " +
+      "<b>{보상}</b>은 보스별 보상 점수, <b>{룰렛}</b>은 룰렛 칸 목록, <b>{MVP}</b>는 MVP 점수로 바뀌어요.</p>" +
+      '<label class="f"><span>창 제목</span><input type="text" maxlength="60" ' + tf("infoTitle") + ' placeholder="' + esc(DEFAULT_INFO_TITLE) + '" value="' + esc(T.infoTitle) + '"></label>' +
+      '<label class="f"><span>내용</span><textarea rows="12" ' + tf("infoText") + ' placeholder="' + esc(infoToText(defaultInfoSections())) + '">' + esc(T.infoText) + "</textarea></label>" +
+      '<div class="row left"><button type="button" class="btn sm" data-set="infoFill">기본 i 창 문구를 불러와서 고치기</button></div></section>';
     const P = d.practice, pf = (k) => 'data-f="p.' + k + '"';
     h += '<section class="panel"><h2>연습 보스</h2><p class="small">규칙 설명 다음에 진행자가 "연습 보스 시작"을 누르면 한 판 연습해요. 룰렛은 항상 터지고, 점수와 출전 기록에는 들어가지 않아요.</p><div class="bcard">' +
       '<label class="f"><span>이름</span><input type="text" maxlength="60" ' + pf("name") + ' value="' + esc(P.name) + '"></label>' +
@@ -742,8 +770,13 @@ window.WCRaid = (function () {
     const T = d.texts, lines = String(T.rulesLines).split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
     if (lines.length > 12) { toast("규칙은 12줄까지예요"); return; }
     if (lines.some((x) => x.length > 200)) { toast("규칙 한 줄은 200자까지예요"); return; }
-    Object.assign(cfg, { lobbyTitle: String(T.lobbyTitle).trim(), lobbySub: String(T.lobbySub).trim(), rulesTitle: String(T.rulesTitle).trim(), rulesLines: lines });
-    const textChanged = ["lobbyTitle", "lobbySub", "rulesTitle"].some((k) => cfg[k] !== (RULES[k] || "")) || JSON.stringify(lines) !== JSON.stringify(RULES.rulesLines || []);
+    const info = textToInfo(T.infoText);
+    if (info.length > 12) { toast("i 창은 12칸까지예요"); return; }
+    if (info.some((x) => !x.title || x.title.length > 40 || x.body.length > 800)) { toast("i 창: 칸마다 '## 제목'(40자까지)이 있어야 하고, 내용은 800자까지예요"); return; }
+    Object.assign(cfg, { lobbyTitle: String(T.lobbyTitle).trim(), lobbySub: String(T.lobbySub).trim(), rulesTitle: String(T.rulesTitle).trim(), rulesLines: lines,
+      infoTitle: String(T.infoTitle).trim(), infoSections: info });
+    const textChanged = ["lobbyTitle", "lobbySub", "rulesTitle", "infoTitle"].some((k) => cfg[k] !== (RULES[k] || "")) || JSON.stringify(lines) !== JSON.stringify(RULES.rulesLines || []) ||
+      JSON.stringify(info) !== JSON.stringify(RULES.infoSections || []);
     const rp = RULES.practiceBoss || {};
     const cfgChanged = textChanged || CFG_FIELDS.some((f) => cfg[f.k] !== RULES[f.k]) ||
       JSON.stringify(cfg.roulette) !== JSON.stringify((RULES.roulette || []).map((x) => ({ kind: x.kind, value: x.value }))) ||
@@ -762,6 +795,12 @@ window.WCRaid = (function () {
     if (what === "defaults") {
       if (!confirm("보스를 기본 5명으로 되돌릴까요? 고친 보스 내용이 모두 사라져요.")) return;
       if (await backend.host("resetBosses")) { setDraft = null; toast("보스를 기본값으로 되돌렸어요"); }
+      return;
+    }
+    if (what === "infoFill" && setDraft) {
+      setDraft.texts.infoText = infoToText(defaultInfoSections());
+      if (!setDraft.texts.infoTitle) setDraft.texts.infoTitle = DEFAULT_INFO_TITLE;
+      setDraft.dirty = true;
       return;
     }
     if (what === "rulesFill" && setDraft) {
@@ -863,6 +902,7 @@ window.WCRaid = (function () {
   const htmlFor = (m) => m.kind === "host" ? hostMountHtml() : m.kind === "settings" ? settingsMountHtml() : m.kind === "screen" ? screenMountHtml() : phoneMountHtml();
   function render() {
     syncBgm();
+    maybeAutoStory();
     mounts.forEach((m) => {
       const html = htmlFor(m);
       if (html === m.last) return;
@@ -910,7 +950,21 @@ window.WCRaid = (function () {
     return x.cleared ? x.name + " 님은 " + LABEL[hi.k] + " " + hi.v + "의 힘으로 끝까지 밀어붙여 " + b.name + "을(를) 무너뜨렸어요."
       : x.name + " 님은 " + LABEL[lo.k] + "이(가) " + lo.v + "에 그쳐 마지막 고비를 넘지 못했어요. " + (b.hp - x.power) + "점만 더 있었으면!";
   }
+  // 지금 판정의 서명 (다시 마감하면 바뀜)
+  const storySig = () => { const rows = (game && game.results[game.round]) || []; return game ? game.round + "|" + rows.map((x) => x.pid + ":" + x.power).join(",") : ""; };
+  let storyTried = "";
+  // 마감한 뒤 서술이 하나도 없으면 (예전 화면으로 마감했거나, 마감 요청이 끊겼을 때) 진행자 화면이 자동으로 한 번 부탁합니다
+  function maybeAutoStory() {
+    if (MODE !== "supabase" || !isHost || storyBusy || !game || game.stage !== "boss" || !["closed", "rolled", "revealed"].includes(game.phase)) return;
+    if (!mounts.some((m) => m.kind === "host")) return;
+    const rows = game.results[game.round] || [];
+    if (!rows.length || rows[0].power == null || rows.some((x) => x.story)) return;
+    if (storyTried === storySig()) return;
+    setTimeout(requestStories, 0);
+  }
   async function requestStories() {
+    if (storyBusy) return;
+    storyTried = storySig();
     if (MODE === "local") {
       const g = LOCAL.S.game, b = game.round === 0 ? PRACTICE : BOSSES[game.round - 1];
       (g.results[g.round] || []).forEach((x) => { x.story = localStory(x, b || {}); });
