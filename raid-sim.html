@@ -250,6 +250,26 @@ a { color: var(--blue); }
 .dice-team { display: flex; flex-direction: column; align-items: center; gap: 1cqw; padding: 1.6cqw 1.2cqw; text-align: center; min-width: 0; }
 .dice-team .dwho { font-size: 1.5cqw; font-weight: 700; color: #545C7A; }
 .dice-team .dwho b { font-weight: 800; font-size: 2.6cqw; color: var(--stage-ink); display: block; }
+/* 돌발 이벤트 룰렛 */
+.reel { display: flex; align-items: center; justify-content: center; width: 92%; min-height: 5cqw; padding: 0.6cqw 1.2cqw; border-radius: 1cqw; background: #fff; border: 0.3cqw solid var(--line);
+  font-weight: 800; font-size: 1.9cqw; text-align: center; overflow: hidden; white-space: nowrap; }
+.reel.spinning span { display: inline-block; animation: reel-tick 0.12s linear infinite; }
+.reel.done { border-color: var(--gold); animation: pop 0.4s both; }
+.reel.good { color: var(--coral-deep); }
+@keyframes reel-tick { 0% { transform: translateY(-35%); opacity: 0.35; } 50% { transform: none; opacity: 1; } 100% { transform: translateY(35%); opacity: 0.35; } }
+.dice-grid.many .reel { font-size: 1.3cqw; min-height: 3.4cqw; }
+.dice-grid.dense .reel { font-size: 1cqw; min-height: 2.6cqw; border-width: 0.2cqw; }
+.pdice .reel { width: 100%; font-size: 6cqw; min-height: 16cqw; border-radius: 3cqw; border-width: 0.8cqw; }
+/* 결과 공개: 출전자의 판정 스탯 값 */
+.stv { display: block; font-style: normal; font-size: 1.15cqw; font-weight: 700; color: var(--blue); }
+.bars.many .stv { font-size: 1cqw; }
+.bars.cols .stv { font-size: 0.85cqw; }
+.practice-tag { display: inline-block; padding: 0.1cqw 0.8cqw; border-radius: 0.8cqw; background: #DDE6FF; color: var(--blue); font-size: 1.1cqw; font-weight: 800; vertical-align: 0.3cqw; }
+/* 설정: 룰렛 칸 */
+.spin-row { display: grid; grid-template-columns: 1.5rem minmax(0, 10rem) 5rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; }
+.spin-row select, .spin-row input { min-height: 2.25rem; padding: 0 0.5rem; border-radius: 0.625rem; border: 0.0625rem solid var(--line); background: var(--panel); color: var(--ink); font-size: 0.875rem; min-width: 0; width: 100%; }
+.spin-label { font-weight: 700; font-size: 0.85rem; }
+@media (max-width: 40rem) { .spin-row { grid-template-columns: 1.5rem minmax(0, 1fr) 5rem; } .spin-label { grid-column: 2 / -1; } .spin-row .bact { grid-column: 2 / -1; } }
 .ev-alert { color: var(--coral-deep); animation: alert 0.5s steps(2) 4; }
 @keyframes alert { 50% { opacity: 0.25; transform: scale(1.04); } }
 .card .ev-alert { font-size: 5.6cqw; font-weight: 900; text-align: center; }
@@ -445,9 +465,12 @@ a { color: var(--blue); }
   let JOIN_MODE = "seats";            // "roster": 휴대폰에서 아이디로 입장 · "seats": 6자리 중 고르기
   // 보스 정보는 Supabase(또는 js/raid-sim-engine.js)가 보내 줍니다. 판정 스탯은 결과 공개 전까지 진행자에게만 옵니다.
   let BOSSES = [];
-  // 돌발 이벤트 주사위 눈별 효과 (판정은 js/raid-sim-engine.js · supabase/raid-sim.sql 과 같음)
-  const diceEff = (b, d) => d === 1 ? "공격력 " + sign(b.diceLow) : d === 2 ? "공격력 −1" : d === 3 ? "공격력 +1" : d === 4 ? "격파하면 +1점" : d === 5 ? "실패해도 +1점" : "공격력 " + sign(b.diceHigh);
-  const diceRules = (b) => [1, 2, 3, 4, 5, 6].map((d) => d + " " + diceEff(b, d)).join(" · ");
+  let PRACTICE = null;   // 연습 보스 (0번 라운드)
+  // 돌발 이벤트 룰렛: 칸마다 효과(kind, value), 문구는 효과대로 자동 (판정은 js/raid-sim-engine.js · supabase/raid-sim.sql)
+  const SPIN_KINDS = [["power", "공격력 ±N"], ["clear", "격파하면 +N점"], ["fail", "실패해도 +N점"], ["none", "효과 없음"]];
+  const effLabel = (e) => !e ? "" : e.kind === "power" ? "공격력 " + sign(e.value) : e.kind === "clear" ? "격파하면 " + sign(e.value) + "점" : e.kind === "fail" ? "실패해도 " + sign(e.value) + "점" : "효과 없음";
+  const effGood = (e) => !!e && e.kind !== "none" && e.value > 0;
+  const spinRules = () => (RULES.roulette || []).map(effLabel).join(" · ");
 
   // ── 픽셀 캐릭터 (js/raid-common.js 와 같은 그림) ───────────────
   function rng(seed) {
@@ -516,7 +539,7 @@ a { color: var(--blue); }
   const BOSS_ART = ["..h......h..", "..hh....hh..", ".XXXXXXXXXX.", "XXXXXXXXXXXX", "XXwwXXXXwwXX", "XXwkXXXXwkXX", "XXXXXXXXXXXX", "XXmmmmmmmmXX", "XXmtmtmtmtXX", ".XXXXXXXXXX.", ".XX..XX..XX."];
   const BOSS_COLORS = ["#5B7FD6", "#8A63D2", "#2E9E6B", "#E0694E", "#1F2540"];
   function bossSprite(round) {
-    const body = BOSS_COLORS[(round - 1) % 5];
+    const body = round === 0 ? "#4FB0A5" : BOSS_COLORS[(round - 1) % 5];
     const fill = { X: body, h: round >= 5 ? "#FFC23D" : body, w: "#FFFFFF", k: "#1F2540", m: "#3A1F2B", t: "#FFFFFF" };
     let out = "";
     BOSS_ART.forEach((row, y) => [...row].forEach((ch, x) => { if (fill[ch]) out += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="' + fill[ch] + '"/>'; }));
@@ -535,8 +558,7 @@ a { color: var(--blue); }
   const defaultStats = () => Object.fromEntries(KEYS.map((k, i) => [k, Math.floor(RULES.statTotal / KEYS.length) + (i < RULES.statTotal % KEYS.length ? 1 : 0)]));
   const blankDraft = () => Object.fromEntries(KEYS.map((k) => [k, RULES.statMin]));
   const sign = (n) => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n);
-  const diceText = (x) => !x.dice ? "" : "주사위 " + x.dice + " · " + diceEff(boss(), x.dice);
-  const luckNote = () => (RULES.luckPower > 0 ? "운이 높을수록 큰 눈이 잘 나와요" : "");
+  const diceText = (x) => x.effect ? "룰렛 " + effLabel(x.effect) : "";
   const qrCache = {};
   function qrSvg(text) {
     if (qrCache[text]) return qrCache[text];
@@ -582,6 +604,7 @@ a { color: var(--blue); }
     Object.keys(picks).forEach((k) => delete picks[k]);
     Object.assign(picks, snap.picks || {});
     BOSSES = snap.bosses || [];
+    PRACTICE = snap.practice || null;
     TEAM_NAMES = Array.isArray(snap.teams) && snap.teams.length ? snap.teams.map(String) : ["A조", "B조"];
     TEAMS = TEAM_NAMES.map((t) => esc(t));
     JOIN_MODE = snap.mode === "roster" ? "roster" : "seats";
@@ -664,7 +687,12 @@ a { color: var(--blue); }
   // ── 화면 계산용 (판정은 Supabase 가 합니다) ──
   const personList = () => Object.keys(people).map(Number).sort((a, b) => a - b).map((i) => people[i]);
   const teamOf = (t) => personList().filter((p) => p.team === t);
-  const boss = () => BOSSES[game.round - 1] || {};
+  const boss = () => (game.round === 0 ? PRACTICE : BOSSES[game.round - 1]) || {};
+  const isPractice = () => !!game && game.stage === "boss" && game.round === 0 && game.phase !== "idle";
+  const rname = () => (game.round === 0 ? "연습" : "보스 " + game.round);
+  const rlabel = () => (game.round === 0 ? "연습 라운드 · 점수에 안 들어가요" : "보스 " + game.round + " / " + BOSSES.length);
+  // 출전자의 판정 스탯 값 (예: 체력 6 + 멘탈 5)
+  const statLine = (x, b) => (b.stats || []).map((k) => LABEL[k] + " " + (charOf(people[x.pid] || {})[k] ?? "?")).join(" + ");
   const pickOf = (r, t) => picks["r" + r + "t" + t];
   function played(pid, before) {
     for (let r = 1; r < before; r++) for (let t = 0; t < TEAMS.length; t++) { const k = pickOf(r, t); if (k && k.pid === pid) return true; }
@@ -676,7 +704,7 @@ a { color: var(--blue); }
   const charOf = (p) => p.char || Object.assign(defaultStats(), { seed: p.seed || 1, isDefault: true });
   function scoreboard() {
     const res = game.results || {};
-    const counted = Object.keys(res).map(Number).filter((r) => r < game.round || (r === game.round && (game.phase === "revealed" || game.phase === "final")));
+    const counted = Object.keys(res).map(Number).filter((r) => r >= 1 && (r < game.round || (r === game.round && (game.phase === "revealed" || game.phase === "final"))));
     const rows = TEAMS.map((_, t) => {
       let total = 0, power = 0, cleared = 0;
       counted.forEach((r) => { const x = (res[r] || []).find((y) => y.team === t); if (x) { total += x.points || 0; power += x.power || 0; cleared += x.cleared ? 1 : 0; } });
@@ -693,17 +721,18 @@ a { color: var(--blue); }
     if (game.stage === "lobby") add("캐릭터 만들기 시작", "make", "go");
     else if (game.stage === "make") { add("조 내 공유로 넘기기", "share", "go"); add("안 만든 사람 랜덤 생성", "fillChars"); }
     else if (game.stage === "share") { add("보스 레이드로 넘기기", "raid", "go"); add("안 만든 사람 랜덤 생성", "fillChars"); }
-    else if (game.phase === "idle" || !game.round) add("1번 보스 시작", "start:1", "go");
+    else if (game.phase === "idle") { add("연습 보스 시작", "start:0", "go"); add("연습 없이 1번 보스 시작", "start:1"); }
     else if (game.phase === "meeting") { add("마감하기", "close", "go"); if (!game.hint) add("힌트 공개", "hint"); }
-    else if (game.phase === "closed") { if (boss().event) add("주사위 굴리기", "roll", "go"); else add("결과 공개", "reveal", "go"); add(game.round + "라운드 다시", "start:" + game.round); }
-    else if (game.phase === "rolled") { add("결과 공개", "reveal", "go"); add(game.round + "라운드 다시", "start:" + game.round); }
+    else if (game.phase === "closed") { if (boss().event) add("룰렛 돌리기", "roll", "go"); else add("결과 공개", "reveal", "go"); add(game.round ? game.round + "라운드 다시" : "연습 다시", "start:" + game.round); }
+    else if (game.phase === "rolled") { add("결과 공개", "reveal", "go"); add(game.round ? game.round + "라운드 다시" : "연습 다시", "start:" + game.round); }
+    else if (game.phase === "revealed" && game.round === 0) { add("1번 보스 시작 (본게임)", "start:1", "go"); add("연습 다시", "start:0"); }
     else if (game.phase === "revealed") { if (game.round < BOSSES.length) { add((game.round + 1) + "번 보스 시작", "start:" + (game.round + 1), "go"); add("최종 순위", "final"); } else add("최종 순위", "final", "go"); }
     add("처음부터", "reset", "quiet");
     return b;
   }
   const stepWord = () => !game ? "준비 전" : game.stage === "lobby" ? "대기" : game.stage === "make" ? "1. 캐릭터 만들기" : game.stage === "share" ? "2. 조 내 공유"
-    : game.phase === "idle" || !game.round ? "3. 보스 레이드 규칙" : game.phase === "meeting" ? "보스 " + game.round + " · 회의" : game.phase === "closed" ? "보스 " + game.round + " · 마감" : game.phase === "rolled" ? "보스 " + game.round + " · 주사위"
-    : game.phase === "revealed" ? "보스 " + game.round + " · 결과" : "최종 순위";
+    : game.phase === "idle" ? "3. 보스 레이드 규칙" : game.phase === "meeting" ? rname() + " · 회의" : game.phase === "closed" ? rname() + " · 마감" : game.phase === "rolled" ? rname() + " · 룰렛"
+    : game.phase === "revealed" ? rname() + " · 결과" : "최종 순위";
 
   // ── 참여자 동작 (스탯 고르기는 이 기기에서, 저장·다시 뽑기·출전자 선택은 Supabase 로) ──
   async function personAct(pid, a, extra) {
@@ -746,25 +775,26 @@ a { color: var(--blue); }
     lastHtml = ""; render();
   }
 
-  // ── 9) 돌발 이벤트 주사위 ──────────────────────────────────────────
-  // 진행자가 "주사위 굴리기"를 누른 시각(rollAt)부터 ROLL_MS 동안 모든 화면에서 같이 굴러가고, 그 뒤 각 조의 눈이 나옵니다.
+  // ── 돌발 이벤트 룰렛 ──────────────────────────────────────────
+  // 진행자가 "룰렛 돌리기"를 누른 시각(rollAt)부터 ROLL_MS 동안 모든 화면에서 같이 돌고(점점 느려짐), 그 뒤 각 조의 칸이 나옵니다.
   const ROLL_MS = 3000;
-  const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
-  function dieSvg(n) {
-    const dots = (PIPS[n] || PIPS[1]).map((i) => '<circle cx="' + (25 + (i % 3) * 25) + '" cy="' + (25 + Math.floor(i / 3) * 25) + '" r="9" fill="' + (n === 1 ? "#C2462B" : "#1F2540") + '"/>').join("");
-    return '<svg viewBox="0 0 100 100" aria-hidden="true"><rect class="face" x="5" y="5" width="90" height="90" rx="18" fill="#fff" stroke="#1F2540" stroke-width="6"/>' + dots + "</svg>";
-  }
   const rolling = () => !!game && game.phase === "rolled" && now() - (game.rollAt || 0) < ROLL_MS;
-  // 주사위 줄: 굴리는 중이면 흔들리는 주사위, 끝나면 각 눈 (쓰인 눈은 금색 테두리, 나머지는 흐리게)
-  function diceRow(x) {
-    const rolls = x.rolls && x.rolls.length ? x.rolls : [x.dice || 1];
-    if (rolling()) return '<div class="dice-row">' + rolls.map(() => '<span class="die rolling" data-roll>' + dieSvg(1 + rand(6)) + "</span>").join("") + "</div>";
-    let used = false;
-    return '<div class="dice-row">' + rolls.map((d) => { const best = !used && d === x.dice; if (best) used = true; return '<span class="die' + (best ? " best" : rolls.length > 1 ? " dim" : "") + '">' + dieSvg(d) + "</span>"; }).join("") + "</div>";
+  function reel(x) {
+    const L = RULES.roulette || [];
+    if (rolling()) return '<div class="reel spinning"><span data-reel>' + esc(effLabel(L[rand(L.length)])) + "</span></div>";
+    return '<div class="reel done' + (effGood(x.effect) ? " good" : "") + '"><span>' + esc(effLabel(x.effect)) + "</span></div>";
   }
-  const diceEffect = (x) => rolling() ? "굴리는 중…" : x.dice + " → " + diceEff(boss(), x.dice);
-  const diceGood = (x) => !rolling() && x.dice >= 3;
-  setInterval(() => { document.querySelectorAll("[data-roll]").forEach((el) => { el.innerHTML = dieSvg(1 + rand(6)); }); }, 110);
+  // 도는 동안: 칸 문구가 차례로 바뀌고, 끝에 가까울수록 느려짐
+  setInterval(() => {
+    if (!rolling()) return;
+    const L = (RULES.roulette || []).map(effLabel), p = Math.min(1, (now() - game.rollAt) / ROLL_MS), gap = 60 + 420 * p * p * p, t = Date.now();
+    if (!L.length) return;
+    document.querySelectorAll("[data-reel]").forEach((el) => {
+      if (t - (Number(el.dataset.t) || 0) < gap) return;
+      const i = ((el.dataset.i != null ? Number(el.dataset.i) : rand(L.length)) + 1) % L.length;
+      el.dataset.i = i; el.dataset.t = t; el.textContent = L[i];
+    });
+  }, 30);
   let rollTimer = null;
   function scheduleRollEnd() {
     clearTimeout(rollTimer);
@@ -772,8 +802,9 @@ a { color: var(--blue); }
   }
   // 우리 조 결과 문장 (휴대폰에만): 몇 점 모자랐는지, 받은 점수
   function myResultLine(x, b) {
+    if (game.round === 0) return (x.cleared ? "보스 HP " + b.hp + " 돌파 → 격파!" : "보스 HP " + b.hp + "까지 " + (b.hp - x.power) + "점 부족") + " · 연습이라 점수에는 안 들어가요";
     const out = [x.cleared ? "보스 HP " + b.hp + " 돌파 → 격파 +" + b.reward + "점" : "보스 HP " + b.hp + "까지 " + (b.hp - x.power) + "점 부족 → 0점"];
-    if (x.extra) out.push("주사위 " + x.dice + " +1점");
+    if (x.extra) out.push("룰렛 " + sign(x.extra) + "점");
     if (x.mvp) out.push("MVP +" + RULES.mvpBonus + "점");
     return out.join(" · ");
   }
@@ -807,16 +838,17 @@ a { color: var(--blue); }
     if (game.stage === "share") return '<div class="pv"><div class="h">조원에게 내 캐릭터를 소개해 주세요</div><div class="sub">휴대폰에서 우리 조 캐릭터 카드를 함께 보세요</div>' +
       '<ol class="qs"><li><b>내 칭호</b>와, 그 칭호가 맞는지 아닌지</li><li><b>가장 높은 스탯</b>: 이 점수를 준 에피소드 하나</li><li><b>가장 낮은 스탯</b>: 솔직한 고백 한 마디</li></ol>' +
       '<div class="timer glass" style="margin-top:auto;align-self:flex-end" data-deadline="' + game.shareDeadline + '"></div></div>';
-    if (game.phase === "idle" || !game.round) return '<div class="pv pv-center"><div class="eyebrow">보스 레이드</div><div class="h">보스 ' + BOSSES.length + '명이 기다리고 있어요</div><div class="glass rules-box"><ol class="rules">' +
+    if (game.phase === "idle") return '<div class="pv pv-center"><div class="eyebrow">보스 레이드</div><div class="h">보스 ' + BOSSES.length + '명이 기다리고 있어요</div><div class="glass rules-box"><ol class="rules">' +
+      "<li>먼저 <b>연습 보스</b>와 한 판 해 봐요. 연습은 점수와 출전 기록에 들어가지 않아요.</li>" +
       "<li>라운드마다 조에서 <b>1명</b>이 출전해요. 한 사람은 한 번만 나갈 수 있어요.</li>" +
       "<li>판정 스탯은 <b>비공개</b>. 보스 설명을 보고 조원과 추리해서 출전자를 고르세요.</li>" +
       "<li>공격력(판정 스탯 합)이 <b>보스 HP 이상이면 격파</b> → 그 보스의 보상 점수(" + rewardRange() + "), <b>실패하면 0점</b>.</li>" +
       "<li>라운드 공격력 1위 조는 <b>MVP " + sign(RULES.mvpBonus) + "점</b> (격파 못 해도, 동점이면 모두).</li>" +
-      "<li>결과 공개 전에 <b>돌발 이벤트</b>가 터질 수도 있어요. 그때는 주사위 눈에 따라 공격력이나 점수가 바뀌어요.</li>" +
+      "<li>결과 공개 전에 <b>돌발 이벤트</b>가 터질 수도 있어요. 그때는 <b>룰렛</b>에 걸린 칸에 따라 공격력이나 점수가 바뀌어요.</li>" +
       "<li>점수를 모두 더한 <b>총점 순위는 마지막에 공개</b>돼요.</li></ol></div></div>";
     const b = boss();
-    const head = '<div class="boss-row glass">' + bossSprite(game.round) + '<div><div class="eyebrow">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="boss-name">' + esc(b.name) + '</div><div class="boss-desc">' + esc(b.desc) + "</div>" +
-      '<div class="chips"><span class="hpc">HP ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + "</div></div></div>";
+    const head = '<div class="boss-row glass">' + bossSprite(game.round) + '<div><div class="eyebrow">' + rlabel() + '</div><div class="boss-name">' + esc(b.name) + '</div><div class="boss-desc">' + esc(b.desc) + "</div>" +
+      '<div class="chips"><span class="hpc">HP ' + b.hp + "</span>" + (game.round === 0 ? "<span>연습</span>" : "<span>보상 " + b.reward + "점</span>") + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + "</div></div></div>";
     if (game.phase === "meeting") {
       const n = TEAMS.filter((_, t) => pickOf(game.round, t)).length;
       return '<div class="pv">' + head + '<div class="meet-foot">' +
@@ -826,14 +858,14 @@ a { color: var(--blue); }
     }
     const rows = game.results[game.round] || [];
     if (game.phase === "closed") {
-      return '<div class="pv"><div class="h">마감! 이번 라운드 출전자</div><div class="sub">' + esc(b.name) + " · 보스 HP " + b.hp + '</div><div class="fighters' + (rows.length > 12 ? " many dense" : rows.length > 4 ? " many" : "") + '"' + (rows.length <= 4 ? ' style="grid-template-columns:repeat(' + rows.length + ',minmax(0,1fr))"' : "") + ">" +
+      return '<div class="pv"><div class="h">마감! ' + (game.round === 0 ? "연습 라운드" : "이번 라운드") + ' 출전자</div><div class="sub">' + esc(b.name) + " · 보스 HP " + b.hp + '</div><div class="fighters' + (rows.length > 12 ? " many dense" : rows.length > 4 ? " many" : "") + '"' + (rows.length <= 4 ? ' style="grid-template-columns:repeat(' + rows.length + ',minmax(0,1fr))"' : "") + ">" +
         rows.map((x) => '<div class="fighter glass"><div class="art">' + sprite(charOf(people[x.pid] || {})) + "</div><div><span>" + TEAMS[x.team] + (x.auto ? " · 랜덤" : "") + "</span><b>" + esc(x.name) + "</b></div></div>").join("") + "</div></div>";
     }
     if (game.phase === "rolled") {
       return '<div class="pv"><div><div class="eyebrow">' + esc(b.name) + '</div><div class="h ev-alert">!! 돌발 이벤트 발생 !!</div>' +
-        '<div class="sub">' + diceRules(b) + "</div></div>" +
+        '<div class="sub">룰렛 칸: ' + esc(spinRules()) + "</div></div>" +
         '<div class="dice-grid' + (rows.length > 12 ? " many dense" : rows.length > 4 ? " many" : "") + '" style="--n:' + (rows.length > 12 ? 7 : Math.min(rows.length, 6)) + '">' + rows.map((x) =>
-          '<div class="dice-team glass"><div class="dwho">' + TEAMS[x.team] + "<b>" + esc(x.name) + "</b></div>" + diceRow(x) + '<div class="eff' + (diceGood(x) ? " up" : "") + '">' + diceEffect(x) + "</div></div>").join("") + "</div></div>";
+          '<div class="dice-team glass"><div class="dwho">' + TEAMS[x.team] + "<b>" + esc(x.name) + "</b></div>" + reel(x) + "</div>").join("") + "</div></div>";
     }
     if (game.phase === "revealed") {
       // 모든 조의 게이지가 동시에 올라가고(0.8초 뒤부터 2.6초), 다 찬 뒤 실패한 캐릭터가 자기 칸 안에서 쓰러집니다 (CSS)
@@ -841,11 +873,11 @@ a { color: var(--blue); }
       const sorted = rows.slice().sort((a, c) => a.team - c.team);
       // 보스 HP 바는 가장 센 공격만큼 줄고, 한 조라도 격파하면 K.O.
       const best = Math.max(...rows.map((x) => x.power)), left = Math.max(0, (b.hp - best) / b.hp * 100), ko = rows.some((x) => x.cleared);
-      return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-top"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + "</div></div>" +
+      return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-top"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯' + (game.round === 0 ? ' <span class="practice-tag">연습</span>' : "") + '</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + "</div></div>" +
         '<div class="boss-hit' + (ko ? " ko" : "") + '"><div class="boss-box">' + bossSprite(game.round) + (ko ? '<b class="ko-stamp">K.O.</b>' : "") + '</div><div class="bhp"><i style="--left:' + left + '%"></i></div><div class="bhp-t">보스 HP ' + b.hp + "</div></div></div>" +
         '<div class="bars glass' + (rows.length > 6 ? " cols" + (rows.length > 14 ? " dense" : "") : rows.length > 4 ? " many" : "") + '" style="--hp:' + (b.hp / max * 100) + "%;--rows:" + Math.ceil(rows.length / 2) + '"><div class="hp-note"><i></i>보스 HP ' + b.hp + " · 점선을 넘으면 격파</div>" +
-        sorted.map((x) => '<div class="bar-row' + (x.cleared ? " win" : " lose") + '"><div class="art">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + "</span></div>" +
-          '<div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i><em class="spark" style="left:' + (Math.max(0, x.power) / max * 100) + '%"></em></div><div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? ' <span class="star">MVP</span>' : "") + "</span>" +
+        sorted.map((x) => '<div class="bar-row' + (x.cleared ? " win" : " lose") + '"><div class="art">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + '</span><em class="stv">' + esc(statLine(x, b)) + "</em></div>" +
+          '<div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i><em class="spark" style="left:' + (Math.max(0, x.power) / max * 100) + '%"></em></div><div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + (game.round === 0 ? "" : " +" + x.points) + (x.mvp && game.round !== 0 ? ' <span class="star">MVP</span>' : "") + "</span>" +
           (x.dice ? '<span class="dice-note">' + diceText(x) + "</span>" : "") + "</div></div>").join("") + "</div></div>";
     }
     if (TEAMS.length > 3) {
@@ -860,17 +892,18 @@ a { color: var(--blue); }
     if (!isHost) return '<p class="small">판정 스탯과 진행 버튼은 위에서 진행자 비밀번호로 로그인하면 보여요.</p>';
     if (!game || !personList().length) return '<p class="small">위의 "게임 준비하기"를 누르면 진행 상태가 만들어져요. 보스·규칙 설정 탭에 명단을 넣었으면 명단대로, 아니면 참여자 자리 6개(A조·B조 3명씩)로 만들어져요.</p>';
     let html = "";
-    if (game.stage !== "boss" || !game.round) {
-      html += '<div class="secret">판정 스탯은 여기에만 보여요.<br>' + BOSSES.map((b, i) => (i + 1) + ". " + esc(b.name) + " → <b>" + statsText(b.stats) + "</b> · HP " + b.hp).join("<br>") + "</div>";
+    if (game.stage !== "boss" || game.phase === "idle") {
+      html += '<div class="secret">판정 스탯은 여기에만 보여요.<br>' + (PRACTICE ? "연습. " + esc(PRACTICE.name) + " → <b>" + statsText(PRACTICE.stats) + "</b> · HP " + PRACTICE.hp + "<br>" : "") +
+        BOSSES.map((b, i) => (i + 1) + ". " + esc(b.name) + " → <b>" + statsText(b.stats) + "</b> · HP " + b.hp).join("<br>") + "</div>";
     } else {
       const b = boss(), rows = game.results[game.round] || [];
-      html += '<div class="secret">' + game.round + "번 보스 판정 스탯 <b>" + statsText(b.stats) + "</b> · 보스 HP " + b.hp + " · 보상 " + b.reward + "점<br>힌트: " + esc(b.hint) + "</div>";
-      html += '<table class="res-table"><thead><tr><th>조</th><th>출전자</th><th class="n">판정 합</th><th class="n">주사위</th><th class="n">공격력</th><th>결과</th></tr></thead><tbody>';
+      html += '<div class="secret">' + (game.round === 0 ? "연습 보스" : game.round + "번 보스") + " 판정 스탯 <b>" + statsText(b.stats) + "</b> · 보스 HP " + b.hp + " · 보상 " + b.reward + "점<br>힌트: " + esc(b.hint) + "</div>";
+      html += '<table class="res-table"><thead><tr><th>조</th><th>출전자</th><th class="n">판정 합</th><th class="n">룰렛</th><th class="n">공격력</th><th>결과</th></tr></thead><tbody>';
       TEAMS.forEach((name, t) => {
         const k = pickOf(game.round, t), p = k ? people[k.pid] : null, x = rows.find((y) => y.team === t);
         const base = p ? b.stats.reduce((n, s) => n + (charOf(p)[s] || 0), 0) : null;
         html += "<tr><td><b>" + name + "</b></td><td>" + (p ? esc(p.name) + (k.auto ? ' <span class="small">(랜덤)</span>' : k.by != null && people[k.by] ? ' <span class="small">· ' + esc(people[k.by].name) + " 선택</span>" : "") : '<span class="small">선택 전</span>') + "</td>" +
-          '<td class="n">' + (base != null ? base : "") + '</td><td class="n">' + (x && x.dice ? x.dice + " (" + diceEff(b, x.dice) + ")" : "") + '</td><td class="n"><b>' + (x ? x.power : "") + "</b></td><td" + (x && x.cleared ? ' class="ok"' : "") + ">" + (x ? (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? " MVP" : "") : "") + "</td></tr>";
+          '<td class="n">' + (base != null ? base : "") + '</td><td class="n">' + (x && x.effect ? esc(effLabel(x.effect)) : "") + '</td><td class="n"><b>' + (x ? x.power : "") + "</b></td><td" + (x && x.cleared ? ' class="ok"' : "") + ">" + (x ? (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? " MVP" : "") : "") + "</td></tr>";
       });
       html += "</tbody></table>";
       html += '<div class="small">누적: ' + scoreboard().map((x) => x.rank + "위 " + TEAMS[x.team] + " " + x.total + "점").join(" · ") + "</div>";
@@ -905,7 +938,7 @@ a { color: var(--blue); }
       return "<h3>나만의 픽셀 캐릭터</h3>" +
         '<div class="card"><div class="remain' + (remain === 0 ? " done" : "") + '">남은 점수 ' + remain + " / " + RULES.statTotal + "</div>" +
         STATS.map((s) => '<div class="stepper"><span style="color:' + s.color + '">' + s.label + '</span><button type="button" data-p="' + pid + '" data-a="dec" data-k="' + s.key + '" aria-label="' + s.label + ' 1점 빼기"' + (d[s.key] <= RULES.statMin ? " disabled" : "") + '>−</button><div class="bar"><b style="width:' + Math.min(100, d[s.key] / RULES.statMax * 100) + "%;background:" + s.color + '"></b></div><span>' + d[s.key] + '</span><button type="button" data-p="' + pid + '" data-a="inc" data-k="' + s.key + '" aria-label="' + s.label + ' 1점 더하기"' + (d[s.key] >= RULES.statMax || remain <= 0 ? " disabled" : "") + ">+</button></div>").join("") +
-        '<div class="muted">스탯 하나는 ' + RULES.statMin + "~" + RULES.statMax + "점, 합계 " + RULES.statTotal + "점. 외형은 스탯에 따라 자동으로 정해져요." + (RULES.luckPower > 0 ? " <b>운</b>이 높을수록 돌발 이벤트 주사위에서 큰 눈이 잘 나와요." : "") + "</div></div>" +
+        '<div class="muted">스탯 하나는 ' + RULES.statMin + "~" + RULES.statMax + "점, 합계 " + RULES.statTotal + "점. 외형은 스탯에 따라 자동으로 정해져요." + (RULES.luckPower > 0 ? " <b>운</b>이 높을수록 돌발 이벤트 룰렛에서 좋은 칸이 잘 나와요." : "") + "</div></div>" +
         '<div class="card"><div class="t">미리보기</div>' + pcard({ name: p.name, char: Object.assign({ seed: p.seed }, d) }, { big: true }) + "</div>" +
         '<button type="button" class="pbtn" data-p="' + pid + '" data-a="save"' + (remain !== 0 ? " disabled" : "") + ">" + (remain !== 0 ? "점수를 " + remain + "점 더 나눠 주세요" : p.char ? "이대로 저장" : "캐릭터 생성") + "</button>" +
         '<button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="randomDraft">랜덤으로 나눠 보기</button>' +
@@ -919,10 +952,10 @@ a { color: var(--blue); }
       h += '<div class="card"><div class="t">우리 조 캐릭터</div>' + team.filter((m) => m.id !== pid).map((m) => pcard(m)).join("") + "</div>";
       return h;
     }
-    if (game.phase === "idle" || !game.round) return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">라운드마다 조에서 1명 출전 · 한 사람은 한 번만<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 HP 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
+    if (game.phase === "idle") return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">먼저 연습 보스와 한 판 (점수 없음)<br>라운드마다 조에서 1명 출전 · 한 사람은 한 번만<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 HP 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
     const b = boss();
-    let h = '<div class="card"><div class="boss-mini">' + bossSprite(game.round) + '<div><div class="muted">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="t">' + esc(b.name) + '</div></div></div>' + fold("d" + game.round, b.desc) +
-      '<div class="phone-chips"><span class="hpc">HP ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + "</div>" +
+    let h = '<div class="card"><div class="boss-mini">' + bossSprite(game.round) + '<div><div class="muted">' + rlabel() + '</div><div class="t">' + esc(b.name) + '</div></div></div>' + fold("d" + game.round, b.desc) +
+      '<div class="phone-chips"><span class="hpc">HP ' + b.hp + "</span>" + (game.round === 0 ? "<span>연습</span>" : "<span>보상 " + b.reward + "점</span>") + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + "</div>" +
       (game.hint && game.phase === "meeting" ? '<div class="muted"><b>힌트</b> ' + esc(b.hint) + "</div>" : "") +
       (game.phase === "meeting" ? '<div class="ptimer" data-deadline="' + game.deadline + '"></div>' : "") + "</div>";
     const k = pickOf(game.round, p.team), pick = k ? people[k.pid] : null;
@@ -936,10 +969,10 @@ a { color: var(--blue); }
     }
     const x = (game.results[game.round] || []).find((y) => y.team === p.team);
     if (game.phase === "closed") return h + '<div class="card"><div class="t">' + (x ? esc(x.name) + " 님 출전!" : "마감") + '</div><div class="muted">' + (x && x.auto ? "아무도 안 골라서 랜덤으로 정해졌어요. " : "") + "앞쪽 화면에서 결과 공개를 기다려 주세요." + "</div></div>";
-    // 9) 우리 조 주사위만
+    // 우리 조 룰렛만
     if (game.phase === "rolled" && x) {
-      return h + '<div class="card pdice"><div class="t ev-alert">!! 돌발 이벤트 발생 !!</div><div class="t">' + TEAMS[p.team] + " 주사위</div><div class=\"muted\">" + esc(x.name) + " 님이 굴려요</div>" + diceRow(x) +
-        '<div class="eff' + (diceGood(x) ? " up" : "") + '">' + diceEffect(x) + '</div><div class="muted">' + diceRules(b) + "</div></div>";
+      return h + '<div class="card pdice"><div class="t ev-alert">!! 돌발 이벤트 발생 !!</div><div class="t">' + TEAMS[p.team] + " 룰렛</div><div class=\"muted\">" + esc(x.name) + " 님 차례예요</div>" + reel(x) +
+        '<div class="muted">룰렛 칸: ' + esc(spinRules()) + "</div></div>";
     }
     if (game.phase === "revealed" && x) {
       const f = people[x.pid];
@@ -948,8 +981,8 @@ a { color: var(--blue); }
         '<div class="php"><i style="--left:' + Math.max(0, (b.hp - x.power) / b.hp * 100) + '%"></i></div>' +
         '<div class="php-t">' + (x.cleared ? "보스 HP " + b.hp + " → 0 · 격파!" : "보스 HP " + b.hp + " → " + (b.hp - x.power) + " 남음 · " + (b.hp - x.power) + "점만 더 있었으면!") + "</div>" +
         '<div class="muted"><b>' + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div>" +
-        '<div class="muted">판정 스탯 ' + statsText(b.stats) + " 합 " + x.base + (x.dice ? " · " + diceText(x) : "") + "</div>" +
-        '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + '</div>' + fold("r" + game.round, b.reveal) + '<div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
+        '<div class="muted">판정 스탯 <b>' + esc(statLine(x, b)) + " = " + x.base + "</b>" + (x.effect ? " · " + esc(diceText(x)) : "") + "</div>" +
+        (game.round === 0 ? '<div class="t">연습 라운드 · 점수 없음</div>' : '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + "</div>") + fold("r" + game.round, b.reveal) + '<div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
         '<div class="muted">누적 점수와 순위는 마지막에 공개돼요.</div>';
     }
     return "<h3>최종 순위</h3>" + rankHtml(p);
@@ -966,18 +999,13 @@ a { color: var(--blue); }
 
   let infoOpen = false;
   function infoHtml() {
-    const evB = BOSSES.filter((b) => b.event), b0 = evB[0] || { diceLow: -2, diceHigh: 3 };
-    const odd = evB.some((b) => b.diceLow !== b0.diceLow || b.diceHigh !== b0.diceHigh);
-    const die = (n) => '<span class="mini-die">' + dieSvg(n) + "</span>";
-    const cards = [1, 2, 3, 4, 5, 6].map((d) => die(d) + diceEff(b0, d)).join("<br>");
     return '<div class="modal-back" data-info-close><div class="modal" role="dialog" aria-modal="true" aria-label="점수 규칙"><div class="modal-head"><h3>점수는 이렇게 매겨요</h3><button type="button" class="info-btn x" data-info-close aria-label="닫기">✕</button></div>' +
-      '<div class="card"><div class="t">공격력</div><div class="muted">출전자의 <b>판정 스탯 합</b>이 공격력이에요. 어떤 스탯이 판정되는지는 비공개이고, 결과 공개 때 알려 줘요. 돌발 이벤트가 터지면 여기에 주사위 결과가 더해져요.</div></div>' +
+      '<div class="card"><div class="t">공격력</div><div class="muted">출전자의 <b>판정 스탯 합</b>이 공격력이에요. 어떤 스탯이 판정되는지는 비공개이고, 결과 공개 때 알려 줘요. 돌발 이벤트가 터지면 여기에 룰렛 결과가 더해져요.</div></div>' +
       '<div class="card"><div class="t">격파 / 실패</div><div class="muted">공격력이 <b>보스 HP 이상이면 격파</b> → 그 보스의 보상 점수를 받아요. 모자라면 <b>실패 → 0점</b>.<br>' + BOSSES.map((b, i) => i + 1 + "번 " + b.reward + "점").join(" · ") + "</div></div>" +
       '<div class="card"><div class="t">MVP</div><div class="muted">라운드마다 공격력이 가장 높은 조가 <b>' + sign(RULES.mvpBonus) + "점</b>을 더 받아요. 격파하지 못해도 받을 수 있고, 동점이면 모두 받아요.</div></div>" +
-      '<div class="card"><div class="t">돌발 이벤트 주사위</div><div class="muted">' + cards +
-        (odd ? "<br>(1·6의 공격력 변화는 보스마다 달라요)" : "") + (evB.length ? "" : "<br>지금은 돌발 이벤트 보스가 없어요.") + "</div></div>" +
-      '<div class="card"><div class="t">순위</div><div class="muted">라운드 점수(격파 보상 + MVP + 주사위 점수)를 모두 더한 <b>총점</b> 순이에요. 총점이 같으면 공격력 합이 높은 조가 위예요. 누적 점수와 순위는 <b>마지막에 공개</b>돼요.</div></div>' +
-      '<div class="card"><div class="t">출전</div><div class="muted">라운드마다 조에서 <b>1명</b>이 나가요. 한 사람은 한 번만 나갈 수 있고(모두 나갔으면 다시 가능), ' + (JOIN_MODE === "roster" ? "아이디로 입장한 사람만 고를 수 있어요. " : "") + "아무도 안 고르면 마감 때 아직 안 나간 사람 중 랜덤이에요.</div></div></div></div>";
+      '<div class="card"><div class="t">돌발 이벤트 룰렛</div><div class="muted">룰렛에 걸린 칸의 효과를 받아요.<br>' + (RULES.roulette || []).map((e) => esc(effLabel(e))).join("<br>") + "</div></div>" +
+      '<div class="card"><div class="t">순위</div><div class="muted">라운드 점수(격파 보상 + MVP + 룰렛 점수)를 모두 더한 <b>총점</b> 순이에요. 총점이 같으면 공격력 합이 높은 조가 위예요. 누적 점수와 순위는 <b>마지막에 공개</b>돼요.</div></div>' +
+      '<div class="card"><div class="t">출전</div><div class="muted">연습 라운드는 점수와 출전 기록에 들어가지 않아요. 라운드마다 조에서 <b>1명</b>이 나가요. 한 사람은 한 번만 나갈 수 있고(모두 나갔으면 다시 가능), ' + (JOIN_MODE === "roster" ? "아이디로 입장한 사람만 고를 수 있어요. " : "") + "아무도 안 고르면 마감 때 아직 안 나간 사람 중 랜덤이에요.</div></div></div></div>";
   }
   const infoBtn = '<button type="button" class="info-btn" data-info aria-label="점수 규칙 보기">i</button>';
   function joinHtml() {
@@ -1053,14 +1081,16 @@ a { color: var(--blue); }
     { k: "shareMin", label: "조 내 공유 시간", unit: "분" },
     { k: "meetingSec", label: "보스 회의 시간", unit: "초" },
     { k: "mvpBonus", label: "MVP 점수", unit: "점", note: "라운드 공격력 1위 조가 받는 점수" },
-    { k: "luckPower", label: "운 효과 세기", unit: "", note: "운이 높을수록 주사위가 큰 눈 쪽으로 기우는 정도 (0~100). 35면 운 최고일 때 6이 약 31%, 0이면 운과 상관없이 모두 1/6" },
+    { k: "luckPower", label: "운 효과 세기", unit: "", note: "운이 높을수록 룰렛의 아래쪽 칸이 잘 나오는 정도 (0~100). 0이면 운과 상관없이 모든 칸이 같은 확률" },
   ];
   const BOSS_KEYS = ["name", "desc", "hp", "reward", "event", "diceLow", "diceHigh", "stats", "hint", "reveal"];
   const bossOut = (b) => Object.fromEntries(BOSS_KEYS.map((k) => [k, k === "stats" ? (b.stats || []).slice() : k === "event" ? !!b.event : b[k] == null ? (k === "diceLow" ? -2 : k === "diceHigh" ? 3 : "") : b[k]]));
   function makeDraft() {
     return { dirty: false,
       config: Object.fromEntries(CFG_FIELDS.map((f) => [f.k, String(RULES[f.k])])),
-      bosses: BOSSES.map((b) => { const o = bossOut(b); ["hp", "reward", "diceLow", "diceHigh"].forEach((k) => { o[k] = String(o[k]); }); return o; }) };
+      bosses: BOSSES.map((b) => { const o = bossOut(b); ["hp", "reward", "diceLow", "diceHigh"].forEach((k) => { o[k] = String(o[k]); }); return o; }),
+      roulette: (RULES.roulette || []).map((x) => ({ kind: x.kind, value: String(x.value) })),
+      practice: (() => { const p = RULES.practiceBoss || {}; return { name: p.name || "", desc: p.desc || "", hp: String(p.hp == null ? 10 : p.hp), stats: (p.stats || []).slice(), hint: p.hint || "", reveal: p.reveal || "" }; })() };
   }
   const newBoss = () => ({ name: "새 보스", desc: "", hp: "12", reward: "2", event: false, diceLow: "-2", diceHigh: "3", stats: ["hp", "mental"], hint: "", reveal: "" });
   const toInt = (v) => (/^\s*-?\d+\s*$/.test(String(v)) ? Number(String(v).trim()) : NaN);
@@ -1086,6 +1116,25 @@ a { color: var(--blue); }
       '<label class="f"><span>' + f.label + '</span><span class="num"><input type="number" inputmode="numeric" step="1" data-f="c.' + f.k + '" value="' + esc(d.config[f.k]) + '"' + (f.rule && ruleLocked ? " disabled" : "") + "><em>" + f.unit + "</em></span>" +
       (f.note ? "<small>" + esc(f.note) + "</small>" : "") + "</label>").join("") + "</div>" +
       '<p class="small">스탯 규칙(합계·최소·최대)은 대기 단계에서만 바꿀 수 있어요' + (ruleLocked ? '. 지금은 잠겨 있어요. 진행 탭에서 "처음부터"를 누르면 바꿀 수 있어요.' : ".") + " 시간은 다음에 시작하는 단계부터 적용돼요.</p></section>";
+    const P = d.practice, pf = (k) => 'data-f="p.' + k + '"';
+    h += '<section class="panel"><h2>연습 보스</h2><p class="small">규칙 설명 다음에 진행자가 "연습 보스 시작"을 누르면 한 판 연습해요. 룰렛은 항상 터지고, 점수와 출전 기록에는 들어가지 않아요.</p><div class="bcard">' +
+      '<label class="f"><span>이름</span><input type="text" maxlength="60" ' + pf("name") + ' value="' + esc(P.name) + '"></label>' +
+      '<label class="f"><span>설명 (모두에게 보임)</span><textarea rows="2" maxlength="300" ' + pf("desc") + ">" + esc(P.desc) + "</textarea></label>" +
+      '<div class="f-row"><label class="f"><span>보스 HP</span><input type="number" inputmode="numeric" step="1" ' + pf("hp") + ' value="' + esc(P.hp) + '"></label></div>' +
+      '<div class="f"><span>판정 스탯 (공격력 = 고른 스탯의 합)</span><div class="checks">' + STATS.map((st) =>
+        '<label class="chk"><input type="checkbox" ' + pf("stat." + st.key) + (P.stats.includes(st.key) ? " checked" : "") + '><span style="color:' + st.color + '">' + st.label + "</span></label>").join("") + "</div></div>" +
+      '<label class="f"><span>힌트 (진행자가 "힌트 공개"를 누르면 보임)</span><input type="text" maxlength="200" ' + pf("hint") + ' value="' + esc(P.hint) + '"></label>' +
+      '<label class="f"><span>결과 공개 때 설명</span><textarea rows="2" maxlength="300" ' + pf("reveal") + ">" + esc(P.reveal) + "</textarea></label></div></section>";
+    h += '<section class="panel"><h2>돌발 이벤트 룰렛</h2><p class="small">돌발 이벤트가 켜진 보스와 연습 보스는 마감 뒤 이 룰렛을 돌려요(모든 보스 공통). 칸 문구는 효과대로 자동으로 만들어져요. ' +
+      "운이 높을수록 <b>아래쪽 칸</b>이 잘 나오니 좋은 효과를 아래에 두세요. 칸은 2~10개예요.</p>" +
+      d.roulette.map((x, i) => '<div class="spin-row"><b>' + (i + 1) + '</b><select data-f="s.' + i + '.kind" aria-label="' + (i + 1) + '번 칸 효과">' +
+        SPIN_KINDS.map(([k, l]) => '<option value="' + k + '"' + (x.kind === k ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
+        (x.kind === "none" ? "<span></span>" : '<input type="number" inputmode="numeric" step="1" data-f="s.' + i + '.value" value="' + esc(x.value) + '" aria-label="' + (i + 1) + '번 칸 값">') +
+        '<span class="spin-label">→ ' + esc(effLabel({ kind: x.kind, value: toInt(x.value) || 0 })) + "</span>" +
+        '<span class="bact"><button type="button" class="btn sm" data-set="sup:' + i + '"' + (i === 0 ? " disabled" : "") + ' aria-label="' + (i + 1) + '번 칸 위로">↑</button>' +
+        '<button type="button" class="btn sm" data-set="sdown:' + i + '"' + (i === d.roulette.length - 1 ? " disabled" : "") + ' aria-label="' + (i + 1) + '번 칸 아래로">↓</button>' +
+        '<button type="button" class="btn sm" data-set="sdel:' + i + '"' + (d.roulette.length <= 2 ? " disabled" : "") + ">삭제</button></span></div>").join("") +
+      '<button type="button" class="btn" data-set="sadd"' + (d.roulette.length >= 10 ? " disabled" : "") + ' style="align-self:flex-start">+ 칸 추가</button></section>';
     const minCount = game && game.stage === "boss" ? Math.max(1, game.round || 0) : 1;
     h += '<section class="panel"><div class="bcount"><h2>보스</h2><label class="chk">보스 수 <select data-count aria-label="보스 수">' +
       Array.from({ length: 10 }, (_, k) => k + 1).map((n) => '<option value="' + n + '"' + (n === d.bosses.length ? " selected" : "") + (n < minCount ? " disabled" : "") + ">" + n + "명</option>").join("") +
@@ -1105,8 +1154,8 @@ a { color: var(--blue); }
         '<div class="f-row">' + num("hp", "보스 HP") + num("reward", "격파 보상 점수") + "</div>" +
         '<div class="f"><span>판정 스탯 (공격력 = 고른 스탯의 합)</span><div class="checks">' + STATS.map((s) =>
           '<label class="chk"><input type="checkbox" ' + f("stat." + s.key) + (b.stats.includes(s.key) ? " checked" : "") + '><span style="color:' + s.color + '">' + s.label + "</span></label>").join("") + "</div></div>" +
-        '<div class="f"><label class="chk"><input type="checkbox" ' + f("event") + (b.event ? " checked" : "") + "><span>돌발 이벤트 (주사위)</span></label>" +
-        (b.event ? '<div class="f-row">' + num("diceLow", "주사위 1이 나오면 공격력") + num("diceHigh", "주사위 6이 나오면 공격력") + "</div><small>2 공격력 −1 · 3 공격력 +1 · 4 격파하면 +1점 · 5 실패해도 +1점 (고정). " + esc(luckNote() || "운 효과는 꺼져 있어요") + "</small>" : "") + "</div>" +
+        '<div class="f"><label class="chk"><input type="checkbox" ' + f("event") + (b.event ? " checked" : "") + "><span>돌발 이벤트 (룰렛)</span></label>" +
+        (b.event ? "<small>마감 뒤 결과 공개 전에 룰렛이 터져요. 룰렛 칸은 위의 '돌발 이벤트 룰렛'에서 정해요.</small>" : "") + "</div>" +
         '<label class="f"><span>힌트 (진행자가 "힌트 공개"를 누르면 보임)</span><input type="text" maxlength="200" ' + f("hint") + ' value="' + esc(b.hint) + '"></label>' +
         '<label class="f"><span>결과 공개 때 설명</span><textarea rows="2" maxlength="300" ' + f("reveal") + ">" + esc(b.reveal) + "</textarea></label></div>";
     });
@@ -1121,7 +1170,11 @@ a { color: var(--blue); }
     const path = (el.dataset.f || "").split("."), d = setDraft;
     if (!d || !path[0]) return false;
     if (path[0] === "c") d.config[path[1]] = el.value;
-    else {
+    else if (path[0] === "s") { const x = d.roulette[Number(path[1])]; if (!x) return false; x[path[2]] = el.value; }
+    else if (path[0] === "p") {
+      if (path[1] === "stat") d.practice.stats = KEYS.filter((k) => (k === path[2] ? el.checked : d.practice.stats.includes(k)));
+      else d.practice[path[1]] = el.value;
+    } else {
       const b = d.bosses[Number(path[1])];
       if (!b) return false;
       if (path[2] === "stat") b.stats = KEYS.filter((k) => (k === path[3] ? el.checked : b.stats.includes(k)));
@@ -1135,11 +1188,15 @@ a { color: var(--blue); }
     const el = e.target;
     if (!el.dataset || !el.dataset.f || el.type === "checkbox") return;
     if (el.dataset.f === "roster") { rosterText = el.value; const m = document.querySelector("[data-roster-sum]"); if (m) m.innerHTML = rosterSummary(); return; }
-    if (setField(el)) { const m = document.querySelector("[data-dirty]"); if (m) m.textContent = "저장하지 않은 변경이 있어요"; }
+    if (setField(el)) {
+      const m = document.querySelector("[data-dirty]"); if (m) m.textContent = "저장하지 않은 변경이 있어요";
+      const row = el.closest(".spin-row"), lab = row && row.querySelector(".spin-label");
+      if (lab && setDraft) { const x = setDraft.roulette[Number(el.dataset.f.split(".")[1])]; if (x) lab.textContent = "→ " + effLabel({ kind: x.kind, value: toInt(x.value) || 0 }); }
+    }
   });
   document.addEventListener("change", (e) => {
     const el = e.target;
-    if (el.dataset && el.dataset.f && el.type === "checkbox" && setField(el)) { lastHtml = ""; render(); }
+    if (el.dataset && el.dataset.f && (el.type === "checkbox" || el.tagName === "SELECT") && setField(el)) { lastHtml = ""; render(); }
     // 보스 수: 늘리면 맨 뒤에 새 보스, 줄이면 맨 뒤부터 지움
     if (el.matches && el.matches("[data-count]") && setDraft) {
       const L = setDraft.bosses, n = Number(el.value);
@@ -1171,7 +1228,20 @@ a { color: var(--blue); }
       if (!o.stats.length) { toast(i + 1 + "번 보스: 판정 스탯을 1개 이상 골라 주세요"); return; }
       bosses.push(o);
     }
-    const cfgChanged = CFG_FIELDS.some((f) => cfg[f.k] !== RULES[f.k]);
+    cfg.roulette = [];
+    for (let i = 0; i < d.roulette.length; i++) {
+      const x = d.roulette[i], v = x.kind === "none" ? 0 : toInt(x.value);
+      if (!Number.isInteger(v)) { toast("룰렛 " + (i + 1) + "번 칸: 정수를 적어 주세요"); return; }
+      cfg.roulette.push({ kind: x.kind, value: v });
+    }
+    const P = d.practice, php = toInt(P.hp);
+    if (!Number.isInteger(php)) { toast("연습 보스: HP에 정수를 적어 주세요"); return; }
+    if (!P.stats.length) { toast("연습 보스: 판정 스탯을 1개 이상 골라 주세요"); return; }
+    cfg.practiceBoss = { name: String(P.name).trim(), desc: String(P.desc).trim(), hp: php, stats: P.stats.slice(), hint: String(P.hint).trim(), reveal: String(P.reveal).trim() };
+    const rp = RULES.practiceBoss || {};
+    const cfgChanged = CFG_FIELDS.some((f) => cfg[f.k] !== RULES[f.k]) ||
+      JSON.stringify(cfg.roulette) !== JSON.stringify((RULES.roulette || []).map((x) => ({ kind: x.kind, value: x.value }))) ||
+      JSON.stringify(cfg.practiceBoss) !== JSON.stringify({ name: rp.name, desc: rp.desc, hp: rp.hp, stats: rp.stats, hint: rp.hint, reveal: rp.reveal });
     const bossChanged = JSON.stringify(bosses) !== JSON.stringify(BOSSES.map(bossOut));
     if (!cfgChanged && !bossChanged) { setDraft = null; toast("바뀐 내용이 없어요"); return; }
     if (cfgChanged && !(await backend.host("saveConfig", null, cfg))) return;
@@ -1215,6 +1285,16 @@ a { color: var(--blue); }
       if (await backend.host("resetBosses")) { setDraft = null; toast("보스를 기본값으로 되돌렸어요"); }
       return;
     }
+    const R = setDraft && setDraft.roulette;
+    if (R && ["sadd", "sdel", "sup", "sdown"].includes(what)) {
+      if (what === "sadd" && R.length < 10) R.push({ kind: "power", value: "1" });
+      else if (what === "sdel" && R.length > 2) R.splice(i, 1);
+      else if (what === "sup" && i > 0) R.splice(i - 1, 0, R.splice(i, 1)[0]);
+      else if (what === "sdown" && i < R.length - 1) R.splice(i + 1, 0, R.splice(i, 1)[0]);
+      else return;
+      setDraft.dirty = true;
+      return;
+    }
     if (!L) return;
     if (what === "add" && L.length < 10) L.push(newBoss());
     else if (what === "del" && L.length > 1) { if (!confirm((i + 1) + "번 보스 '" + L[i].name + "'를 지울까요? (저장해야 반영돼요)")) return; L.splice(i, 1); }
@@ -1250,22 +1330,28 @@ a { color: var(--blue); }
 
   // BGM (js/raid-sim-bgm.js): 발표 화면 · 진행자 화면에서만. 단계에 맞는 곡, 결과 공개 때 타격·격파 효과음
   const bgmOn = () => !!(window.RaidSimBgm && window.RaidSimBgm.enabled);
-  let sfxKey = "";
+  let sfxKey = "", afterTrack = "", afterAt = 0;
   const curSfxKey = () => !game ? "" : game.phase === "revealed" ? "r" + game.round : game.phase === "rolled" ? "d" + game.round : "";
   function syncBgm(v) {
     const B = window.RaidSimBgm, g = game;
     if (!B || v === "join") return;
-    B.setTrack(!g || g.stage !== "boss" || !g.round ? "lobby" : g.phase === "meeting" ? "meeting" : g.phase === "closed" ? "wait" : g.phase === "rolled" ? (rolling() ? "dice" : "wait") : g.phase === "revealed" ? "wait" : g.phase === "final" ? "victory" : "lobby");
     const key = curSfxKey();
     if (key && key !== sfxKey) {
-      if (key[0] === "d") { if (rolling()) B.sfx("land", (g.rollAt + ROLL_MS - now()) / 1000); }   // 주사위 눈이 나오는 순간에 맞춰
+      if (key[0] === "d") { if (rolling()) B.sfx("land", (g.rollAt + ROLL_MS - now()) / 1000); }   // 룰렛이 멈추는 순간에 맞춰
       else {
-        const rows = g.results[g.round] || [];
-        for (let i = 0; i < 6; i++) B.sfx("hit", 0.85 + i * 0.42);
-        B.sfx(rows.some((x) => x.cleared) ? "ko" : "fail", 3.4);
+        // 게이지가 차는 동안 점점 빨라지는 타격 + 올라가는 소리, 끝에 격파/실패 효과음, 그 뒤 격파·전멸 곡
+        const win = (g.results[g.round] || []).some((x) => x.cleared);
+        B.sfx("charge", 0.8);
+        B.sfx(win ? "ko" : "fail", 3.4);
+        afterTrack = win ? "win" : "lose"; afterAt = Date.now() + 4300;
+        setTimeout(() => syncBgm(view()), 4400);
       }
     }
     sfxKey = key;
+    const st = !g ? "lobby" : g.stage;
+    B.setTrack(st === "lobby" ? "lobby" : st === "make" ? "make" : st === "share" ? "share" : g.phase === "idle" ? "rules"
+      : g.phase === "meeting" ? (g.round === 0 ? "practice" : "meeting") : g.phase === "closed" ? "wait" : g.phase === "rolled" ? (rolling() ? "dice" : "wait")
+      : g.phase === "revealed" ? (afterTrack && Date.now() >= afterAt ? afterTrack : "wait") : g.phase === "final" ? "victory" : "lobby");
   }
 
   let lastHtml = "";

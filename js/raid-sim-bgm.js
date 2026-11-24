@@ -18,6 +18,38 @@
       bass: seq(`C3 . C3 . G2 . G2 . | A2 . A2 . E2 . E2 . | F2 . F2 . C3 . C3 . | G2 . G2 . D3 . D3 .
                  C3 . C3 . G2 . G2 . | A2 . A2 . E2 . E2 . | F2 . F2 . G2 . G2 . | C3 . G2 . C3 - - .`),
       drum: seq(rep("k . h . s . h .", 7) + " k . h . s s s .") },
+    // 캐릭터 만들기: 통통 튀는 F장조
+    make: { bpm: 128, gain: 0.75,
+      lead: seq(`F5 . A5 . C6 . A5 . | G5 . A5 . F5 - . . | E5 . G5 . C6 . G5 . | F5 . E5 . D5 - . .
+                 F5 . A5 . C6 . D6 . | C6 . A5 . F5 . A5 . | G5 . E5 . C5 . E5 . | F5 - - . . . . .`), leadShift: -12,
+      bass: seq(`F2 . C3 . F2 . C3 . | C3 . G2 . C3 . G2 . | C3 . G2 . C3 . G2 . | D3 . A2 . D3 . A2 .
+                 F2 . C3 . F2 . C3 . | F2 . C3 . F2 . C3 . | C3 . G2 . C3 . G2 . | F2 . C3 . F2 - - .`),
+      drum: seq(rep("k . h h s . h .", 7) + " k . h h s s k .") },
+    // 조 내 공유: 이야기 나누기 좋게 잔잔한 G장조 (부드러운 삼각파)
+    share: { bpm: 90, gain: 0.55, leadWave: "triangle", leadVol: 0.32,
+      lead: seq(`B4 - - D5 - - G5 - | F#5 - - D5 - - A4 - | C5 - - E5 - - A5 - | G5 - - - . . . .`),
+      bass: seq(`G2 - - - D3 - - - | D2 - - - A2 - - - | C3 - - - E2 - - - | G2 - - - D3 - - -`),
+      drum: seq(rep("k . . . . . h .", 4)) },
+    // 보스 레이드 규칙 설명: 출정 전 행진 D장조
+    rules: { bpm: 108, gain: 0.7,
+      lead: seq(`D5 - F#5 - A5 - F#5 - | E5 - G5 - B5 - G5 - | F#5 - A5 - D6 - A5 - | E5 - C#5 - D5 - - -`), leadShift: -12,
+      bass: seq(`D3 . A2 . D3 . A2 . | A2 . E3 . A2 . E3 . | D3 . A2 . D3 . A2 . | A2 . E3 . D3 - - .`),
+      drum: seq(rep("k . s . k . s .", 3) + " k . s . k s s s") },
+    // 연습 라운드: 가볍게 몸 푸는 곡
+    practice: { bpm: 124, gain: 0.7,
+      lead: seq(`G5 . G5 A5 B5 . D6 . | C6 . B5 . A5 . G5 . | F5 . F5 G5 A5 . C6 . | B5 . A5 . G5 - . .`), leadShift: -12,
+      bass: seq(`G2 . D3 . G2 . D3 . | C3 . G2 . C3 . G2 . | F2 . C3 . F2 . C3 . | G2 . D3 . G2 - - .`),
+      drum: seq(rep("k h s h k h s h", 4)) },
+    // 결과 효과음 뒤 · 한 조라도 격파: 밝은 C장조
+    win: { bpm: 140, gain: 0.8,
+      lead: seq(`C5 E5 G5 C6 - G5 C6 E6 | D6 - B5 G5 - D6 - . | C6 E6 D6 C6 B5 G5 A5 B5 | C6 - - - G5 - C6 -`), leadShift: -12,
+      bass: seq(`C3 . G2 . C3 . G2 . | G2 . D3 . G2 . D3 . | A2 . E3 . F2 . G2 . | C3 . G2 . C3 - - .`),
+      drum: seq(rep("k . h . s . h k", 3) + " k k s s k k s s") },
+    // 결과 효과음 뒤 · 모두 실패: 느리고 쓸쓸한 A단조 (부드러운 삼각파)
+    lose: { bpm: 72, gain: 0.55, leadWave: "triangle", leadVol: 0.34,
+      lead: seq(`E5 - - - D5 - C5 - | B4 - - - A4 - - - | C5 - - - B4 - A4 - | G#4 - - - - - . .`),
+      bass: seq(`A2 - - - - - - - | E2 - - - - - - - | F2 - - - - - - - | E2 - - - - - - -`),
+      drum: seq(rep("k . . . . . . .", 4)) },
     // 보스 회의: 조용히 생각할 수 있게, 느린 A단조 (부드러운 삼각파)
     meeting: { bpm: 100, gain: 0.6, leadWave: "triangle", leadVol: 0.34,
       lead: seq(`A4 - C5 - E5 - . . | G4 - B4 - D5 - . . | F4 - A4 - C5 - . . | E4 - G#4 - B4 - - -
@@ -34,7 +66,7 @@
       lead: seq(`C5 D5 E5 F5 G5 A5 B5 C6 | D6 E6 F6 G6 A6 B6 C7 -`), leadShift: -24,
       bass: seq(`C3 C3 C3 C3 D3 D3 D3 D3 | E3 E3 E3 E3 G3 G3 G3 G3`),
       drum: seq(rep("s s s s s s s s", 2)) },
-    // 결과를 본 뒤: 조용한 C장조
+    // (예전 결과 곡, 지금은 쓰지 않음)
     calm: { bpm: 96, gain: 0.55,
       lead: seq(`E5 - - G5 - - C6 - | B5 - - G5 - - D5 - | C5 - - E5 - - A5 - | G5 - - - . . . .`), leadShift: -12,
       bass: seq(`C3 - - - G2 - - - | G2 - - - D3 - - - | A2 - - - E2 - - - | F2 - - - G2 - - -`),
@@ -114,12 +146,21 @@
       want = name;
       if (enabled && ctx) start(name);
     },
-    // 효과음: hit(타격) · ko(격파) · fail(실패) · land(주사위 눈이 나옴). delay 초 뒤에
+    // 효과음: hit(타격) · charge(게이지가 차는 동안) · ko(격파) · fail(실패) · land(룰렛이 멈춤). delay 초 뒤에
     sfx(name, delay) {
       if (!enabled || !ctx) return;
       const t = ctx.currentTime + (delay || 0);
       if (name === "hit") { hiss(t, 0.09, 0.6, 1200, "lowpass"); tone("square", 220, t, 0.09, 0.25, 70); }
       else if (name === "ko") { [523, 659, 784, 1047].forEach((f, i) => tone("square", f, t + i * 0.08, 0.16, 0.22)); tone("triangle", 131, t, 0.5, 0.5); }
+      else if (name === "charge") {
+        // 게이지가 차는 2.5초: 올라가는 소리 + 점점 빨라지는 타격
+        const T = 2.5, o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "sawtooth"; o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(880, t + T);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.09, t + T * 0.85); g.gain.exponentialRampToValueAtTime(0.0001, t + T);
+        o.connect(g); g.connect(master); o.start(t); o.stop(t + T + 0.05);
+        let x = 0, dt = 0.34;
+        while (x < T) { hiss(t + x, 0.07, 0.4, 1400, "bandpass"); tone("square", 160 + x * 140, t + x, 0.07, 0.14, 80); tone("sine", 120, t + x, 0.1, 0.5, 45); x += dt; dt = Math.max(0.06, dt * 0.82); }
+      }
       else if (name === "land") { hiss(t, 0.6, 0.5, 5000, "highpass"); tone("sine", 160, t, 0.3, 0.9, 45); [523, 659, 784].forEach((f) => tone("square", f, t, 0.5, 0.12)); }
       else if (name === "fail") { [392, 330, 262].forEach((f, i) => tone("square", f, t + i * 0.14, 0.2, 0.18)); }
     },

@@ -2,9 +2,9 @@
 // raid-sim.html 의 연습 모드(?local 또는 Supabase 에 연결할 수 없을 때)에서 브라우저가 직접 씁니다. Supabase 판정은 supabase/raid-sim.sql (규칙이 같아야 합니다).
 //   캐릭터 스탯 5개: 체력 · 지력 · 친화력 · 멘탈 · 운
 //   공격력 = 판정 스탯 합 (+돌발 이벤트 주사위). 보스 HP 이상이면 격파 → 보상 점수.
-//   돌발 이벤트 주사위(1개)의 눈별 효과: 1 공격력 diceLow · 2 공격력 −1 · 3 공격력 +1 · 4 격파하면 +1점 · 5 실패해도 +1점 · 6 공격력 diceHigh
-//   운: 운이 높을수록 큰 눈이 잘 나옵니다. 눈 k 의 가중치 = r^(k-1), r = (1 + luckPower/100)^t, t = (운 − 스탯 최소) / (스탯 최대 − 스탯 최소).
-//       운이 최소면 모든 눈 1/6, luckPower 35 에서 운이 최대면 6이 약 31%. luckPower 0 이면 운과 상관없이 1/6.
+//   돌발 이벤트 룰렛: 진행자가 정한 칸(config.roulette, 2~10칸) 중 하나. 칸 효과 kind: power(공격력 ±value) · clear(격파하면 +value점) · fail(실패해도 +value점) · none
+//   운: 운이 높을수록 아래쪽 칸이 잘 나옵니다. k번째 칸의 가중치 = r^(k-1), r = (1 + luckPower/100)^t, t = (운 − 스탯 최소) / (스탯 최대 − 스탯 최소).
+//   연습 라운드: 0번 라운드(config.practiceBoss). 룰렛은 항상 터지고, 출전 기록과 점수에는 들어가지 않습니다.
 //   라운드 공격력 1위 조는 MVP 점수. 순위는 총점, 같으면 공격력 합.
 (function (root) {
   "use strict";
@@ -13,7 +13,11 @@
   const TEAMS = ["A조", "B조"];   // 명단이 없을 때 (6자리 연습판)
   const DEFAULT_NAMES = ["참여자 1", "참여자 2", "참여자 3", "참여자 4", "참여자 5", "참여자 6"];
   const SEATS = DEFAULT_NAMES.length;
-  const DEFAULT_CONFIG = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, shareMin: 8, mvpBonus: 1, luckPower: 35 };
+  const DEFAULT_CONFIG = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, shareMin: 8, mvpBonus: 1, luckPower: 35,
+    roulette: [{ kind: "power", value: -2 }, { kind: "power", value: -1 }, { kind: "power", value: 1 }, { kind: "clear", value: 1 }, { kind: "fail", value: 1 }, { kind: "power", value: 3 }],
+    practiceBoss: { name: "연습 보스: 월요일 아침 '만원 지하철'", desc: "월요일 아침 8시, 지하철 문이 열리자 사람들이 밀려든다. 손잡이 하나 잡기도 힘든 이 전쟁을 버텨야 회사에 도착한다. 연습 판이니 부담 없이 붙어 보자!",
+      hp: 10, stats: ["hp", "luck"], hint: "버티거나, 운 좋게 앉거나.", reveal: "만원 지하철을 이긴 건 끝까지 서서 버티는 체력, 그리고 마침 앞자리가 비는 운이었습니다. 머리를 써도 지하철은 빨리 오지 않아요." } };
+  const SPIN_KINDS = ["power", "clear", "fail", "none"];
   // stats · hint · reveal 은 결과 공개 전까지 참여자에게 보내지 않습니다 (snapshot 참고).
   const DEFAULT_BOSSES = [
     {"name":"무한 회의 루프 '리:미팅'","desc":"회의가 끝나면 '방금 회의를 정리하는 회의'가 소환된다. 벌써 세 번째 회의, 의자는 딱딱하고 결론은 또 다음 회의로 미뤄진다. 이 보스는 쓰러뜨리는 게 아니라 끝날 때까지 버텨야 사라진다.","hp":11,"reward":1,"event":false,"diceLow":-2,"diceHigh":3,"stats":["hp","mental"],"hint":"끝까지 남는 사람이 이긴다.","reveal":"끝없는 회의를 이긴 건 말솜씨가 아니라 버티는 힘이었습니다. 몇 시간째 이어지는 회의를 견딜 체력, 결론 없는 말들에 지치지 않을 멘탈이 필요했어요. 지력으로 정리해 보려 해도 회의는 또 다른 회의를 낳을 뿐이었습니다."},
@@ -41,21 +45,19 @@
     const t = (cfg || DEFAULT_CONFIG).statTotal, n = KEYS.length;
     return Object.fromEntries(KEYS.map((k, i) => [k, Math.floor(t / n) + (i < t % n ? 1 : 0)]));
   }
-  // 돌발 이벤트 주사위: 운이 높을수록 큰 눈 쪽으로 기울어진 주사위 1개
+  // 돌발 이벤트 룰렛: 운이 높을수록 아래쪽 칸 쪽으로 기울어짐. 1부터 시작하는 칸 번호를 돌려줌
   function luckWeights(cfg, luck) {
-    const span = cfg.statMax - cfg.statMin;
+    const span = cfg.statMax - cfg.statMin, n = (cfg.roulette || []).length;
     const t = span > 0 ? Math.min(1, Math.max(0, ((Number(luck) || 0) - cfg.statMin) / span)) : 0;
     const r = Math.pow(1 + (cfg.luckPower || 0) / 100, t);
-    return [1, 2, 3, 4, 5, 6].map((k) => Math.pow(r, k - 1));
+    return Array.from({ length: n }, (_, k) => Math.pow(r, k));
   }
-  function rollDie(cfg, luck) {
+  function rollSpin(cfg, luck) {
     const w = luckWeights(cfg, luck), total = w.reduce((a, b) => a + b, 0);
     let u = Math.random() * total;
-    for (let k = 0; k < 6; k++) { u -= w[k]; if (u < 0) return k + 1; }
-    return 6;
+    for (let k = 0; k < w.length; k++) { u -= w[k]; if (u < 0) return k + 1; }
+    return w.length;
   }
-  // 눈별 공격력 변화 (4·5는 점수 효과라 공격력은 그대로)
-  const diceBonus = (b, d) => (d === 1 ? b.diceLow : d === 2 ? -1 : d === 3 ? 1 : d === 6 ? b.diceHigh : 0);
   const initialGame = () => ({ v: 1, stage: "lobby", round: 0, phase: "idle", hint: false, deadline: null, shareDeadline: null, locked: false, results: {} });
 
   // 규칙·보스 확인. 문제가 없으면 null, 있으면 이유. (supabase/raid-sim.sql 의 raid_sim_check_config · raid_sim_check_bosses 와 같음)
@@ -68,8 +70,10 @@
     if (!isInt(c.meetingSec, 30, 1800)) return "회의 시간은 30~1800초예요";
     if (!isInt(c.shareMin, 1, 60)) return "조 내 공유 시간은 1~60분이에요";
     if (!isInt(c.mvpBonus, 0, 20)) return "MVP 점수는 0~20점이에요";
-    if (!isInt(c.luckPower, 0, 100)) return "운 효과 세기는 0~100이에요 (0이면 운과 상관없이 1/6)";
-    return null;
+    if (!isInt(c.luckPower, 0, 100)) return "운 효과 세기는 0~100이에요 (0이면 운과 상관없이 모든 칸이 같은 확률)";
+    if (!Array.isArray(c.roulette) || c.roulette.length < 2 || c.roulette.length > 10) return "룰렛 칸은 2~10개예요";
+    if (c.roulette.some((x) => !x || typeof x !== "object" || !SPIN_KINDS.includes(x.kind) || !isInt(x.value, -50, 50))) return "룰렛 칸의 효과 값은 -50~50이에요";
+    return checkBoss(Object.assign({ reward: 0, event: true, diceLow: 0, diceHigh: 0 }, c.practiceBoss), "연습 보스: ");
   }
   // 명단 [{uid, name, team}] 확인 (빈 배열 = 6자리 연습판)
   function checkRoster(list) {
@@ -92,10 +96,7 @@
     if (teams.size > 20) return "조는 20개까지예요";
     return null;
   }
-  function checkBosses(list) {
-    if (!Array.isArray(list) || list.length < 1 || list.length > 10) return "보스는 1~10명이어야 해요";
-    for (let i = 0; i < list.length; i++) {
-      const b = list[i], pre = i + 1 + "번 보스: ";
+  function checkBoss(b, pre) {
       if (!b || typeof b !== "object") return pre + "형식이 잘못됐어요";
       if (typeof b.name !== "string" || !b.name.trim() || b.name.length > 60) return pre + "이름은 1~60자로 적어 주세요";
       if (typeof b.desc !== "string" || b.desc.length > 300) return pre + "설명은 300자 이하예요";
@@ -106,7 +107,11 @@
       if (!Array.isArray(b.stats) || b.stats.length < 1 || b.stats.length > KEYS.length || b.stats.some((s, j) => !KEYS.includes(s) || b.stats.indexOf(s) !== j)) return pre + "판정 스탯을 1개 이상 골라 주세요";
       if (typeof b.hint !== "string" || b.hint.length > 200) return pre + "힌트는 200자 이하예요";
       if (typeof b.reveal !== "string" || b.reveal.length > 300) return pre + "공개 설명은 300자 이하예요";
-    }
+      return null;
+  }
+  function checkBosses(list) {
+    if (!Array.isArray(list) || list.length < 1 || list.length > 10) return "보스는 1~10명이어야 해요";
+    for (let i = 0; i < list.length; i++) { const e = checkBoss(list[i], i + 1 + "번 보스: "); if (e) return e; }
     return null;
   }
 
@@ -124,6 +129,8 @@
   const canPick = (S, pid, t) => present(S, S.people[pid]) &&
     (!played(S, pid, S.game.round) || teamOf(S, t).filter((m) => present(S, m)).every((m) => played(S, m.id, S.game.round)));
   const charOf = (S, p) => p.char || Object.assign(defaultStats(S.config), { seed: p.seed || 1, isDefault: true });
+  // 0번 라운드 = 연습 보스 (룰렛 항상, 보상 없음)
+  const bossAt = (S, r) => r === 0 ? Object.assign({ reward: 0, event: true, diceLow: 0, diceHigh: 0 }, S.config.practiceBoss) : S.bosses[r - 1];
   const editable = (g) => !g.locked && (g.stage === "make" || g.stage === "share");
 
   function lockCharacters(S) {
@@ -133,7 +140,7 @@
     Object.keys(S.picks).forEach((key) => { const m = key.match(/^r(\d+)t\d+$/); if (m && Number(m[1]) >= r) delete S.picks[key]; });
   }
   function closeRound(S) {
-    const g = S.game, r = g.round, b = S.bosses[r - 1], cfg = S.config;
+    const g = S.game, r = g.round, b = bossAt(S, r), cfg = S.config;
     for (let t = 0; t < S.teams.length; t++) {
       if (pickOf(S, r, t)) continue;
       // 아무도 안 골랐으면: 아직 안 나간 사람 → 입장한 사람을 먼저, 그 안에서 랜덤
@@ -144,13 +151,12 @@
     const rows = S.teams.map((_, t) => {
       const k = pickOf(S, r, t), p = S.people[k.pid], c = charOf(S, p);
       const base = b.stats.reduce((n, s) => n + (c[s] || 0), 0);
-      // 돌발 이벤트: 운으로 기울어진 주사위 1개
-      let dice = null, bonus = 0, rolls = null;
-      if (b.event) { dice = rollDie(cfg, c.luck); rolls = [dice]; bonus = diceBonus(b, dice); }
+      // 돌발 이벤트: 운으로 기울어진 룰렛 (dice = 나온 칸 번호, effect = 그 칸의 효과)
+      let dice = null, bonus = 0, rolls = null, effect = null;
+      if (b.event) { dice = rollSpin(cfg, c.luck); rolls = [dice]; effect = clone(cfg.roulette[dice - 1]); bonus = effect.kind === "power" ? effect.value : 0; }
       const power = base + bonus, cleared = power >= b.hp;
-      // 4: 격파하면 +1점, 5: 실패해도 +1점
-      const extra = (dice === 4 && cleared) || (dice === 5 && !cleared) ? 1 : 0;
-      return { team: t, pid: p.id, name: p.name, base, dice, rolls, bonus, power, cleared, extra, auto: !!k.auto };
+      const extra = effect && ((effect.kind === "clear" && cleared) || (effect.kind === "fail" && !cleared)) ? effect.value : 0;
+      return { team: t, pid: p.id, name: p.name, base, dice, rolls, effect, bonus, power, cleared, extra, auto: !!k.auto };
     });
     const max = Math.max(...rows.map((x) => x.power));
     rows.forEach((x) => { x.mvp = x.power === max; x.points = (x.cleared ? b.reward : 0) + (x.mvp ? cfg.mvpBonus : 0) + x.extra; });
@@ -199,9 +205,9 @@
     },
     start(S, r) {
       const g = S.game;
-      const ok = g.stage === "boss" && Number.isInteger(r) && r >= 1 && r <= S.bosses.length &&
-        ((r === 1 && (g.phase === "idle" || !g.round)) || (r === g.round && (g.phase === "closed" || g.phase === "rolled")) || (r === g.round + 1 && g.phase === "revealed"));
-      if (!ok) return "지금은 " + r + "번 보스를 시작할 수 없어요";
+      const ok = g.stage === "boss" && Number.isInteger(r) && r >= 0 && r <= S.bosses.length &&
+        (((r === 0 || r === 1) && (g.phase === "idle" || !g.round)) || (r === g.round && (g.phase === "closed" || g.phase === "rolled")) || (r === g.round + 1 && g.phase === "revealed"));
+      if (!ok) return r === 0 ? "연습은 본게임 전에만 할 수 있어요" : "지금은 " + r + "번 보스를 시작할 수 없어요";
       lockCharacters(S);
       clearPicksFrom(S, r);
       Object.keys(g.results).forEach((k) => { if (Number(k) >= r) delete g.results[k]; });
@@ -210,14 +216,14 @@
     hint(S) { if (S.game.phase !== "meeting") return "회의 중에만 힌트를 열 수 있어요"; S.game.hint = true; },
     close(S) { if (S.game.phase !== "meeting") return "회의 중에만 마감할 수 있어요"; closeRound(S); },
     roll(S) {
-      const g = S.game, b = S.bosses[g.round - 1];
-      if (g.phase !== "closed") return "마감한 뒤에 주사위를 굴릴 수 있어요";
+      const g = S.game, b = bossAt(S, g.round);
+      if (g.phase !== "closed") return "마감한 뒤에 룰렛을 돌릴 수 있어요";
       if (!b || !b.event) return "이번 보스는 돌발 이벤트가 없어요";
       Object.assign(g, { phase: "rolled", rollAt: Date.now() });
     },
     reveal(S) {
-      const g = S.game, b = S.bosses[g.round - 1];
-      if (g.phase === "closed" && b && b.event) return "돌발 이벤트 라운드예요. 먼저 \"주사위 굴리기\"를 눌러 주세요";
+      const g = S.game, b = bossAt(S, g.round);
+      if (g.phase === "closed" && b && b.event) return "돌발 이벤트 라운드예요. 먼저 \"룰렛 돌리기\"를 눌러 주세요";
       if (g.phase !== "closed" && g.phase !== "rolled") return "마감한 뒤에 공개할 수 있어요";
       g.phase = "revealed";
     },
@@ -236,7 +242,12 @@
       if (err) return err;
       const g = S.game;
       if (g && g.stage !== "lobby" && ["statTotal", "statMin", "statMax"].some((k) => next[k] !== S.config[k])) return "스탯 규칙(합계·최소·최대)은 대기 단계에서만 바꿀 수 있어요. \"처음부터\"를 누르면 대기 단계로 돌아가요";
-      S.config = next;
+      if (g && g.round === 0 && ["meeting", "closed", "rolled"].includes(g.phase) && JSON.stringify(next.practiceBoss) !== JSON.stringify(S.config.practiceBoss)) return "연습 라운드 진행 중에는 연습 보스를 바꿀 수 없어요";
+      // 저장할 때는 아는 칸만 남김
+      next.roulette = next.roulette.map((x) => ({ kind: x.kind, value: x.value }));
+      const p = next.practiceBoss;
+      next.practiceBoss = { name: p.name.trim(), desc: p.desc, hp: p.hp, stats: p.stats.slice(), hint: p.hint, reveal: p.reveal };
+      S.config = clone(next);
     },
     saveBosses(S, _, data) {
       const g = S.game;
@@ -322,18 +333,24 @@
       else if (g && g.hint && r === g.round) pub.hint = b.hint;
       return pub;
     });
+    const pb = bossAt(S, 0);
+    const practice = { name: pb.name, desc: pb.desc, hp: pb.hp, reward: 0, event: true, nStats: pb.stats.length };
+    if (isHost || open(0)) Object.assign(practice, { stats: pb.stats.slice(), hint: pb.hint, reveal: pb.reveal });
+    else if (g && g.hint && g.round === 0) practice.hint = pb.hint;
     if (g && !isHost) {
       Object.keys(g.results || {}).forEach((k) => {
         const rolled = Number(k) === g.round && g.phase === "rolled";
-        if (!open(Number(k))) g.results[k] = g.results[k].map((x) => Object.assign({ team: x.team, pid: x.pid, name: x.name, auto: x.auto }, rolled ? { dice: x.dice, rolls: x.rolls, bonus: x.bonus } : {}));
+        if (!open(Number(k))) g.results[k] = g.results[k].map((x) => Object.assign({ team: x.team, pid: x.pid, name: x.name, auto: x.auto }, rolled ? { dice: x.dice, rolls: x.rolls, bonus: x.bonus, effect: x.effect } : {}));
       });
     }
     const people = clone(S.people);
     if (!isHost) Object.values(people).forEach((p) => { delete p.uid; });   // 참여자 화면에는 아이디를 보내지 않음
-    return { game: g, people, picks: clone(S.picks), teams: S.teams.slice(), mode: S.mode, bosses, config: clone(S.config), isHost: !!isHost, now: Date.now() };
+    const config = clone(S.config);
+    if (!isHost) delete config.practiceBoss;   // 연습 보스의 판정 스탯은 진행자에게만
+    return { game: g, people, picks: clone(S.picks), teams: S.teams.slice(), mode: S.mode, bosses, practice, config, isHost: !!isHost, now: Date.now() };
   }
 
-  const api = { luckWeights, rollDie, KEYS, TEAMS, DEFAULT_CONFIG, DEFAULT_BOSSES, create, host, act, login, snapshot, randomStats, defaultStats, checkConfig, checkBosses, checkRoster };
+  const api = { luckWeights, rollSpin, KEYS, TEAMS, DEFAULT_CONFIG, DEFAULT_BOSSES, create, host, act, login, snapshot, randomStats, defaultStats, checkConfig, checkBosses, checkRoster };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.RaidSimEngine = api;
 })(typeof window !== "undefined" ? window : this);
