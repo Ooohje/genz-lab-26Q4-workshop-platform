@@ -106,24 +106,46 @@ async function askGemini(apiKey: string, model: string, prompt: string): Promise
   return text;
 }
 
+// AI 서술 만들기
+//   mode "draft" : 회의 중. 출전자가 정해진 조(teams)의 서술을 지금 스탯으로 미리 씀(룰렛 전, 예상 결과). 진행자에게만 보관.
+//   그 밖        : 마감 뒤. 미리 쓴 서술이 맞지 않아 비어 있는 조만 실제 판정으로 씀.
 // deno-lint-ignore no-explicit-any
-async function makeStories(db: any) {
+async function makeStories(db: any, opt: any) {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) return json({ error: "AI 서술을 쓰려면 Edge Function secret GEMINI_API_KEY 가 필요해요" }, 500);
   const st = await db.rpc("raid_sim_admin", { p_op: "state", p_arg: null, p_data: null });
   if (st.error || !st.data?.ok) return json({ error: st.error?.message ?? "상태를 읽지 못했어요" }, 500);
   const v = st.data.view, g = v.game, r = g?.round;
-  if (!g || g.stage !== "boss" || !["closed", "rolled", "revealed"].includes(g.phase)) return json({ error: "마감한 뒤에 만들 수 있어요" }, 409);
-  // deno-lint-ignore no-explicit-any
-  const rows: any[] = (g.results ?? {})[r] ?? [];
+  const draft = opt?.mode === "draft";
+  if (!g || g.stage !== "boss") return json({ error: "보스 레이드 중이 아니에요" }, 409);
+  if (draft ? g.phase !== "meeting" : !["closed", "rolled", "revealed"].includes(g.phase)) return json({ error: draft ? "회의 중에만 미리 쓸 수 있어요" : "마감한 뒤에 만들 수 있어요" }, 409);
   const boss = r === 0 ? v.practice : (v.bosses ?? [])[r - 1];
-  if (!rows.length || !boss) return json({ error: "이번 라운드 판정이 없어요" }, 409);
+  if (!boss) return json({ error: "보스를 찾지 못했어요" }, 409);
   const teams: string[] = v.teams ?? [];
-  const judged = (boss.stats ?? []).map((k: string) => STAT_LABEL[k] ?? k);
+  const judgedKeys: string[] = boss.stats ?? [];
+  // 서술할 조: [{team, pid, name, base, power, cleared, effect}]
+  // deno-lint-ignore no-explicit-any
+  let rows: any[];
+  if (draft) {
+    const want = new Set((Array.isArray(opt.teams) ? opt.teams : []).map(Number));
+    rows = [];
+    for (const t of want) {
+      const k = (v.picks ?? {})["r" + r + "t" + t];
+      const p = k ? (v.people ?? {})[k.pid] : null;
+      if (!p) continue;
+      const c = p.char ?? {};
+      const base = judgedKeys.reduce((n, key) => n + (Number(c[key]) || 0), 0);
+      rows.push({ team: t, pid: k.pid, name: p.name, base, power: base, cleared: base >= boss.hp, effect: null });
+    }
+  } else {
+    rows = ((g.results ?? {})[r] ?? []).filter((x: { story?: string }) => !x.story);
+  }
+  if (!rows.length) return json({ ok: true, view: v });   // 쓸 조가 없음 (이미 다 있음)
+  const judged = judgedKeys.map((k) => STAT_LABEL[k] ?? k);
   const lines = rows.map((x) => {
     const c = (v.people ?? {})[x.pid]?.char ?? {};
     const all = Object.keys(STAT_LABEL).map((k) => STAT_LABEL[k] + " " + (c[k] ?? "?")).join(", ");
-    const judgedVals = (boss.stats ?? []).map((k: string) => STAT_LABEL[k] + " " + (c[k] ?? "?")).join(" + ");
+    const judgedVals = judgedKeys.map((k) => STAT_LABEL[k] + " " + (c[k] ?? "?")).join(" + ");
     return `- team ${x.team} (${teams[x.team] ?? x.team + "조"}) ${x.name}: 스탯 [${all}] → 판정 ${judgedVals} = ${x.base}` +
       (x.effect ? `, 룰렛 '${effText(x.effect)}'` : "") + ` → 공격력 ${x.power} / 보스 HP ${boss.hp} → ` +
       (x.cleared ? "격파" : `실패 (${boss.hp - x.power}점 부족)`);
@@ -146,15 +168,24 @@ async function makeStories(db: any) {
     } catch (e) { errors.push(e instanceof Error ? e.message : String(e)); }
   }
   if (!Array.isArray(list)) return json({ error: "AI 서술을 만들지 못했어요: " + errors.join(" / ") }, 502);
-  const payload: Record<string, string> = { _sig: rows.map((x) => x.pid + ":" + x.power).join(",") };
+  const texts: Record<string, string> = {};
   for (const it of list) {
     const t = Number(it?.team);
-    if (Number.isInteger(t) && rows.some((x) => x.team === t) && typeof it?.text === "string" && it.text.trim()) payload[String(t)] = it.text.trim().slice(0, 240);
+    if (Number.isInteger(t) && rows.some((x) => x.team === t) && typeof it?.text === "string" && it.text.trim()) texts[String(t)] = it.text.trim().slice(0, 240);
   }
-  const { data, error } = await db.rpc("raid_sim_admin", { p_op: "setStories", p_arg: r, p_data: payload });
-  if (error) return json({ error: error.message }, 500);
-  if (!data?.ok) return json({ error: data?.error ?? "서술을 저장하지 못했어요" }, 409);
-  return json({ ok: true, view: data.view });
+  let call;
+  if (draft) {
+    // deno-lint-ignore no-explicit-any
+    const drafts: Record<string, any> = {};
+    for (const x of rows) if (texts[x.team]) drafts[String(x.team)] = { pid: x.pid, cleared: x.cleared, text: texts[x.team] };
+    call = await db.rpc("raid_sim_admin", { p_op: "setDrafts", p_arg: r, p_data: drafts });
+  } else {
+    const all = (g.results ?? {})[r] ?? [];
+    call = await db.rpc("raid_sim_admin", { p_op: "setStories", p_arg: r, p_data: Object.assign({ _sig: all.map((x: { pid: number; power: number }) => x.pid + ":" + x.power).join(",") }, texts) });
+  }
+  if (call.error) return json({ error: call.error.message }, 500);
+  if (!call.data?.ok) return json({ error: call.data?.error ?? "서술을 저장하지 못했어요" }, 409);
+  return json({ ok: true, view: call.data.view });
 }
 
 // op: state | setup | make | fillChars | share | raid | start(arg=라운드, 0 = 연습) | hint | close | roll | reveal | final | back(이전 단계) | reset | resetSeats
@@ -184,7 +215,8 @@ Deno.serve(async (req) => {
   const op = String(body.op ?? "state");
   if (op === "importRoster") return await importRoster();
   if (op === "story") {
-    return await makeStories(createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } }));
+    const opt = body.data != null && typeof body.data === "object" ? body.data : {};
+    return await makeStories(createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } }), opt);
   }
   if (!OPS.has(op)) return json({ error: "알 수 없는 동작이에요" }, 400);
   const arg = Number.isInteger(body.arg) ? body.arg : null;

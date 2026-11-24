@@ -379,6 +379,7 @@ begin
                                            else coalesce((select jsonb_object_agg(key, value - 'uid') from jsonb_each(s->'people')), '{}'::jsonb) end,
                             'picks', coalesce(s->'picks', '{}'::jsonb),
                             'teams', coalesce(s->'teams', '["A조", "B조"]'::jsonb), 'mode', coalesce(s->>'mode', 'seats'),
+                            'storyDrafts', case when p_host then coalesce(s->'storyDrafts', '{}'::jsonb) else '{}'::jsonb end,
                             'bosses', v_bosses, 'practice', v_practice, 'config', case when p_host then v_cfg else v_cfg - 'practiceBoss' end, 'isHost', p_host, 'now', public.raid_sim_ms());
 end $$;
 
@@ -459,7 +460,7 @@ declare
   v_last integer := jsonb_array_length(coalesce(s->'teams', '["A조", "B조"]'::jsonb)) - 1;
   t integer; v_pid integer; v_key text; p jsonb; c jsonb;
   v_base integer; v_dice integer; v_bonus integer; v_power integer; v_rolls jsonb; v_extra integer; v_eff jsonb;
-  v_rows jsonb := '[]'::jsonb; v_max integer;
+  v_rows jsonb := '[]'::jsonb; v_max integer; v_dr jsonb;
 begin
   if r = 0 then
     -- 연습 보스: 룰렛 항상, 보상 없음
@@ -508,6 +509,16 @@ begin
                      + (x->>'extra')::integer))
     into v_rows from jsonb_array_elements(v_rows) x;
 
+  -- 회의 중에 미리 쓴 AI 서술: 출전자·격파 여부가 같고 룰렛이 공격력을 바꾸지 않았으면 그대로 씀 (나머지는 Edge Function 이 마감 뒤 씀)
+  v_dr := s->'storyDrafts'->('r' || r);
+  if v_dr is not null and jsonb_typeof(v_dr) = 'object' then
+    select jsonb_agg(case when jsonb_typeof(v_dr->(x->>'team')) = 'object'
+                            and (v_dr->(x->>'team')->>'pid') = (x->>'pid')
+                            and (v_dr->(x->>'team')->>'cleared') = (x->>'cleared')
+                            and coalesce(x->'effect'->>'kind', 'none') <> 'power'
+                       then x || jsonb_build_object('story', left(v_dr->(x->>'team')->>'text', 240)) else x end order by o)
+      into v_rows from jsonb_array_elements(v_rows) with ordinality as t(x, o);
+  end if;
   s := jsonb_set(s, array['game', 'results', r::text], v_rows);
   s := jsonb_set(s, '{game,phase}', '"closed"');
   s := jsonb_set(s, '{game,deadline}', 'null');
@@ -577,6 +588,7 @@ begin
                                                where (substring(key from '^r(\d+)t\d+$'))::integer < p_arg), '{}'::jsonb));
         s := jsonb_set(s, '{game,results}', coalesce((select jsonb_object_agg(key, value) from jsonb_each(s#>'{game,results}')
                                                       where key::integer < p_arg), '{}'::jsonb));
+        s := jsonb_set(s, '{storyDrafts}', coalesce(s->'storyDrafts', '{}'::jsonb) - ('r' || p_arg));
         s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('round', p_arg, 'phase', 'meeting', 'hint', false, 'locked', true,
                                                                     'deadline', v_now + (v_cfg->>'meetingSec')::integer * 1000));
       end if;
@@ -598,6 +610,19 @@ begin
     when 'final' then
       if v_phase <> 'revealed' then err := '결과 공개 뒤에 최종 순위를 띄울 수 있어요';
       else s := jsonb_set(s, '{game,phase}', '"final"'); end if;
+    when 'setDrafts' then
+      -- 회의 중에 미리 쓴 AI 서술 (Edge Function raid-sim 의 story, mode draft). p_data = {"조 번호": {pid, cleared, text}, …}
+      -- 그사이 출전자가 바뀐 조는 버림
+      if v_phase <> 'meeting' or p_arg is distinct from v_round then err := '회의 중에만 미리 쓸 수 있어요';
+      elsif p_data is null or jsonb_typeof(p_data) <> 'object' then err := '서술 형식이 잘못됐어요';
+      else
+        s := jsonb_set(s, '{storyDrafts}', coalesce(s->'storyDrafts', '{}'::jsonb) || jsonb_build_object('r' || p_arg,
+               coalesce(s->'storyDrafts'->('r' || p_arg), '{}'::jsonb) || coalesce((
+                 select jsonb_object_agg(d.key, jsonb_build_object('pid', (d.value->>'pid')::integer, 'cleared', (d.value->>'cleared')::boolean, 'text', left(d.value->>'text', 240)))
+                   from jsonb_each(p_data) d
+                  where jsonb_typeof(d.value) = 'object' and jsonb_typeof(d.value->'text') = 'string'
+                    and (s->'picks'->('r' || p_arg || 't' || d.key)->>'pid') = (d.value->>'pid')), '{}'::jsonb)));
+      end if;
     when 'setStories' then
       -- AI 서술(Edge Function raid-sim 의 story)을 이번 라운드 결과에 붙임. p_data = {"_sig": 판정 서명, "조 번호": "서술", …}
       -- 그사이 다시 마감해 판정이 바뀌었으면(서명이 다르면) 붙이지 않습니다.
@@ -645,7 +670,7 @@ begin
       for k in select key from jsonb_each(s->'people') loop
         s := jsonb_set(s, array['people', k], s->'people'->k || jsonb_build_object('char', null, 'rerolls', 0));
       end loop;
-      s := s || jsonb_build_object('game', public.raid_sim_initial_game(), 'picks', '{}'::jsonb);
+      s := (s - 'storyDrafts') || jsonb_build_object('game', public.raid_sim_initial_game(), 'picks', '{}'::jsonb);
     when 'resetSeats' then
       -- 명단으로 만든 판은 이름은 두고 입장 표시만 지웁니다.
       for k in select key from jsonb_each(s->'people') loop

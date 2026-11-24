@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261124d";
+  const V = "20261125a";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
 
@@ -30,7 +30,8 @@ window.WCRaid = (function () {
   let JOIN_MODE = "seats";            // "roster": 휴대폰에서 아이디로 입장 · "seats": 6자리 중 고르기
   // 보스 정보는 Supabase(또는 js/raid-sim-engine.js)가 보내 줍니다. 판정 스탯은 결과 공개 전까지 진행자에게만 옵니다.
   let BOSSES = [];
-  let PRACTICE = null;   // 연습 보스 (0번 라운드)
+  let PRACTICE = null;
+  let STORY_DRAFTS = {};   // 회의 중에 미리 쓴 AI 서술 (진행자에게만 옴)   // 연습 보스 (0번 라운드)
   // 돌발 이벤트 룰렛: 칸마다 효과(kind, value), 문구는 효과대로 자동 (판정은 js/raid-sim-engine.js · supabase/raid-sim.sql)
   const SPIN_KINDS = [["power", "공격력 ±N"], ["clear", "격파하면 +N점"], ["fail", "실패해도 +N점"], ["none", "효과 없음"]];
   const effLabel = (e) => !e ? "" : e.kind === "power" ? "공격력 " + sign(e.value) : e.kind === "clear" ? "격파하면 " + sign(e.value) + "점" : e.kind === "fail" ? "실패해도 " + sign(e.value) + "점" : "효과 없음";
@@ -160,6 +161,7 @@ window.WCRaid = (function () {
     Object.assign(picks, snap.picks || {});
     BOSSES = snap.bosses || [];
     PRACTICE = snap.practice || null;
+    STORY_DRAFTS = snap.storyDrafts || {};
     TEAM_NAMES = Array.isArray(snap.teams) && snap.teams.length ? snap.teams.map(String) : ["A조", "B조"];
     TEAMS = TEAM_NAMES.map((t) => esc(t));
     JOIN_MODE = snap.mode === "roster" ? "roster" : "seats";
@@ -464,11 +466,16 @@ window.WCRaid = (function () {
       html += '<table class="res-table"><thead><tr><th>조</th><th>출전자</th><th class="n">판정 합</th><th class="n">룰렛</th><th class="n">공격력</th><th>결과</th></tr></thead><tbody>';
       TEAMS.forEach((name, t) => {
         const k = pickOf(game.round, t), p = k ? people[k.pid] : null, x = rows.find((y) => y.team === t);
-        const base = p ? b.stats.reduce((n, s) => n + (charOf(p)[s] || 0), 0) : null;
+        const base = p ? (b.stats || []).reduce((n, s) => n + (charOf(p)[s] || 0), 0) : null;
         html += "<tr><td><b>" + name + "</b></td><td>" + (p ? esc(p.name) + (k.auto ? ' <span class="small">(랜덤)</span>' : k.by != null && people[k.by] ? ' <span class="small">· ' + esc(people[k.by].name) + " 선택</span>" : "") : '<span class="small">선택 전</span>') + "</td>" +
           '<td class="n">' + (base != null ? base : "") + '</td><td class="n">' + (x && x.effect ? esc(effLabel(x.effect)) : "") + '</td><td class="n"><b>' + (x ? x.power : "") + "</b></td><td" + (x && x.cleared ? ' class="ok"' : "") + ">" + (x ? (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? " MVP" : "") : "") + "</td></tr>";
       });
       html += "</tbody></table>";
+      if (game.phase === "meeting" && MODE === "supabase") {
+        const dr = STORY_DRAFTS["r" + game.round] || {}, picked = TEAMS.filter((_, t) => pickOf(game.round, t)).length;
+        const ready = TEAMS.filter((_, t) => { const k = pickOf(game.round, t); return k && dr[t] && dr[t].pid === k.pid; }).length;
+        html += '<div class="small">AI 서술 미리 쓰기: 출전자가 정해진 ' + picked + "개 조 중 " + ready + "개 준비됨" + (draftBusy ? " · 쓰는 중…" : "") + "</div>";
+      }
       if (rows.length && rows[0].power != null) {
         html += '<div class="stories"><div class="between"><b>AI 서술</b><button type="button" class="btn quiet sm" data-story' + (storyBusy ? " disabled" : "") + ">" + (storyBusy ? "만드는 중…" : "다시 만들기") + "</button></div>" +
           (storyError ? '<div class="small" style="color:var(--coral-deep)">' + esc(storyError) + "</div>" : "") +
@@ -546,12 +553,11 @@ window.WCRaid = (function () {
       const f = people[x.pid];
       return h + '<div class="card"><div class="outcome' + (x.cleared ? " win" : "") + '">' + (x.cleared ? "격파!" : "아쉽게 실패") + "</div>" +
         '<div class="pfight' + (x.cleared ? " win" : " lose") + '"><div class="art">' + (f ? sprite(charOf(f)) : "") + '</div><div class="pvs"><b class="pdmg">' + x.power + '</b><span>공격력</span></div><div class="pboss">' + bossSprite(game.round) + (x.cleared ? '<b class="ko-stamp">K.O.</b>' : "") + "</div></div>" +
-        storyBox(x) +
         '<div class="php"><i style="--left:' + Math.max(0, (b.hp - x.power) / b.hp * 100) + '%"></i></div>' +
         '<div class="php-t">' + (x.cleared ? "보스 HP " + b.hp + " → 0 · 격파!" : "보스 HP " + b.hp + " → " + (b.hp - x.power) + " 남음 · " + (b.hp - x.power) + "점만 더 있었으면!") + "</div>" +
         '<div class="muted"><b>' + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div>" +
         '<div class="muted">판정 스탯 <b>' + esc(statLine(x, b)) + " = " + x.base + "</b>" + (x.effect ? " · " + esc(diceText(x)) : "") + "</div>" +
-        (game.round === 0 ? '<div class="t">연습 라운드 · 점수 없음</div>' : '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + "</div>") + fold("r" + game.round, b.reveal) + '<div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
+        (game.round === 0 ? '<div class="t">연습 라운드 · 점수 없음</div>' : '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + "</div>") + storyBox(x) + '<div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
         '<div class="muted">누적 점수와 순위는 마지막에 공개돼요.</div>';
     }
     return "<h3>최종 순위</h3>" + rankHtml(p);
@@ -912,6 +918,7 @@ window.WCRaid = (function () {
   function render() {
     syncBgm();
     maybeAutoStory();
+    maybeDraftStories();
     mounts.forEach((m) => {
       const html = htmlFor(m);
       if (html === m.last) return;
@@ -967,9 +974,27 @@ window.WCRaid = (function () {
     if (MODE !== "supabase" || !isHost || storyBusy || !game || game.stage !== "boss" || !["closed", "rolled", "revealed"].includes(game.phase)) return;
     if (!mounts.some((m) => m.kind === "host")) return;
     const rows = game.results[game.round] || [];
-    if (!rows.length || rows[0].power == null || rows.some((x) => x.story)) return;
+    if (!rows.length || rows[0].power == null || rows.every((x) => x.story)) return;
     if (storyTried === storySig()) return;
     setTimeout(requestStories, 0);
+  }
+  // 회의 중: 출전자가 정해진 조는 4초 동안 바뀌지 않으면 AI 서술을 미리 써 둡니다 (바뀐 조만 다시)
+  let draftTimer = null, draftSig = "", draftBusy = false, draftFailSig = "";
+  function maybeDraftStories() {
+    if (MODE !== "supabase" || !isHost || !game || game.stage !== "boss" || game.phase !== "meeting" || !mounts.some((m) => m.kind === "host")) return;
+    const dr = STORY_DRAFTS["r" + game.round] || {};
+    const need = TEAMS.map((_, t) => t).filter((t) => { const k = pickOf(game.round, t); return k && (!dr[t] || dr[t].pid !== k.pid); });
+    const sig = game.round + "|" + need.map((t) => t + ":" + pickOf(game.round, t).pid).join(",");
+    if (!need.length) { clearTimeout(draftTimer); draftSig = ""; return; }
+    if (draftBusy || sig === draftSig || sig === draftFailSig) return;
+    draftSig = sig;
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(async () => {
+      draftBusy = true;
+      try { apply(await callAdmin("story", null, { mode: "draft", teams: need }), true); draftFailSig = ""; }
+      catch (e) { draftFailSig = sig; }
+      draftBusy = false; draftSig = ""; render();
+    }, 4000);
   }
   async function requestStories() {
     if (storyBusy) return;
