@@ -18,19 +18,20 @@
       bass: seq(`C3 . C3 . G2 . G2 . | A2 . A2 . E2 . E2 . | F2 . F2 . C3 . C3 . | G2 . G2 . D3 . D3 .
                  C3 . C3 . G2 . G2 . | A2 . A2 . E2 . E2 . | F2 . F2 . G2 . G2 . | C3 . G2 . C3 - - .`),
       drum: seq(rep("k . h . s . h .", 7) + " k . h . s s s .") },
-    // 보스 회의: 긴장감 있는 A단조 아르페지오
-    meeting: { bpm: 138, gain: 0.75,
-      lead: seq(`A4 C5 E5 C5 A4 C5 E5 C5 | G4 B4 D5 B4 G4 B4 D5 B4 | F4 A4 C5 A4 F4 A4 C5 A4 | E4 G#4 B4 G#4 E4 G#4 B4 E5`),
-      bass: seq(`A2 - . A2 A2 - . A2 | G2 - . G2 G2 - . G2 | F2 - . F2 F2 - . F2 | E2 - . E2 E2 - . E2`),
-      drum: seq(rep("k . h k s . h .", 3) + " k . h k s s s s") },
-    // 마감 뒤 기다리는 동안: 베이스와 하이햇만
-    wait: { bpm: 120, gain: 0.7,
-      lead: seq(rep(".", 32)),
-      bass: seq(`A2 . . A2 . . A2 . | G2 . . G2 . . G2 . | F2 . . F2 . . F2 . | E2 . . E2 . . B2 .`),
-      drum: seq(rep("k . h . h . h .", 4)) },
-    // 주사위 굴리기: 스네어 연타와 올라가는 음
-    dice: { bpm: 168, gain: 0.75,
-      lead: seq(`C5 D5 E5 F5 G5 A5 B5 C6 | D6 C6 B5 A5 G5 F5 E5 D5`), leadShift: -12,
+    // 보스 회의: 조용히 생각할 수 있게, 느린 A단조 (부드러운 삼각파)
+    meeting: { bpm: 100, gain: 0.6, leadWave: "triangle", leadVol: 0.34,
+      lead: seq(`A4 - C5 - E5 - . . | G4 - B4 - D5 - . . | F4 - A4 - C5 - . . | E4 - G#4 - B4 - - -
+                 A4 - C5 - E5 - A5 - | G5 - E5 - D5 - . . | F4 - A4 - C5 - D5 - | E5 - - - . . . .`),
+      bass: seq(rep(`A2 - - - E2 - - - | G2 - - - D2 - - - | F2 - - - C3 - - - | E2 - - - E2 - - -`, 2)),
+      drum: seq(rep("k . . . h . . .", 7) + " k . . . h . h .") },
+    // 마감 뒤 출전자 소개: 다가오는 전투를 기다리는 D단조 행진
+    wait: { bpm: 108, gain: 0.7,
+      lead: seq(`D5 - - F5 - - A5 - | G5 - - F5 - - E5 - | F5 - - A5 - - D6 - | C6 - - - A5 - - -`), leadShift: -12,
+      bass: seq(`D3 - D3 - A2 - A2 - | C3 - C3 - G2 - G2 - | F2 - F2 - C3 - C3 - | A2 - A2 - E3 - A2 -`),
+      drum: seq(rep("k . h . s . h .", 3) + " k . h . s . s s") },
+    // 주사위 굴리기: 3초(= 16칸)에 딱 한 번 도는 스네어 연타. 눈이 나오는 순간 "land" 효과음과 함께 다음 곡으로
+    dice: { bpm: 160, gain: 0.75,
+      lead: seq(`C5 D5 E5 F5 G5 A5 B5 C6 | D6 E6 F6 G6 A6 B6 C7 -`), leadShift: -24,
       bass: seq(`C3 C3 C3 C3 D3 D3 D3 D3 | E3 E3 E3 E3 G3 G3 G3 G3`),
       drum: seq(rep("s s s s s s s s", 2)) },
     // 결과를 본 뒤: 조용한 C장조
@@ -81,7 +82,7 @@
 
   function scheduleStep(tr, i, t, dur) {
     const L = tr.lead[i % tr.lead.length], B = tr.bass[i % tr.bass.length], D = tr.drum[i % tr.drum.length];
-    if (L && L !== "-" && L !== ".") tone("square", hz(L, tr.leadShift), t, dur * holdLen(tr.lead, i % tr.lead.length) * 0.9, 0.22 * tr.gain);
+    if (L && L !== "-" && L !== ".") tone(tr.leadWave || "square", hz(L, tr.leadShift), t, dur * holdLen(tr.lead, i % tr.lead.length) * 0.9, (tr.leadVol || 0.22) * tr.gain);
     if (B && B !== "-" && B !== ".") tone("triangle", hz(B), t, dur * holdLen(tr.bass, i % tr.bass.length) * 0.95, 0.5 * tr.gain);
     drum(D, t);
   }
@@ -113,12 +114,13 @@
       want = name;
       if (enabled && ctx) start(name);
     },
-    // 효과음: hit(타격) · ko(격파) · fail(실패). delay 초 뒤에
+    // 효과음: hit(타격) · ko(격파) · fail(실패) · land(주사위 눈이 나옴). delay 초 뒤에
     sfx(name, delay) {
       if (!enabled || !ctx) return;
       const t = ctx.currentTime + (delay || 0);
       if (name === "hit") { hiss(t, 0.09, 0.6, 1200, "lowpass"); tone("square", 220, t, 0.09, 0.25, 70); }
       else if (name === "ko") { [523, 659, 784, 1047].forEach((f, i) => tone("square", f, t + i * 0.08, 0.16, 0.22)); tone("triangle", 131, t, 0.5, 0.5); }
+      else if (name === "land") { hiss(t, 0.6, 0.5, 5000, "highpass"); tone("sine", 160, t, 0.3, 0.9, 45); [523, 659, 784].forEach((f) => tone("square", f, t, 0.5, 0.12)); }
       else if (name === "fail") { [392, 330, 262].forEach((f, i) => tone("square", f, t + i * 0.14, 0.2, 0.18)); }
     },
   };

@@ -376,6 +376,9 @@ a { color: var(--blue); }
 .pdmg { font-weight: 900; font-size: 9cqw; line-height: 1; color: var(--coral-deep); animation: pop 0.4s 0.45s both; }
 .pvs span { font-size: 3cqw; color: #6B7290; font-weight: 700; }
 .pboss { position: relative; }
+.php { height: 3.2cqw; border-radius: 1.6cqw; background: #ECEEF5; overflow: hidden; }
+.php i { display: block; height: 100%; width: 100%; border-radius: 1.6cqw; background: var(--coral-deep); animation: drain 0.9s 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.php-t { font-size: 3.3cqw; font-weight: 700; color: var(--coral-deep); text-align: center; }
 .pboss .boss-art { animation: hit-shake 0.42s 0.45s 2; }
 .pfight.win .pboss .boss-art { animation: hit-shake 0.42s 0.45s 2, boss-down 0.6s 1.3s forwards; }
 .pboss .ko-stamp { font-size: 6cqw; animation-delay: 1.3s; text-shadow: none; }
@@ -946,6 +949,8 @@ a { color: var(--blue); }
       const f = people[x.pid];
       return h + '<div class="card"><div class="outcome' + (x.cleared ? " win" : "") + '">' + (x.cleared ? "격파!" : "아쉽게 실패") + "</div>" +
         '<div class="pfight' + (x.cleared ? " win" : " lose") + '"><div class="art">' + (f ? sprite(charOf(f)) : "") + '</div><div class="pvs"><b class="pdmg">' + x.power + '</b><span>공격력</span></div><div class="pboss">' + bossSprite(game.round) + (x.cleared ? '<b class="ko-stamp">K.O.</b>' : "") + "</div></div>" +
+        '<div class="php"><i style="--left:' + Math.max(0, (b.hp - x.power) / b.hp * 100) + '%"></i></div>' +
+        '<div class="php-t">' + (x.cleared ? "보스 HP " + b.hp + " → 0 · 격파!" : "보스 HP " + b.hp + " → " + (b.hp - x.power) + " 남음 · " + (b.hp - x.power) + "점만 더 있었으면!") + "</div>" +
         '<div class="muted"><b>' + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div>" +
         '<div class="muted">판정 스탯 ' + statsText(b.stats) + " 합 " + x.base + (x.dice ? " · " + diceText(x) + " (" + diceEff(b, x.dice) + ")" : "") + "</div>" +
         '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + '</div>' + fold("r" + game.round, b.reveal) + '<div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
@@ -1255,15 +1260,19 @@ a { color: var(--blue); }
   // BGM (js/raid-sim-bgm.js): 발표 화면 · 진행자 화면에서만. 단계에 맞는 곡, 결과 공개 때 타격·격파 효과음
   const bgmOn = () => !!(window.RaidSimBgm && window.RaidSimBgm.enabled);
   let sfxKey = "";
+  const curSfxKey = () => !game ? "" : game.phase === "revealed" ? "r" + game.round : game.phase === "rolled" ? "d" + game.round : "";
   function syncBgm(v) {
     const B = window.RaidSimBgm, g = game;
     if (!B || v === "join") return;
-    B.setTrack(!g || g.stage !== "boss" || !g.round ? "lobby" : g.phase === "meeting" ? "meeting" : g.phase === "closed" ? "wait" : g.phase === "rolled" ? "dice" : g.phase === "revealed" ? "calm" : g.phase === "final" ? "victory" : "lobby");
-    const key = g && g.phase === "revealed" ? "r" + g.round : "";
+    B.setTrack(!g || g.stage !== "boss" || !g.round ? "lobby" : g.phase === "meeting" ? "meeting" : g.phase === "closed" ? "wait" : g.phase === "rolled" ? (rolling() ? "dice" : "wait") : g.phase === "revealed" ? "calm" : g.phase === "final" ? "victory" : "lobby");
+    const key = curSfxKey();
     if (key && key !== sfxKey) {
-      const rows = g.results[g.round] || [];
-      for (let i = 0; i < 6; i++) B.sfx("hit", 0.85 + i * 0.42);
-      B.sfx(rows.some((x) => x.cleared) ? "ko" : "fail", 3.4);
+      if (key[0] === "d") { if (rolling()) B.sfx("land", (g.rollAt + ROLL_MS - now()) / 1000); }   // 주사위 눈이 나오는 순간에 맞춰
+      else {
+        const rows = g.results[g.round] || [];
+        for (let i = 0; i < 6; i++) B.sfx("hit", 0.85 + i * 0.42);
+        B.sfx(rows.some((x) => x.cleared) ? "ko" : "fail", 3.4);
+      }
     }
     sfxKey = key;
   }
@@ -1319,7 +1328,7 @@ a { color: var(--blue); }
   let hostBusy = false;
   document.addEventListener("click", async (e) => {
     if (e.target.closest("[data-info]")) { infoOpen = true; lastHtml = ""; render(); return; }
-    if (e.target.closest("[data-bgm]")) { if (window.RaidSimBgm) { window.RaidSimBgm.toggle(); sfxKey = game && game.phase === "revealed" ? "r" + game.round : ""; } lastHtml = ""; render(); return; }
+    if (e.target.closest("[data-bgm]")) { if (window.RaidSimBgm) { window.RaidSimBgm.toggle(); sfxKey = curSfxKey(); } lastHtml = ""; render(); return; }
     const mb = e.target.closest("[data-more]");
     if (mb) { const k = mb.dataset.more; if (moreOpen.has(k)) moreOpen.delete(k); else moreOpen.add(k); lastHtml = ""; render(); return; }
     const ic = e.target.closest("[data-info-close]");
