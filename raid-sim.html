@@ -447,7 +447,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     });
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.ok) { const e = new Error(j.error || (res.status === 404 ? "raid-sim Edge Function 을 먼저 배포해 주세요" : "진행자 요청 실패 (" + res.status + ")")); e.status = res.status; throw e; }
-    return j.view;
+    return op === "importRoster" ? j.rows : j.view;
   }
   async function hostAct(fn, arg, data) {
     try { const v = await callAdmin(fn, arg, data); isHost = true; apply(v, true); return true; }
@@ -777,7 +777,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     String(text || "").split(/\r?\n/).forEach((line, i) => {
       const raw = line.trim();
       if (!raw) return;
-      const cols = raw.split(/\t|,/).map((c) => c.trim());
+      const cols = (raw.includes("\t") ? raw.split("\t") : raw.split(",")).map((c) => c.trim());   // 탭이 있으면 탭으로만 나눔 (이름에 쉼표가 있어도 됨)
       const isHeader = first && /^(아이디|id|knox ?id|사번|이름|name)$/i.test(cols[0]);   // 맨 첫 줄이 머리글이면 건너뜀
       first = false;
       if (isHeader) return;
@@ -795,7 +795,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     rows.forEach((r, i) => { if (r.uid.length > 40 || r.name.length > 20 || r.team.length > 20) errs.push(i + 1 + "번째 사람: 아이디는 40자, 이름·조는 20자까지예요"); });
     return { rows, teams, errs };
   }
-  const currentRosterText = () => (JOIN_MODE === "roster" ? personList().filter((p) => p.uid).map((p) => [p.uid, p.name, TEAM_NAMES[p.team]].join(", ")).join("\n") : "");
+  const currentRosterText = () => (JOIN_MODE === "roster" ? personList().filter((p) => p.uid).map((p) => [p.uid, p.name, TEAM_NAMES[p.team]].join("	")).join("\n") : "");
   function rosterSummary() {
     const r = parseRoster(rosterText != null ? rosterText : currentRosterText());
     if (!r.rows.length && !r.errs.length) return "명단이 비어 있어요 → 6자리(A조·B조 3명씩) 연습판";
@@ -836,7 +836,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       "명단을 적용하면 참여자는 휴대폰에서 <b>아이디만 입력</b>하면 자기 이름과 조로 들어가요. 비워 두면 6자리(A조·B조 3명씩) 연습판이에요.</p>" +
       '<label class="f"><span>명단</span><textarea rows="8" data-f="roster" spellcheck="false" placeholder="knox01, 김민지, 1조&#10;knox02, 이서준, 1조&#10;knox03, 박지우, 2조"' + (lobby ? "" : " disabled") + ">" + esc(rosterText != null ? rosterText : currentRosterText()) + "</textarea></label>" +
       '<div class="small" data-roster-sum>' + rosterSummary() + "</div>" +
-      '<div class="row left"><button type="button" class="btn go" data-set="roster"' + (lobby ? "" : " disabled") + ">명단 적용</button>" +
+      '<div class="row left">' + (MODE === "supabase" ? '<button type="button" class="btn" data-set="rosterImport"' + (lobby ? "" : " disabled") + ">워크샵 명단 불러오기</button>" : "") +
+      '<button type="button" class="btn go" data-set="roster"' + (lobby ? "" : " disabled") + ">명단 적용</button>" +
       (JOIN_MODE === "roster" ? '<button type="button" class="btn quiet" data-set="rosterClear"' + (lobby ? "" : " disabled") + ">명단 비우기 (6자리 연습판으로)</button>" : "") + "</div>" +
       (lobby ? "" : '<p class="small">명단은 대기 단계에서만 바꿀 수 있어요. 진행 탭에서 "처음부터"를 누르면 바꿀 수 있어요.</p>') + "</section>";
     h += '<section class="panel"><h2>게임 규칙</h2><div class="cfg-grid">' + CFG_FIELDS.map((f) =>
@@ -940,6 +941,16 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const L = setDraft && setDraft.bosses;
     if (what === "save") { await saveSettings(); return; }
     if (what === "revert") { setDraft = null; return; }
+    // 워크샵 본 프로젝트의 명단(아이디·이름·조)을 명단 칸에 채움. "명단 적용"을 눌러야 반영
+    if (what === "rosterImport") {
+      let rows;
+      try { rows = await callAdmin("importRoster"); }
+      catch (e) { toast(e.message); return; }
+      if (!rows || !rows.length) { toast("워크샵 명단에 조가 정해진 사람이 없어요"); return; }
+      rosterText = rows.map((r) => [r.uid, r.name, r.team].join("\t")).join("\n");
+      toast("워크샵 명단 " + rows.length + "명을 불러왔어요. 확인하고 \"명단 적용\"을 눌러 주세요");
+      return;
+    }
     if (what === "roster") {
       const r = parseRoster(rosterText != null ? rosterText : currentRosterText());
       if (r.errs.length) { toast(r.errs[0]); return; }
