@@ -1,7 +1,7 @@
 // 보스 레이드 시뮬레이터의 규칙과 진행 상태 (스탯 판정, AI 없음).
 // raid-sim.html 의 연습 모드(?local 또는 Supabase 에 연결할 수 없을 때)에서 브라우저가 직접 씁니다. Supabase 판정은 supabase/raid-sim.sql (규칙이 같아야 합니다).
 //   캐릭터 스탯 5개: 체력 · 지력 · 친화력 · 멘탈 · 운
-//   공격력 = 판정 스탯 합 (+돌발 이벤트 주사위: 1이면 보스의 diceLow, 6이면 diceHigh). 보스 체력 이상이면 격파 → 보상 점수.
+//   공격력 = 판정 스탯 합 (+돌발 이벤트 주사위: 1이면 보스의 diceLow, 6이면 diceHigh). 보스 HP 이상이면 격파 → 보상 점수.
 //   운: 돌발 이벤트 라운드에 운 luckStep 점마다 주사위를 1개 더 굴려 가장 좋은 눈을 씁니다 (luckStep 0이면 끔, 최대 5개).
 //   라운드 공격력 1위 조는 MVP 점수. 순위는 총점, 같으면 공격력 합.
 (function (root) {
@@ -82,7 +82,7 @@
       if (!b || typeof b !== "object") return pre + "형식이 잘못됐어요";
       if (typeof b.name !== "string" || !b.name.trim() || b.name.length > 60) return pre + "이름은 1~60자로 적어 주세요";
       if (typeof b.desc !== "string" || b.desc.length > 300) return pre + "설명은 300자 이하예요";
-      if (!isInt(b.hp, 1, 300)) return pre + "체력은 1~300이에요";
+      if (!isInt(b.hp, 1, 300)) return pre + "HP는 1~300이에요";
       if (!isInt(b.reward, 0, 50)) return pre + "보상 점수는 0~50점이에요";
       if (typeof b.event !== "boolean") return pre + "돌발 이벤트 값이 잘못됐어요";
       if (!isInt(b.diceLow, -50, 50) || !isInt(b.diceHigh, -50, 50)) return pre + "주사위 효과는 -50~50이에요";

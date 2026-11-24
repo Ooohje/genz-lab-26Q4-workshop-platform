@@ -5,299 +5,350 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <title>보스 레이드 시뮬레이터</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="raid-sim-config.js"></script>
 <style>
-/* 화면 세 가지: 진행자(기본) · 참여자(#join, 휴대폰) · 발표 화면(#screen, 프로젝터 전체 화면). 모두 같은 실시간 데이터를 봅니다. */
+/* 화면 세 가지: 진행자(기본) · 참여자(#join, 휴대폰) · 발표 화면(#screen, 프로젝터 전체 화면). 모두 같은 실시간 데이터를 봅니다.
+   레트로 게임풍 어두운 화면 · 글꼴은 Pretendard 하나.
+   크기는 모두 비율로: 발표 화면은 화면 너비(cqw), 휴대폰은 휴대폰 너비(cqw), 진행자 화면은 rem·%·fr. */
 :root {
-  --bg: #EEF0F7; --panel: #FFFFFF; --ink: #1F2540; --muted: #626A88; --line: #DCE0EE; --soft: #F4F5FA;
-  --coral: #F4775C; --coral-deep: #C2462B; --blue: #4A6FD0; --gold: #FFC23D; --ok: #2E9E6B;
-  --stage: #F7F3EE; --stage-ink: #1F2540;
-  --f-display: "Do Hyeon", "Noto Sans KR", system-ui, sans-serif;
-  --f-body: "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+  --bg: #0B0E1F; --bg2: #11152E; --panel: #171C3D; --panel2: #20275A; --line: #343C80; --ink: #F1F3FF; --muted: #A6ADDA; --dim: #6C74AC;
+  --hot: #FF4F79; --gold: #FFD23F; --cyan: #4DE1FF; --green: #3DDC97; --shadow: #04050D;
+  --font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  color-scheme: dark;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #121420; --panel: #1C1F30; --ink: #ECEEF8; --muted: #9EA5C2; --line: #2E3350; --soft: #252941; color-scheme: dark;
-} }
-:root[data-theme="dark"] { --bg: #121420; --panel: #1C1F30; --ink: #ECEEF8; --muted: #9EA5C2; --line: #2E3350; --soft: #252941; color-scheme: dark; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.5;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 40px; }
-button { font: inherit; color: inherit; cursor: pointer; }
-button:disabled { cursor: default; opacity: 0.45; }
-button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
-a { color: var(--blue); }
-.wrap { max-width: 1440px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
-.sec-title { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 6px; }
-.small { font-size: 12px; color: var(--muted); }
-.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 40; max-width: min(92vw, 520px);
-  padding: 10px 16px; border-radius: 12px; background: var(--ink); color: var(--panel); font-weight: 700; font-size: 13px; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 0.9375rem; line-height: 1.5;
+  word-break: keep-all; overflow-wrap: anywhere; -webkit-text-size-adjust: 100%; }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; opacity: 0.4; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible { outline: 0.2rem solid var(--cyan); outline-offset: 0.15rem; }
+a { color: var(--cyan); }
+b, strong { font-weight: 800; }
+.toast { position: fixed; left: 50%; bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60; max-width: min(92vw, 32rem);
+  padding: 0.65rem 1rem; border: 0.15rem solid var(--gold); background: var(--panel2); color: var(--ink); font-weight: 700; font-size: 0.85rem; box-shadow: 0.25rem 0.25rem 0 var(--shadow); }
 
-.host { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
-  padding: 12px max(16px, env(safe-area-inset-left, 0px)); background: var(--panel); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
-body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
-.host-in { max-width: 1440px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
-.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; flex-wrap: wrap; }
-.brand h1 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 26px; }
-.live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.live.on i { background: var(--ok); }
-.step { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 14px; background: var(--ink); color: var(--panel); font-size: 12px; font-weight: 700; }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.btn { height: 40px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft); font-weight: 700; font-size: 14px; color: var(--ink); }
-.btn.go { background: var(--coral); border-color: var(--coral); color: #1F2540; }
-.btn.quiet { background: transparent; color: var(--muted); }
-.login { display: flex; gap: 8px; flex-wrap: wrap; }
-.tabs { max-width: 1440px; margin: 0 auto 4px; display: flex; gap: 6px; flex-wrap: wrap; }
-.tabs button { height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-weight: 700; }
-.tabs button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
-.settings { max-width: 960px; }
-.cfg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-.f { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 700; color: var(--muted); min-width: 0; }
-.f small { font-weight: 400; font-size: 11.5px; line-height: 1.4; }
-.f input[type="text"], .f input[type="number"], .f textarea { width: 100%; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; font-weight: 400; }
-.f textarea { resize: vertical; }
-.f input:disabled { opacity: 0.5; }
-.num { display: flex; align-items: center; gap: 6px; }
-.num input { flex: 1; }
-.num em { font-style: normal; font-weight: 400; }
-.f-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.bcount { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
-.bcount select { height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; }
-.bcard { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--soft); }
-.bcard-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
-.bcard-h b { font-size: 15px; }
-.bexp { font-size: 12px; color: var(--muted); margin-right: auto; }
-.bact { display: flex; gap: 4px; }
-.btn.sm { height: 30px; padding: 0 10px; font-size: 12.5px; }
-.checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; }
-.chk input { width: 18px; height: 18px; margin: 0; }
-.save-bar { position: sticky; bottom: max(8px, env(safe-area-inset-bottom, 0px)); z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px;
-  border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: 0 -8px 24px -18px rgba(0, 0, 0, 0.4); }
-.save-bar [data-dirty] { margin-right: auto; }
-.login input { height: 40px; min-width: 0; width: 200px; max-width: 100%; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; }
-.top { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-.side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.panel h2 { margin: 0; font-size: 15px; }
-.join-box { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 14px; align-items: center; }
-.qr { width: 112px; height: 112px; padding: 6px; border-radius: 10px; background: #fff; }
+/* ── 캐릭터 그림 칸: 밝은 타일 위에 픽셀 캐릭터 (넘어져도 이 칸 안에서) ── */
+.art { position: relative; aspect-ratio: 16 / 18; background: linear-gradient(180deg, #E8EBFF 0%, #C6CDF3 100%); box-shadow: inset 0 -0.35em 0 rgba(31, 37, 64, 0.12); overflow: hidden; }
+.art > svg { width: 84% !important; height: auto !important; margin: 6% auto 0; transform-origin: 50% 50%; }
+.art:empty { background: rgba(255, 255, 255, 0.08); box-shadow: none; }
+
+/* ── 진행자 화면 ─────────────────────────────────────────────── */
+.host { position: sticky; top: 0; z-index: 5; padding: calc(0.7rem + env(safe-area-inset-top, 0px)) max(2.5%, env(safe-area-inset-right, 0px)) 0.7rem max(2.5%, env(safe-area-inset-left, 0px));
+  background: rgba(11, 14, 31, 0.94); border-bottom: 0.15rem solid var(--line); backdrop-filter: blur(6px); }
+.host-in { max-width: 90rem; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; }
+.brand { display: flex; align-items: center; gap: 0.4rem 0.75rem; margin-right: auto; flex-wrap: wrap; min-width: 0; }
+.brand h1 { margin: 0; font-size: 1.45rem; font-weight: 900; letter-spacing: -0.02em; }
+.brand h1 span { color: var(--gold); }
+.live { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--muted); }
+.live i { width: 0.5rem; height: 0.5rem; background: var(--dim); }
+.live.on i { background: var(--green); box-shadow: 0 0 0.5rem var(--green); }
+.step { display: inline-flex; align-items: center; min-height: 1.8rem; padding: 0 0.75rem; border: 0.125rem solid var(--cyan); color: var(--cyan); font-size: 0.78rem; font-weight: 800; }
+.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 2.5rem; padding: 0 1rem; border: 0.125rem solid var(--line); background: var(--panel2); color: var(--ink);
+  font-weight: 800; font-size: 0.875rem; text-decoration: none; box-shadow: 0.2rem 0.2rem 0 var(--shadow); }
+.btn:not(:disabled):active { transform: translate(0.1rem, 0.1rem); box-shadow: 0.1rem 0.1rem 0 var(--shadow); }
+.btn.go { background: var(--gold); border-color: var(--gold); color: #1B1500; }
+.btn.quiet { background: transparent; border-color: transparent; box-shadow: none; color: var(--muted); }
+.btn.sm { min-height: 2rem; padding: 0 0.65rem; font-size: 0.8rem; }
+.login { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.login input { min-height: 2.5rem; width: 13rem; max-width: 100%; padding: 0 0.75rem; border: 0.125rem solid var(--line); background: var(--bg2); }
+.hostview { padding: 0 max(2.5%, env(safe-area-inset-right, 0px)) 3rem max(2.5%, env(safe-area-inset-left, 0px)); }
+.tabs { max-width: 90rem; margin: 1rem auto 0; display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.tabs button { min-height: 2.25rem; padding: 0 0.9rem; border: 0.125rem solid var(--line); background: transparent; color: var(--muted); font-weight: 800; }
+.tabs button.on { background: var(--cyan); border-color: var(--cyan); color: #04121A; }
+.wrap { max-width: 90rem; margin: 1rem auto 0; display: flex; flex-direction: column; gap: 1rem; }
+.sec-title { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.45rem; }
+.small { font-size: 0.78rem; color: var(--muted); }
+.top { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.side { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.panel { background: var(--panel); border: 0.125rem solid var(--line); box-shadow: 0.3rem 0.3rem 0 var(--shadow); padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+.panel h2 { margin: 0; font-size: 1rem; font-weight: 800; }
+.join-box { display: grid; grid-template-columns: 30% minmax(0, 1fr); gap: 0.9rem; align-items: center; }
+.join-side { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.qr { width: 100%; aspect-ratio: 1; padding: 6%; background: #fff; }
 .qr svg { width: 100%; height: 100%; display: block; }
-.link { font-size: 12.5px; word-break: break-all; padding: 6px 8px; border-radius: 8px; background: var(--soft); user-select: all; }
-.secret { padding: 10px 12px; border-radius: 10px; background: var(--soft); font-size: 13px; line-height: 1.55; }
-.secret b { color: var(--coral-deep); }
-.res-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.res-table th, .res-table td { padding: 6px 4px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
-.res-table th { color: var(--muted); font-weight: 500; border-top: none; white-space: nowrap; }
+.link { font-size: 0.78rem; word-break: break-all; padding: 0.4rem 0.5rem; background: var(--bg2); border: 0.125rem solid var(--line); user-select: all; }
+.secret { padding: 0.65rem 0.75rem; background: var(--bg2); border-left: 0.25rem solid var(--gold); font-size: 0.82rem; line-height: 1.6; }
+.secret b { color: var(--gold); }
+.res-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.res-table th, .res-table td { padding: 0.4rem 0.25rem; border-top: 0.0625rem solid var(--line); text-align: left; vertical-align: top; }
+.res-table th { color: var(--muted); font-weight: 600; border-top: none; white-space: nowrap; }
 .res-table td:first-child, .res-table .n { white-space: nowrap; }
 .res-table .n { text-align: right; font-variant-numeric: tabular-nums; }
-.res-table .ok { color: var(--coral-deep); font-weight: 700; }
-.who-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.who { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; align-items: center; padding: 6px 8px; border-radius: 10px; background: var(--soft); font-size: 12.5px; }
-.who .art { width: 34px; aspect-ratio: 16 / 18; border-radius: 6px; background: rgba(127, 127, 127, 0.15); }
+.res-table .ok { color: var(--gold); font-weight: 800; }
+.who-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.who { display: grid; grid-template-columns: 18% minmax(0, 1fr); gap: 0.5rem; align-items: center; padding: 0.4rem 0.5rem; background: var(--bg2); font-size: 0.8rem; min-width: 0; }
 .who b { display: block; }
-.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 4px; vertical-align: 1px; }
-.dot.on { background: var(--ok); }
-
-.proj-box { container-type: inline-size; }
-.proj { position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; color: var(--stage-ink);
-  background: radial-gradient(120% 90% at 85% 10%, #F6C9D8 0%, transparent 55%), radial-gradient(90% 80% at 10% 100%, #BFD0F5 0%, transparent 60%), var(--stage);
-  box-shadow: 0 12px 32px -18px rgba(31, 37, 64, 0.45); }
-.screen-only { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #0E1018; z-index: 30; }
-.screen-only .proj-box { width: min(100vw, 177.78vh); }
-.screen-only .proj { border-radius: 0; }
-.pv { position: absolute; inset: 0; padding: 4.2cqw 4.6cqw; display: flex; flex-direction: column; gap: 1.6cqw; }
-.pv .eyebrow { font-size: 1.4cqw; font-weight: 700; color: var(--coral-deep); }
-.pv .h { font-family: var(--f-display); font-size: 4.2cqw; line-height: 1.1; text-wrap: balance; }
-.pv .sub { font-size: 1.6cqw; color: #545C7A; line-height: 1.45; }
-.glass { background: rgba(255, 255, 255, 0.72); border-radius: 1.4cqw; }
-.pv-center { align-items: center; justify-content: center; text-align: center; }
-.stat-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1.2cqw; }
-.stat-card { padding: 1.4cqw; display: flex; flex-direction: column; gap: 0.6cqw; border-top: 0.45cqw solid var(--c); }
-.stat-card .art { width: 7cqw; aspect-ratio: 16 / 18; align-self: center; }
-.stat-card b { font-family: var(--f-display); font-weight: 400; font-size: 2.6cqw; color: var(--c); }
-.stat-card span { font-size: 1.25cqw; line-height: 1.4; }
-.pv-foot { margin-top: auto; display: flex; gap: 1.2cqw; align-items: stretch; }
-.count { display: flex; align-items: baseline; gap: 0.8cqw; padding: 1.2cqw 2cqw; font-size: 1.6cqw; font-weight: 700; }
-.count b { font-family: var(--f-display); font-weight: 400; font-size: 4.6cqw; }
-.pv-qr { display: flex; align-items: center; gap: 1.2cqw; padding: 1cqw 1.6cqw; font-size: 1.4cqw; font-weight: 700; margin-left: auto; text-align: left; }
-.pv-qr .q { width: 8cqw; height: 8cqw; background: #fff; padding: 0.4cqw; border-radius: 0.6cqw; }
-.pv-qr .q svg { width: 100%; height: 100%; display: block; }
-.qs { margin: 0; padding-left: 3.4cqw; display: flex; flex-direction: column; gap: 1.2cqw; font-size: 2.5cqw; line-height: 1.35; }
-.qs b { color: var(--coral-deep); }
-.timer { font-family: var(--f-display); font-size: 4.6cqw; padding: 0.6cqw 2cqw; font-variant-numeric: tabular-nums; }
-.timer.urgent { color: var(--coral-deep); }
-.rules { margin: 0; padding-left: 3cqw; display: flex; flex-direction: column; gap: 1cqw; font-size: 2cqw; line-height: 1.4; text-align: left; }
-.boss-row { display: grid; grid-template-columns: 17cqw minmax(0, 1fr); gap: 2.6cqw; align-items: center; padding: 2.2cqw 2.6cqw; }
-.boss-art { width: 17cqw; aspect-ratio: 12 / 11; animation: bob 1.6s ease-in-out infinite alternate; }
-.boss-name { font-family: var(--f-display); font-size: 3.6cqw; line-height: 1.15; text-wrap: balance; }
-.boss-desc { font-size: 1.7cqw; line-height: 1.45; margin-top: 0.6cqw; }
-.chips { display: flex; flex-wrap: wrap; gap: 0.6cqw; margin-top: 1cqw; }
-.chips span { padding: 0.35cqw 1.1cqw; border-radius: 2cqw; background: #fff; font-size: 1.3cqw; font-weight: 700; }
-.chips .hot { background: var(--coral); }
-.meet-foot { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 1.2cqw; }
-.hint { display: flex; align-items: center; gap: 1cqw; padding: 1.2cqw 1.8cqw; font-size: 1.8cqw; font-weight: 700; }
-.hint em { font-style: normal; flex-shrink: 0; padding: 0.3cqw 0.9cqw; border-radius: 1cqw; background: var(--stage-ink); color: #fff; font-size: 1.2cqw; }
-.mini-count { display: flex; align-items: baseline; gap: 0.6cqw; padding: 0.8cqw 1.8cqw; font-size: 1.3cqw; font-weight: 700; }
-.mini-count b { font-family: var(--f-display); font-weight: 400; font-size: 3.4cqw; }
-.event-note { padding: 0.8cqw 1.6cqw; font-size: 1.3cqw; font-weight: 700; }
-.fighters { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.6cqw; }
-.fighter { display: grid; grid-template-columns: 11cqw minmax(0, 1fr); gap: 1.6cqw; align-items: center; padding: 2cqw; animation: rise 0.6s both; }
-.fighter .art { width: 11cqw; aspect-ratio: 16 / 18; }
-.fighter b { font-family: var(--f-display); font-weight: 400; font-size: 3.2cqw; display: block; }
-.fighter span { font-size: 1.5cqw; color: #545C7A; }
-.reveal-stats { font-family: var(--f-display); font-size: 5cqw; line-height: 1; animation: pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-.bars { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 1.6cqw; padding: 2cqw 2.4cqw; }
-.bar-row { display: grid; grid-template-columns: 7cqw 15cqw minmax(0, 1fr) 15cqw; gap: 1.4cqw; align-items: center; animation: rise 0.6s both; }
-.bar-row .art { width: 7cqw; aspect-ratio: 16 / 18; }
-.bar-row .nm b { font-family: var(--f-display); font-weight: 400; font-size: 2.4cqw; display: block; }
-.bar-row .nm span { font-size: 1.4cqw; color: #545C7A; }
-.track { position: relative; height: 3cqw; border-radius: 1.5cqw; background: rgba(31, 37, 64, 0.08); }
-.track i { position: absolute; inset: 0 auto 0 0; border-radius: 1.5cqw; background: var(--blue); animation: grow 2.6s 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.bar-row.win .track i { background: var(--coral); }
-.track::after { content: ""; position: absolute; top: -0.8cqw; bottom: -0.8cqw; left: var(--hp); border-left: 0.3cqw dashed var(--coral-deep); }
-.res { display: flex; flex-direction: column; align-items: flex-start; gap: 0.2cqw; }
-.res b { font-family: var(--f-display); font-weight: 400; font-size: 3cqw; line-height: 1; }
-.res span { font-size: 1.3cqw; font-weight: 700; }
-.bar-row.win .res b { color: var(--coral-deep); }
-.star { padding: 0.1cqw 0.7cqw; border-radius: 0.8cqw; background: var(--gold); font-size: 1.1cqw; font-weight: 900; }
-.hp-note { font-size: 1.3cqw; font-weight: 700; color: var(--coral-deep); }
-.board { display: flex; flex-wrap: wrap; gap: 0.6cqw 1cqw; }
-.board span { padding: 0.5cqw 1.4cqw; border-radius: 1cqw; background: rgba(255, 255, 255, 0.8); font-size: 1.4cqw; font-weight: 700; }
-.podium { flex: 1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 3cqw; align-items: end; padding: 0 10cqw; }
-.podium div { display: flex; flex-direction: column; gap: 1cqw; text-align: center; animation: rise 0.8s both; }
-.podium b { font-family: var(--f-display); font-weight: 400; font-size: 3.6cqw; }
-.podium span { font-size: 1.6cqw; font-weight: 700; }
-.podium .block { font-family: var(--f-display); font-size: 3.4cqw; border-radius: 1.6cqw 1.6cqw 0 0; display: flex; align-items: center; justify-content: center; }
-.podium .r1 .block { height: 22cqw; background: rgba(255, 194, 61, 0.8); }
-.podium .r2 .block { height: 14cqw; }
-
-.phones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.team-group { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.team-phones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.team-label { font-weight: 700; font-size: 13px; color: var(--muted); }
-.phone { min-width: 0; height: 600px; border-radius: 26px; border: 6px solid #1F2540; background: #FBF9F6; color: #1F2540; display: flex; flex-direction: column; overflow: hidden; }
-.phone-bar { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 8px 12px; background: #fff; border-bottom: 1px solid #ECEAF2; font-size: 12px; color: #1F2540; }
-.phone-bar b { font-size: 13px; margin-right: auto; }
-.phone-bar > span { padding: 1px 8px; border-radius: 9px; background: #EEF0F7; font-weight: 700; }
-.screen { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-.joinview { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; color: #1F2540; background: #FBF9F6;
-  margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding-inline: max(14px, env(safe-area-inset-left, 0px)) max(14px, env(safe-area-inset-right, 0px)); }
-.joinview > .screen { width: 100%; max-width: 480px; margin-inline: auto; }
-.joinview .phone-bar { margin-inline: calc(-1 * max(14px, env(safe-area-inset-left, 0px))); padding-right: max(14px, env(safe-area-inset-right, 0px)); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 3; padding-inline: max(14px, env(safe-area-inset-left, 0px)); font-size: 14px; }
-.joinview .screen { padding: 14px 0 24px; overflow: visible; }
-.screen h3 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 22px; line-height: 1.2; }
-.card { background: #fff; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 1px 0 #ECEAF2; }
-.card .t { font-weight: 700; font-size: 14px; }
-.muted { color: #6B7290; font-size: 12.5px; line-height: 1.5; }
-.remain { font-weight: 700; font-size: 13px; padding: 6px 10px; border-radius: 10px; background: rgba(244, 119, 92, 0.15); }
-.remain.done { background: rgba(46, 158, 107, 0.15); }
-.stepper { display: grid; grid-template-columns: 46px 36px minmax(0, 1fr) 22px 36px; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
-.stepper button { height: 36px; border-radius: 10px; border: none; background: #1F2540; color: #fff; font-size: 19px; line-height: 1; }
-.bar { height: 9px; border-radius: 5px; background: #ECEEF5; overflow: hidden; }
-.bar b { display: block; height: 100%; }
-.pbtn { min-height: 42px; border-radius: 12px; border: none; background: var(--coral); color: #1F2540; font-weight: 800; font-size: 14px; padding: 0 12px; }
-.pbtn.ghost { background: #EEF0F7; }
-.row { display: flex; gap: 6px; }
+.who .small { display: block; }
+.dot { display: inline-block; width: 0.45rem; height: 0.45rem; background: var(--dim); margin-right: 0.3rem; vertical-align: 0.1rem; }
+.dot.on { background: var(--green); }
+.reset-seats { align-self: flex-start; }
+/* 보스·규칙 설정 탭 */
+.settings { max-width: 60rem; }
+.cfg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12.5rem), 1fr)); gap: 0.75rem; }
+.f { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; font-weight: 700; color: var(--muted); min-width: 0; }
+.f small { font-weight: 400; font-size: 0.72rem; line-height: 1.45; }
+.f input[type="text"], .f input[type="number"], .f textarea { width: 100%; min-width: 0; padding: 0.5rem 0.65rem; border: 0.125rem solid var(--line); background: var(--bg2); color: var(--ink); font-size: 0.875rem; font-weight: 400; }
+.f textarea { resize: vertical; }
+.f input:disabled, .f textarea:disabled { opacity: 0.5; }
+.num { display: flex; align-items: center; gap: 0.4rem; }
+.num input { flex: 1; }
+.num em { font-style: normal; font-weight: 400; }
+.f-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+.bcount { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem; }
+.bcount select { min-height: 2.25rem; padding: 0 0.6rem; border: 0.125rem solid var(--line); background: var(--bg2); font-size: 0.875rem; font-weight: 800; }
+.bcard { border: 0.125rem solid var(--line); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; background: var(--bg2); }
+.bcard-h { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; }
+.bcard-h b { font-size: 0.95rem; color: var(--gold); }
+.bexp { font-size: 0.75rem; color: var(--muted); margin-right: auto; }
+.bact { display: flex; gap: 0.25rem; }
+.checks { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; }
+.chk { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; font-weight: 800; color: var(--ink); cursor: pointer; }
+.chk input { width: 1.1rem; height: 1.1rem; margin: 0; accent-color: var(--gold); }
+.save-bar { position: sticky; bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)); z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem;
+  border: 0.125rem solid var(--gold); background: var(--panel); box-shadow: 0.3rem 0.3rem 0 var(--shadow); }
+.save-bar [data-dirty] { margin-right: auto; }
+.row { display: flex; gap: 0.4rem; }
 .row > * { flex: 1; }
+.row.left { flex-wrap: wrap; }
 .row.left > * { flex: 0 0 auto; }
+.notice { padding: 0.6rem 0.75rem; border: 0.125rem solid var(--gold); background: rgba(255, 210, 63, 0.1); color: var(--gold); font-size: 0.82rem; }
+
+/* ── 발표 화면 (16:9, 모든 크기는 화면 너비의 %: cqw) ─────────────── */
+.proj-box { container-type: inline-size; }
+.proj { position: relative; aspect-ratio: 16 / 9; overflow: hidden; color: var(--ink); border: 0.3cqw solid var(--line); box-shadow: 0.6cqw 0.6cqw 0 var(--shadow);
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.022) 0 0.15cqw, transparent 0.15cqw 0.45cqw),
+    radial-gradient(60% 70% at 88% 0%, rgba(155, 123, 255, 0.32), transparent 70%),
+    radial-gradient(55% 60% at 0% 100%, rgba(77, 225, 255, 0.18), transparent 70%),
+    linear-gradient(180deg, #141941 0%, #0A0C1C 100%); }
+.screen-only { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #05060D; z-index: 30; }
+.screen-only .proj-box { width: min(100vw, 177.78vh); }
+.screen-only .proj { border: 0; box-shadow: none; }
+.pv { position: absolute; inset: 0; padding: 3.4cqw 4cqw; display: flex; flex-direction: column; gap: 1.5cqw; min-height: 0; }
+.pv > * { min-height: 0; }
+.pv .eyebrow { font-size: 1.3cqw; font-weight: 800; color: var(--cyan); letter-spacing: 0.06em; }
+.pv .h { font-size: 3.8cqw; font-weight: 900; line-height: 1.18; letter-spacing: -0.02em; text-wrap: balance; }
+.pv .sub { font-size: 1.55cqw; color: var(--muted); line-height: 1.5; }
+.glass { background: rgba(23, 28, 61, 0.88); border: 0.22cqw solid var(--line); box-shadow: 0.45cqw 0.45cqw 0 var(--shadow); }
+.pv-center { align-items: center; justify-content: center; text-align: center; }
+.pv-center .h { font-size: 4.6cqw; }
+.title-glow { color: var(--gold); text-shadow: 0.35cqw 0.35cqw 0 var(--shadow); }
+.stat-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.2cqw; }
+.stat-card { padding: 1.3cqw; display: flex; flex-direction: column; gap: 0.6cqw; border-top: 0.5cqw solid var(--c); min-width: 0; }
+.stat-card .art { width: 52%; align-self: center; }
+.stat-card b { font-weight: 900; font-size: 2.3cqw; color: var(--c); }
+.stat-card span { font-size: 1.2cqw; line-height: 1.45; color: var(--muted); }
+.pv-foot { margin-top: auto; display: flex; gap: 1.2cqw; align-items: stretch; }
+.count { display: flex; align-items: baseline; gap: 0.8cqw; padding: 1.1cqw 1.8cqw; font-size: 1.5cqw; font-weight: 800; }
+.count b { font-weight: 900; font-size: 4.2cqw; color: var(--gold); font-variant-numeric: tabular-nums; }
+.pv-qr { display: flex; align-items: center; gap: 1.2cqw; padding: 1cqw 1.6cqw; font-size: 1.4cqw; font-weight: 800; margin-left: auto; text-align: left; }
+.pv-qr .q { width: 8cqw; aspect-ratio: 1; background: #fff; padding: 0.45cqw; }
+.pv-qr .q svg { width: 100%; height: 100%; display: block; }
+.pv-qr.big { margin: 0; flex-direction: column; text-align: center; padding: 1.4cqw; gap: 0.8cqw; font-size: 1.5cqw; }
+.pv-qr.big .q { width: 15cqw; }
+.lobby-row { display: flex; align-items: stretch; justify-content: center; gap: 2cqw; margin-top: 1cqw; }
+.lobby-row .count { flex-direction: column; align-items: center; justify-content: center; gap: 0.2cqw; padding: 1.6cqw 3cqw; }
+.qs { margin: 0; padding: 2.4cqw 3cqw 2.4cqw 5.4cqw; display: flex; flex-direction: column; gap: 1.4cqw; font-size: 2.4cqw; line-height: 1.4; }
+.qs b { color: var(--gold); }
+.timer { font-size: 4.4cqw; font-weight: 900; padding: 0.5cqw 2cqw; font-variant-numeric: tabular-nums; color: var(--gold); display: flex; align-items: center; justify-content: center; }
+.timer.urgent { color: var(--hot); animation: blink 1s steps(2) infinite; }
+.rules-box { padding: 2.2cqw 3cqw; max-width: 88%; }
+.rules { margin: 0; padding-left: 2.6cqw; display: flex; flex-direction: column; gap: 1cqw; font-size: 1.85cqw; line-height: 1.45; text-align: left; }
+.rules b { color: var(--gold); }
+.boss-row { flex: 1 1 auto; display: grid; grid-template-columns: 22% minmax(0, 1fr); gap: 3cqw; align-items: center; padding: 2.4cqw 3cqw; }
+.boss-art { display: block; width: 100%; aspect-ratio: 12 / 11; animation: bob 1.6s ease-in-out infinite alternate; filter: drop-shadow(0.5cqw 0.5cqw 0 var(--shadow)); }
+.boss-name { font-size: 3.5cqw; font-weight: 900; line-height: 1.2; letter-spacing: -0.02em; text-wrap: balance; margin-top: 0.3cqw; }
+.boss-desc { font-size: 1.7cqw; line-height: 1.6; margin-top: 0.8cqw; color: #D3D8F7; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.7cqw; margin-top: 1.2cqw; }
+.chips span { padding: 0.35cqw 1.1cqw; background: var(--panel2); border: 0.18cqw solid var(--line); font-size: 1.35cqw; font-weight: 800; }
+.chips .hpc { background: var(--hot); border-color: var(--hot); color: #fff; }
+.chips .hot { background: var(--gold); border-color: var(--gold); color: #1B1500; }
+.meet-foot { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 1.2cqw; }
+.hint { display: flex; align-items: center; gap: 1.2cqw; padding: 1.2cqw 1.8cqw; font-size: 1.75cqw; font-weight: 700; }
+.hint em { font-style: normal; flex-shrink: 0; padding: 0.3cqw 0.9cqw; background: var(--cyan); color: #04121A; font-size: 1.2cqw; font-weight: 900; }
+.mini-count { display: flex; align-items: baseline; gap: 0.6cqw; padding: 0.8cqw 1.8cqw; font-size: 1.3cqw; font-weight: 800; }
+.mini-count b { font-weight: 900; font-size: 3.3cqw; color: var(--gold); }
+.event-note { padding: 0.8cqw 1.6cqw; font-size: 1.3cqw; font-weight: 700; color: var(--gold); }
+.fighters { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.6cqw; align-content: center; }
+.fighter { display: grid; grid-template-columns: 34% minmax(0, 1fr); gap: 1.6cqw; align-items: center; padding: 1.8cqw; animation: rise 0.6s both; min-width: 0; }
+.fighter b { font-weight: 900; font-size: 3cqw; display: block; line-height: 1.2; }
+.fighter span { font-size: 1.5cqw; color: var(--cyan); font-weight: 700; }
 .fighters.many { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1cqw; }
-.fighters.many .fighter { grid-template-columns: 6cqw minmax(0, 1fr); gap: 0.8cqw; padding: 1cqw; }
-.fighters.many .fighter .art { width: 6cqw; }
-.fighters.many .fighter b { font-size: 2cqw; }
-.fighters.many .fighter span { font-size: 1.2cqw; }
-.bars.many { gap: 0.5cqw; padding: 1.2cqw 2cqw; }
-.bars.many .bar-row { grid-template-columns: 3.4cqw 13cqw minmax(0, 1fr) 17cqw; gap: 1cqw; }
-.bars.many .bar-row .art { width: 3.4cqw; }
+.fighters.many .fighter { gap: 1cqw; padding: 1cqw; }
+.fighters.many .fighter b { font-size: 1.9cqw; }
+.fighters.many .fighter span { font-size: 1.15cqw; }
+.reveal-head { display: flex; flex-direction: column; gap: 0.5cqw; }
+.reveal-stats { font-size: 4.4cqw; font-weight: 900; line-height: 1.1; color: var(--gold); text-shadow: 0.35cqw 0.35cqw 0 var(--shadow); animation: pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.result-line { font-size: 1.45cqw; font-weight: 800; color: var(--ink); line-height: 1.5; padding: 0.6cqw 1.2cqw; border-left: 0.4cqw solid var(--gold); background: rgba(255, 210, 63, 0.08); }
+.bars { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; gap: 1.2cqw; padding: 1.6cqw 2.4cqw; }
+.bar-row { display: grid; grid-template-columns: 6.5cqw 13cqw minmax(0, 1fr) 16cqw; gap: 1.6cqw; align-items: center; animation: rise 0.5s 0.3s both; }
+.bar-row .nm b { font-weight: 900; font-size: 2.3cqw; display: block; line-height: 1.2; }
+.bar-row .nm span { font-size: 1.35cqw; color: var(--muted); }
+.track { position: relative; height: 3cqw; background: var(--bg2); border: 0.22cqw solid var(--line); }
+.track i { position: absolute; inset: 0 auto 0 0; max-width: 100%; animation: grow 2.6s 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  background: repeating-linear-gradient(90deg, var(--cyan) 0 1.3cqw, #2BB4D6 1.3cqw 1.6cqw); }
+.bar-row.win .track i { background: repeating-linear-gradient(90deg, var(--gold) 0 1.3cqw, #E0AE12 1.3cqw 1.6cqw); }
+.track::after { content: ""; position: absolute; top: -0.9cqw; bottom: -0.9cqw; left: var(--hp); border-left: 0.3cqw dashed var(--hot); }
+.res { display: flex; flex-direction: column; align-items: flex-start; gap: 0.2cqw; min-width: 0; }
+.res b { font-weight: 900; font-size: 2.8cqw; line-height: 1; font-variant-numeric: tabular-nums; }
+.res span { font-size: 1.3cqw; font-weight: 800; }
+.res .dice-note { font-weight: 500; color: var(--muted); }
+.bar-row.win .res b { color: var(--gold); }
+.bar-row.lose .res b { color: var(--muted); }
+.star { padding: 0.1cqw 0.7cqw; background: var(--gold); color: #1B1500; font-size: 1.1cqw; font-weight: 900; }
+.hp-note { display: flex; align-items: center; gap: 0.8cqw; font-size: 1.3cqw; font-weight: 800; color: var(--hot); }
+.hp-note i { display: inline-block; width: 2.4cqw; border-top: 0.3cqw dashed var(--hot); }
+.reveal-head .sub { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pv.many { gap: 1cqw; padding-block: 2.6cqw; }
+.pv.many .reveal-stats { font-size: 3cqw; }
+.pv.many .reveal-head .sub { font-size: 1.35cqw; }
+.pv.many .result-line { font-size: 1.25cqw; padding-block: 0.4cqw; }
+.bars.many { gap: 0.3cqw; padding: 1cqw 2cqw; justify-content: space-between; }
+.bars.many .bar-row { grid-template-columns: 3cqw 13cqw minmax(0, 1fr) 21cqw; gap: 1cqw; }
+.bars.many .res { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+.bars.many .res .dice-note { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .bars.many .bar-row .nm b { font-size: 1.6cqw; display: inline; margin-right: 0.6cqw; }
 .bars.many .bar-row .nm span { font-size: 1.1cqw; }
-.bars.many .track { height: 1.6cqw; }
-.bars.many .res { flex-direction: row; align-items: baseline; gap: 0.6cqw; flex-wrap: wrap; }
+.bars.many .track { height: 1.7cqw; }
+.bars.many .res { flex-direction: row; align-items: baseline; gap: 0.6cqw; }
 .bars.many .res b { font-size: 1.9cqw; }
 .bars.many .res span { font-size: 1.05cqw; }
-.rank-list { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: 0.8cqw 3cqw; padding: 2cqw 3cqw; }
-.rank-list .rk { display: grid; grid-template-columns: 6cqw minmax(0, 1fr) auto; align-items: baseline; gap: 1cqw; padding: 0.7cqw 1.2cqw; border-radius: 1cqw; font-size: 1.9cqw; font-weight: 700; }
-.rank-list .rk b { font-family: var(--f-display); font-weight: 400; font-size: 2.4cqw; }
-.rank-list .rk.top { background: rgba(255, 194, 61, 0.8); }
+.podium { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3cqw; align-items: end; padding: 0 10%; }
+.podium > div { display: flex; flex-direction: column; gap: 1cqw; text-align: center; animation: rise 0.8s both; min-width: 0; }
+.podium b { font-weight: 900; font-size: 3.4cqw; }
+.podium span { font-size: 1.6cqw; font-weight: 800; color: var(--muted); }
+.podium .block { font-weight: 900; font-size: 3.4cqw; display: flex; align-items: center; justify-content: center; }
+.podium .r1 .block { height: 22cqw; background: var(--gold); border-color: var(--gold); color: #1B1500; }
+.podium .r2 .block { height: 14cqw; }
 .podium .r3 .block { height: 9cqw; }
-/* 6) 격파 실패: 게이지가 다 찬 뒤 캐릭터가 넘어지고 회색으로 */
-.bar-row .art, .pfight .art { transform-origin: 50% 100%; }
-.bar-row.lose .art { animation: fall 0.8s ease-in both; }
-.pfight.lose .art { animation: fall 0.8s 0.6s ease-in both; }
-@keyframes fall { 0% { transform: none; filter: none; } 70% { transform: rotate(98deg) scale(0.8); } 100% { transform: rotate(90deg) translate(6%, 0) scale(0.8); filter: grayscale(1) opacity(0.55); } }
-.result-line { font-size: 1.45cqw; font-weight: 700; color: var(--stage-ink); margin-top: 0.6cqw; line-height: 1.45; }
-.pfight { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: center; }
-.pfight .art { width: 72px; aspect-ratio: 16 / 18; }
-/* 9) 돌발 이벤트 주사위 */
+.rank-list { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: 0.8cqw 3cqw; padding: 2cqw 3cqw; }
+.rank-list .rk { display: grid; grid-template-columns: 6cqw minmax(0, 1fr) auto; align-items: baseline; gap: 1cqw; padding: 0.7cqw 1.2cqw; font-size: 1.9cqw; font-weight: 800; }
+.rank-list .rk b { font-weight: 900; font-size: 2.4cqw; }
+.rank-list .rk.top { background: var(--gold); color: #1B1500; }
+/* 돌발 이벤트 주사위 */
 .die { display: inline-block; width: 7cqw; aspect-ratio: 1; flex: 0 0 auto; }
 .die svg { display: block; width: 100%; height: 100%; }
 .die.rolling { animation: shake 0.28s linear infinite; }
-.die.best svg .face { stroke: var(--gold); stroke-width: 9; }
-.die.dim { opacity: 0.38; }
-@keyframes shake { 0% { transform: rotate(-14deg) translateY(0); } 50% { transform: rotate(14deg) translateY(-10%); } 100% { transform: rotate(-14deg) translateY(0); } }
-.dice-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 1.4cqw; align-content: center; }
-.dice-team { display: flex; flex-direction: column; align-items: center; gap: 1cqw; padding: 1.6cqw 1.2cqw; text-align: center; }
-.dice-team .dwho { font-size: 1.5cqw; font-weight: 700; color: #545C7A; }
-.dice-team .dwho b { font-family: var(--f-display); font-weight: 400; font-size: 2.6cqw; color: var(--stage-ink); display: block; }
+.die.best svg .face { stroke: var(--gold); stroke-width: 10; }
+.die.dim { opacity: 0.35; }
+.dice-grid { flex: 1; display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 1.4cqw; align-content: center; }
+.dice-team { display: flex; flex-direction: column; align-items: center; gap: 1cqw; padding: 1.6cqw 1.2cqw; text-align: center; min-width: 0; }
+.dice-team .dwho { font-size: 1.5cqw; font-weight: 800; color: var(--cyan); }
+.dice-team .dwho b { font-weight: 900; font-size: 2.6cqw; color: var(--ink); display: block; }
 .dice-row { display: flex; gap: 0.8cqw; justify-content: center; flex-wrap: wrap; }
-.dice-team .eff { font-family: var(--f-display); font-size: 2.4cqw; }
-.dice-team .eff.up { color: var(--coral-deep); }
+.dice-team .eff { font-weight: 900; font-size: 2.3cqw; }
+.eff.up { color: var(--gold); }
 .dice-grid.many .die { width: 4cqw; }
 .dice-grid.many .dice-team { padding: 0.8cqw; gap: 0.5cqw; }
 .dice-grid.many .dice-team .dwho b { font-size: 1.8cqw; }
 .dice-grid.many .dice-team .eff { font-size: 1.6cqw; }
-.pdice .die { width: 64px; }
-.pdice .dice-row { gap: 10px; }
-.pdice .eff { font-family: var(--f-display); font-size: 22px; }
-.pdice .eff.up { color: var(--coral-deep); }
-/* 8) 휴대폰 점수 규칙 (i) */
-.info-btn { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid #1F2540; background: #fff; color: #1F2540; font: 700 15px/1 Georgia, serif; font-style: italic; flex: 0 0 auto; }
-.modal-back { position: fixed; inset: 0; z-index: 50; background: rgba(14, 16, 24, 0.55); display: flex; align-items: flex-end; justify-content: center; }
-.modal { width: 100%; max-width: 480px; max-height: 88vh; max-height: 88dvh; overflow-y: auto; background: #FBF9F6; color: #1F2540; border-radius: 20px 20px 0 0;
-  padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 10px; }
-.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.modal-head h3 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 22px; }
-.mini-die { display: inline-block; width: 20px; height: 20px; vertical-align: -5px; margin-right: 2px; }
-.mini-die svg { width: 100%; height: 100%; display: block; }
-.pc { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border-radius: 12px; text-align: left; border: 2px solid transparent;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--aura) 16%, #fff), #fff); width: 100%; color: #1F2540; }
-.pc .art { width: 56px; aspect-ratio: 16 / 18; background: rgba(255, 255, 255, 0.8); border-radius: 8px; padding: 2px; }
-.pc .ttl { font-size: 11px; font-weight: 700; color: color-mix(in srgb, var(--aura) 75%, #1F2540); }
-.pc .nm { font-weight: 700; font-size: 14px; }
-.pc .tag, .tag { font-size: 10.5px; padding: 0 6px; border-radius: 6px; background: #EEF0F7; margin-left: 4px; font-weight: 700; }
-.pc.on { border-color: #1F2540; }
-.pc.big { grid-template-columns: 92px minmax(0, 1fr); }
-.pc.big .art { width: 92px; }
-.pc.empty { background: #F4F5FA; border: 2px dashed #DCE0EE; }
-.mstats { display: grid; grid-template-columns: 36px minmax(0, 1fr) 14px; gap: 2px 5px; align-items: center; font-size: 11px; font-weight: 700; margin-top: 2px; }
-.mstats i { height: 5px; border-radius: 3px; background: #ECEEF5; overflow: hidden; }
+
+/* 격파 실패: 게이지가 다 찬 뒤 캐릭터가 자기 칸 안에서 옆으로 쓰러지고 회색으로 */
+.bar-row.lose .art > svg { animation: fall 0.7s 3.4s ease-in both; }
+.pfight.lose .art > svg { animation: fall 0.7s 0.6s ease-in both; }
+.bar-row.lose .art, .pfight.lose .art { animation: tile-dim 0.7s 3.4s both; }
+.pfight.lose .art { animation-delay: 0.6s; }
+@keyframes fall {
+  0% { transform: none; filter: none; }
+  65% { transform: translateY(16%) rotate(100deg) scale(0.85); }
+  100% { transform: translateY(16%) rotate(90deg) scale(0.85); filter: grayscale(1) brightness(0.75); }
+}
+@keyframes tile-dim { to { filter: grayscale(1); opacity: 0.75; } }
+
+/* ── 휴대폰 (진행자 화면의 미리보기와 실제 휴대폰이 같은 모양. 크기는 휴대폰 너비의 %: cqw) ── */
+.phones { display: flex; flex-direction: column; gap: 1.25rem; }
+.team-group { min-width: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.team-label { font-weight: 800; font-size: 0.85rem; color: var(--cyan); }
+.team-phones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.phone { container-type: inline-size; min-width: 0; aspect-ratio: 9 / 17; border: 0.4rem solid #2A3170; box-shadow: 0.3rem 0.3rem 0 var(--shadow); background: var(--bg); display: flex; flex-direction: column; overflow: hidden; }
+.joinview { min-height: 100vh; min-height: 100dvh; display: flex; justify-content: center; background: radial-gradient(90% 50% at 100% 0%, rgba(155, 123, 255, 0.18), transparent 70%), var(--bg); }
+.pwrap { container-type: inline-size; width: min(100%, 34rem); display: flex; flex-direction: column; padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px); }
+.phone-bar { display: flex; align-items: center; gap: 2cqw; padding: 2.6cqw 3.6cqw; background: var(--panel); border-bottom: 0.6cqw solid var(--line); font-size: 3.4cqw; }
+.phone-bar b { font-size: 3.8cqw; margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phone-bar > span { padding: 0.4cqw 2.2cqw; border: 0.5cqw solid var(--cyan); color: var(--cyan); font-weight: 800; white-space: nowrap; }
+.phone-bar .btn { min-height: 0; height: 7.5cqw; padding: 0 2.4cqw; font-size: 3cqw; box-shadow: none; }
+.joinview .phone-bar { position: sticky; top: 0; z-index: 3; padding-top: calc(2.6cqw + env(safe-area-inset-top, 0px)); }
+.screen { flex: 1; min-height: 0; overflow-y: auto; padding: 3.6cqw; display: flex; flex-direction: column; gap: 3cqw; font-size: 3.6cqw; }
+.joinview .screen { flex: none; overflow: visible; padding: 4.5cqw 4cqw calc(8cqw + env(safe-area-inset-bottom, 0px)); }
+.screen h3 { margin: 0.8cqw 0 0; font-weight: 900; font-size: 6.2cqw; line-height: 1.25; letter-spacing: -0.02em; }
+.card { background: var(--panel); border: 0.5cqw solid var(--line); box-shadow: 1cqw 1cqw 0 var(--shadow); padding: 3.6cqw; display: flex; flex-direction: column; gap: 2.2cqw; min-width: 0; }
+.card .t { font-weight: 800; font-size: 3.9cqw; }
+.card .t.big { font-size: 4.6cqw; }
+.muted { color: var(--muted); font-size: 3.3cqw; line-height: 1.55; }
+.muted b { color: var(--ink); }
+.remain { font-weight: 800; font-size: 3.5cqw; padding: 1.6cqw 2.6cqw; background: rgba(255, 79, 121, 0.16); border-left: 1cqw solid var(--hot); }
+.remain.done { background: rgba(61, 220, 151, 0.14); border-color: var(--green); }
+.stepper { display: grid; grid-template-columns: 15% 10% minmax(0, 1fr) 7% 10%; align-items: center; gap: 2cqw; font-size: 3.5cqw; font-weight: 800; }
+.stepper > span:last-of-type { text-align: center; font-variant-numeric: tabular-nums; }
+.stepper button { aspect-ratio: 1; width: 100%; border: 0; background: var(--panel2); box-shadow: inset 0 -0.8cqw 0 rgba(0, 0, 0, 0.3); color: var(--ink); font-size: 5cqw; font-weight: 900; line-height: 1; }
+.bar { height: 2.6cqw; background: var(--bg2); border: 0.4cqw solid var(--line); overflow: hidden; }
+.bar b { display: block; height: 100%; }
+.pbtn { min-height: 12cqw; border: 0; background: var(--gold); color: #1B1500; font-weight: 900; font-size: 4cqw; padding: 0 3cqw; box-shadow: 1cqw 1cqw 0 var(--shadow); }
+.pbtn:not(:disabled):active { transform: translate(0.5cqw, 0.5cqw); box-shadow: 0.5cqw 0.5cqw 0 var(--shadow); }
+.pbtn.ghost { background: var(--panel2); color: var(--ink); border: 0.5cqw solid var(--line); }
+.pc { display: grid; grid-template-columns: 22% minmax(0, 1fr); gap: 3cqw; align-items: center; padding: 2.6cqw; text-align: left; width: 100%; color: var(--ink);
+  border: 0.6cqw solid var(--line); background: linear-gradient(135deg, color-mix(in srgb, var(--aura) 26%, var(--panel)) 0%, var(--panel) 70%); box-shadow: 1cqw 1cqw 0 var(--shadow); }
+.pc .ttl { font-size: 2.9cqw; font-weight: 800; color: color-mix(in srgb, var(--aura) 75%, #fff); }
+.pc .nm { font-weight: 900; font-size: 4cqw; }
+.pc .tag, .tag { display: inline-block; font-size: 2.7cqw; padding: 0 1.5cqw; background: var(--panel2); border: 0.4cqw solid var(--line); margin-left: 1.2cqw; font-weight: 800; vertical-align: 0.3cqw; }
+.pc.on { border-color: var(--gold); box-shadow: 0 0 0 0.6cqw rgba(255, 210, 63, 0.35), 1cqw 1cqw 0 var(--shadow); }
+.pc.on .tag { background: var(--gold); border-color: var(--gold); color: #1B1500; }
+.pc.big { grid-template-columns: 32% minmax(0, 1fr); }
+.pc.empty { background: var(--bg2); border-style: dashed; box-shadow: none; }
+.mstats { display: grid; grid-template-columns: 16% minmax(0, 1fr) 6%; gap: 0.6cqw 1.6cqw; align-items: center; font-size: 2.8cqw; font-weight: 800; margin-top: 0.8cqw; }
+.mstats > span:nth-child(3n) { text-align: right; font-variant-numeric: tabular-nums; }
+.mstats i { height: 1.6cqw; background: rgba(0, 0, 0, 0.35); overflow: hidden; }
 .mstats i b { display: block; height: 100%; }
-.ptimer { font-family: var(--f-display); font-size: 24px; color: var(--coral-deep); font-variant-numeric: tabular-nums; }
-.outcome { font-family: var(--f-display); font-size: 24px; }
-.outcome.win { color: var(--coral-deep); }
-.rank-row { display: grid; grid-template-columns: 40px 1fr auto; padding: 8px 10px; border-radius: 10px; font-size: 14px; }
-.rank-row.mine { background: #1F2540; color: #fff; }
-.phone-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.phone-chips span { padding: 1px 8px; border-radius: 8px; background: #EEF0F7; font-size: 11.5px; font-weight: 700; }
-.phone-chips .hot { background: var(--coral); }
-.slot { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 12px; border-radius: 12px; border: 2px solid #ECEAF2; background: #fff; text-align: left; width: 100%; color: #1F2540; }
-.slot b { font-size: 15px; }
-.slot.taken { opacity: 0.7; }
-.namebox { width: 100%; height: 42px; padding: 0 12px; border-radius: 10px; border: 1.5px solid #DCE0EE; font: inherit; font-size: 15px; background: #fff; color: #1F2540; }
-.notice { padding: 10px 12px; border-radius: 12px; background: #FFF4D6; color: #6B4A00; font-size: 13px; }
+.ptimer { font-weight: 900; font-size: 7cqw; color: var(--gold); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.ptimer.urgent { color: var(--hot); }
+.ptimer.inline { font-size: 4.6cqw; margin-left: auto; }
+.t-row { display: flex; align-items: baseline; gap: 2cqw; }
+.outcome { font-weight: 900; font-size: 7cqw; color: var(--muted); }
+.outcome.win { color: var(--gold); text-shadow: 0.6cqw 0.6cqw 0 var(--shadow); }
+.rank-row { display: grid; grid-template-columns: 18% minmax(0, 1fr) auto; padding: 2.2cqw 2.8cqw; font-size: 3.8cqw; background: var(--bg2); }
+.rank-row.mine { background: var(--gold); color: #1B1500; }
+.phone-chips { display: flex; flex-wrap: wrap; gap: 1.4cqw; }
+.phone-chips span { padding: 0.4cqw 2cqw; background: var(--panel2); border: 0.4cqw solid var(--line); font-size: 3cqw; font-weight: 800; }
+.phone-chips .hpc { background: var(--hot); border-color: var(--hot); color: #fff; }
+.phone-chips .hot { background: var(--gold); border-color: var(--gold); color: #1B1500; }
+.boss-mini { display: grid; grid-template-columns: 20% minmax(0, 1fr); gap: 3cqw; align-items: center; }
+.boss-mini .boss-art { animation: none; }
+.boss-mini .t { font-size: 4.4cqw; line-height: 1.3; }
+.slot { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2cqw; padding: 3cqw; border: 0.5cqw solid var(--line); background: var(--bg2); text-align: left; width: 100%; color: var(--ink); }
+.slot b { font-size: 4cqw; }
+.slot.taken { opacity: 0.65; }
+.namebox { width: 100%; min-height: 12cqw; padding: 0 3cqw; border: 0.5cqw solid var(--line); font-size: max(1rem, 4.2cqw); background: var(--bg2); color: var(--ink); }
+.pfight { display: grid; grid-template-columns: 24% minmax(0, 1fr); gap: 3.2cqw; align-items: center; font-size: 3.6cqw; }
+.pfight b { font-size: 4.2cqw; }
+.pdice .die { width: 17cqw; }
+.pdice .dice-row { gap: 2.6cqw; }
+.pdice .eff { font-weight: 900; font-size: 5.4cqw; }
+.screen .notice { font-size: 3.3cqw; padding: 2.6cqw 3cqw; border-width: 0.5cqw; }
+/* 점수 규칙 (i) */
+.info-btn { width: 8.4cqw; aspect-ratio: 1; border: 0.6cqw solid var(--cyan); background: transparent; color: var(--cyan); font: italic 900 4.4cqw/1 Georgia, serif; flex: 0 0 auto; padding: 0; }
+.info-btn.x { font: 900 4cqw/1 var(--font); font-style: normal; }
+.modal-back { position: fixed; inset: 0; z-index: 50; background: rgba(4, 5, 13, 0.7); display: flex; align-items: flex-end; justify-content: center; }
+.modal { width: 100cqw; max-height: 88vh; max-height: 88dvh; overflow-y: auto; background: var(--bg); border-top: 0.8cqw solid var(--cyan);
+  padding: 4.5cqw 4cqw calc(4.5cqw + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 3cqw; font-size: 3.6cqw; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 3cqw; }
+.modal-head h3 { margin: 0; font-weight: 900; font-size: 5.6cqw; }
+.mini-die { display: inline-block; width: 5cqw; aspect-ratio: 1; vertical-align: -1.2cqw; margin-right: 0.6cqw; }
+.mini-die svg { width: 100%; height: 100%; display: block; }
 
 @keyframes bob { to { transform: translateY(-4%); } }
-@keyframes rise { from { opacity: 0.2; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes rise { from { opacity: 0; transform: translateY(6%); } to { opacity: 1; transform: none; } }
 @keyframes pop { from { opacity: 0.2; transform: scale(0.8); } to { opacity: 1; transform: none; } }
 @keyframes grow { from { width: 0; } }
+@keyframes blink { 50% { opacity: 0.45; } }
+@keyframes shake { 0% { transform: rotate(-14deg) translateY(0); } 50% { transform: rotate(14deg) translateY(-10%); } 100% { transform: rotate(-14deg) translateY(0); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01s !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; } }
-@media (max-width: 1100px) { .top { grid-template-columns: minmax(0, 1fr); } .phones { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 640px) { .f-row { grid-template-columns: minmax(0, 1fr); } .team-phones { grid-template-columns: minmax(0, 1fr); } .phone { height: 560px; } .brand h1 { font-size: 22px; } .join-box { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 68rem) { .top { grid-template-columns: minmax(0, 1fr); } .team-phones { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 40rem) { .f-row { grid-template-columns: minmax(0, 1fr); } .team-phones { grid-template-columns: minmax(0, 1fr); } .brand h1 { font-size: 1.2rem; } .who-grid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -316,11 +367,11 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   const JOIN_URL = location.href.split("#")[0] + "#join";
 
   const STATS = [
-    { key: "hp", label: "체력", desc: "오래 버티는 힘, 몸으로 밀어붙이는 추진력", color: "#E0694E" },
-    { key: "intel", label: "지력", desc: "분석하고 정리하고 구조를 짜는 힘", color: "#4A6FD0" },
-    { key: "social", label: "친화력", desc: "사람을 연결하고 분위기를 만드는 힘", color: "#2E9E6B" },
-    { key: "mental", label: "멘탈", desc: "압박과 변수 앞에서 흔들리지 않는 힘", color: "#8A63D2" },
-    { key: "luck", label: "운", desc: "예상 못 한 변수가 내 편이 되는 힘", color: "#C98A1B" },
+    { key: "hp", label: "체력", desc: "오래 버티는 힘, 몸으로 밀어붙이는 추진력", color: "#FF7A5C" },
+    { key: "intel", label: "지력", desc: "분석하고 정리하고 구조를 짜는 힘", color: "#6C8CFF" },
+    { key: "social", label: "친화력", desc: "사람을 연결하고 분위기를 만드는 힘", color: "#3DDC97" },
+    { key: "mental", label: "멘탈", desc: "압박과 변수 앞에서 흔들리지 않는 힘", color: "#B18CFF" },
+    { key: "luck", label: "운", desc: "예상 못 한 변수가 내 편이 되는 힘", color: "#FFC93D" },
   ];
   // 게임 규칙 (진행자가 "보스·규칙 설정" 탭에서 바꿈). Supabase(또는 js/raid-sim-engine.js)가 보내 줍니다.
   const DEFAULT_RULES = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, shareMin: 8, mvpBonus: 1, luckStep: 4 };
@@ -400,7 +451,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     return '<svg viewBox="0 0 16 18" shape-rendering="crispEdges" aria-hidden="true" style="display:block;width:100%;height:100%">' + out.join("") + "</svg>";
   }
   const BOSS_ART = ["..h......h..", "..hh....hh..", ".XXXXXXXXXX.", "XXXXXXXXXXXX", "XXwwXXXXwwXX", "XXwkXXXXwkXX", "XXXXXXXXXXXX", "XXmmmmmmmmXX", "XXmtmtmtmtXX", ".XXXXXXXXXX.", ".XX..XX..XX."];
-  const BOSS_COLORS = ["#5B7FD6", "#8A63D2", "#2E9E6B", "#E0694E", "#1F2540"];
+  const BOSS_COLORS = ["#5B7FD6", "#8A63D2", "#2E9E6B", "#E0694E", "#D94A8C"];
   function bossSprite(round) {
     const body = BOSS_COLORS[(round - 1) % 5];
     const fill = { X: body, h: round >= 5 ? "#FFC23D" : body, w: "#FFFFFF", k: "#1F2540", m: "#3A1F2B", t: "#FFFFFF" };
@@ -655,11 +706,11 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     clearTimeout(rollTimer);
     if (rolling()) rollTimer = setTimeout(() => { lastHtml = ""; render(); }, Math.max(50, ROLL_MS - (now() - game.rollAt)) + 60);
   }
-  // 4) 결과 문장: 판정 스탯과 체력, 격파·실패한 조, MVP
+  // 4) 결과 문장: 판정 스탯과 보스 HP, 격파·실패한 조, MVP
   function resultLine(rows, b) {
     const name = (x) => TEAMS[x.team];
     const won = rows.filter((x) => x.cleared), lost = rows.filter((x) => !x.cleared), mvp = rows.filter((x) => x.mvp);
-    const out = [statsText(b.stats) + " 합이 " + b.hp + " 이상이어야 했어요."];
+    const out = [statsText(b.stats) + " 합이 보스 HP " + b.hp + " 이상이어야 했어요."];
     out.push(won.length ? (won.length === rows.length ? "모든 조가" : won.map(name).join("·") + "는") + " 격파해서 +" + b.reward + "점" : "격파한 조가 없어요");
     if (lost.length && won.length) out.push(lost.map((x) => name(x) + " " + (b.hp - x.power) + "점 부족").join(", ") + "으로 실패");
     if (lost.length && !won.length) out.push(lost.map((x) => name(x) + " " + (b.hp - x.power) + "점 부족").join(", "));
@@ -684,7 +735,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const qr = '<div class="pv-qr glass"><div class="q">' + qrSvg(JOIN_URL) + "</div><span>휴대폰으로<br>QR을 찍어 참여</span></div>";
     if (game.stage === "lobby") {
       const joined = personList().filter((p) => p.claimed).length;
-      return '<div class="pv pv-center"><div class="eyebrow">오프닝 아이스브레이킹</div><div class="h">나만의 픽셀 캐릭터<br>&amp; 보스 레이드</div><div class="sub">휴대폰으로 QR을 찍고 아이디를 입력해 주세요 · 입장 ' + joined + " / " + personList().length + '명</div><div class="pv-foot" style="margin-top:1cqw">' + qr + "</div></div>";
+      return '<div class="pv pv-center"><div class="eyebrow">오프닝 아이스브레이킹</div><div class="h">나만의 <span class="title-glow">픽셀 캐릭터</span><br>&amp; 보스 레이드</div><div class="sub">휴대폰으로 QR을 찍고 아이디를 입력해 주세요</div>' +
+        '<div class="lobby-row"><div class="pv-qr glass big"><div class="q">' + qrSvg(JOIN_URL) + '</div><span>QR을 찍어 참여</span></div><div class="count glass"><span>입장</span><b>' + joined + "</b><span>/ " + personList().length + "명</span></div></div></div>";
     }
     if (game.stage === "make") {
       const made = personList().filter((p) => p.char && !p.char.isDefault).length;
@@ -695,16 +747,16 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     if (game.stage === "share") return '<div class="pv"><div class="h">조원에게 내 캐릭터를 소개해 주세요</div><div class="sub">휴대폰에서 우리 조 캐릭터 카드를 함께 보세요</div>' +
       '<ol class="qs"><li><b>내 칭호</b>와, 그 칭호가 맞는지 아닌지</li><li><b>가장 높은 스탯</b>: 이 점수를 준 에피소드 하나</li><li><b>가장 낮은 스탯</b>: 솔직한 고백 한 마디</li></ol>' +
       '<div class="timer glass" style="margin-top:auto;align-self:flex-end" data-deadline="' + game.shareDeadline + '"></div></div>';
-    if (game.phase === "idle" || !game.round) return '<div class="pv pv-center"><div class="eyebrow">보스 레이드</div><div class="h">보스 ' + BOSSES.length + '명이 기다리고 있어요</div><div class="glass" style="padding:2cqw 3cqw"><ol class="rules">' +
+    if (game.phase === "idle" || !game.round) return '<div class="pv pv-center"><div class="eyebrow">보스 레이드</div><div class="h">보스 ' + BOSSES.length + '명이 기다리고 있어요</div><div class="glass rules-box"><ol class="rules">' +
       "<li>라운드마다 조에서 <b>1명</b>이 출전해요. 한 사람은 한 번만 나갈 수 있어요.</li>" +
       "<li>판정 스탯은 <b>비공개</b>. 보스 설명을 보고 조원과 추리해서 출전자를 고르세요.</li>" +
-      "<li>공격력(판정 스탯 합)이 <b>보스 체력 이상이면 격파</b> → 그 보스의 보상 점수(" + rewardRange() + "), <b>실패하면 0점</b>.</li>" +
+      "<li>공격력(판정 스탯 합)이 <b>보스 HP 이상이면 격파</b> → 그 보스의 보상 점수(" + rewardRange() + "), <b>실패하면 0점</b>.</li>" +
       "<li>라운드 공격력 1위 조는 <b>MVP " + sign(RULES.mvpBonus) + "점</b> (격파 못 해도, 동점이면 모두).</li>" +
       "<li>돌발 이벤트 보스는 주사위를 굴려요. <b>1이면 감점, 6이면 가산</b>." + (RULES.luckStep > 0 ? " <b>운</b>이 높으면 주사위를 더 굴려 가장 좋은 눈을 써요." : "") + "</li>" +
       "<li>점수를 모두 더한 <b>총점 순위는 마지막에 공개</b>돼요.</li></ol></div></div>";
     const b = boss();
     const head = '<div class="boss-row glass">' + bossSprite(game.round) + '<div><div class="eyebrow">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="boss-name">' + esc(b.name) + '</div><div class="boss-desc">' + esc(b.desc) + "</div>" +
-      '<div class="chips"><span>체력 ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + (b.event ? '<span class="hot">돌발 이벤트</span>' : "") + "</div></div></div>";
+      '<div class="chips"><span class="hpc">HP ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + (b.event ? '<span class="hot">돌발 이벤트</span>' : "") + "</div></div></div>";
     if (game.phase === "meeting") {
       const n = TEAMS.filter((_, t) => pickOf(game.round, t)).length;
       return '<div class="pv">' + head + '<div class="meet-foot">' +
@@ -714,7 +766,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     }
     const rows = game.results[game.round] || [];
     if (game.phase === "closed") {
-      return '<div class="pv"><div class="h">마감! 이번 라운드 출전자</div><div class="sub">' + esc(b.name) + " · 보스 체력 " + b.hp + '</div><div class="fighters' + (rows.length > 4 ? " many" : "") + '"' + (rows.length <= 4 ? ' style="grid-template-columns:repeat(' + rows.length + ',minmax(0,1fr))"' : "") + ">" +
+      return '<div class="pv"><div class="h">마감! 이번 라운드 출전자</div><div class="sub">' + esc(b.name) + " · 보스 HP " + b.hp + '</div><div class="fighters' + (rows.length > 4 ? " many" : "") + '"' + (rows.length <= 4 ? ' style="grid-template-columns:repeat(' + rows.length + ',minmax(0,1fr))"' : "") + ">" +
         rows.map((x) => '<div class="fighter glass"><div class="art">' + sprite(charOf(people[x.pid] || {})) + "</div><div><span>" + TEAMS[x.team] + (x.auto ? " · 랜덤" : "") + "</span><b>" + esc(x.name) + "</b></div></div>").join("") + "</div></div>";
     }
     if (game.phase === "rolled") {
@@ -724,13 +776,14 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
           '<div class="dice-team glass"><div class="dwho">' + TEAMS[x.team] + "<b>" + esc(x.name) + "</b></div>" + diceRow(x) + '<div class="eff' + (!rolling() && x.bonus > 0 ? " up" : "") + '">' + diceEffect(x) + "</div></div>").join("") + "</div></div>";
     }
     if (game.phase === "revealed") {
+      // 모든 조의 게이지가 동시에 올라가고(0.8초 뒤부터 2.6초), 다 찬 뒤 실패한 캐릭터가 자기 칸 안에서 쓰러집니다 (CSS)
       const max = Math.max(b.hp + 4, ...rows.map((x) => x.power));
-      const sorted = rows.slice().sort((a, c) => a.power - c.power);
-      return '<div class="pv"><div><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + '</div><div class="result-line">' + esc(resultLine(rows, b)) + "</div></div>" +
-        '<div class="bars glass' + (rows.length > 4 ? " many" : "") + '" style="--hp:' + (b.hp / max * 100) + '%"><div class="hp-note">점선 = 보스 체력 ' + b.hp + " · 점선을 넘으면 격파</div>" +
-        sorted.map((x, i) => '<div class="bar-row' + (x.cleared ? " win" : " lose") + '" style="animation-delay:' + (0.3 + i * 1.1) + 's"><div class="art" style="animation-delay:' + (0.3 + i * 1.1 + 0.5 + 2.6) + 's">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + "</span></div>" +
-          '<div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + "%;animation-delay:" + (0.3 + i * 1.1 + 0.5) + 's"></i></div><div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? ' <span class="star">MVP</span>' : "") + "</span>" +
-          (x.dice ? '<span style="font-weight:500">' + diceText(x) + (DICE_WORD[x.dice] ? " · " + DICE_WORD[x.dice] : "") + "</span>" : "") + "</div></div>").join("") + "</div></div>";
+      const sorted = rows.slice().sort((a, c) => a.team - c.team);
+      return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + '</div><div class="result-line">' + esc(resultLine(rows, b)) + "</div></div>" +
+        '<div class="bars glass' + (rows.length > 4 ? " many" : "") + '" style="--hp:' + (b.hp / max * 100) + '%"><div class="hp-note"><i></i>보스 HP ' + b.hp + " · 점선을 넘으면 격파</div>" +
+        sorted.map((x) => '<div class="bar-row' + (x.cleared ? " win" : " lose") + '"><div class="art">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + "</span></div>" +
+          '<div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i></div><div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? ' <span class="star">MVP</span>' : "") + "</span>" +
+          (x.dice ? '<span class="dice-note">' + diceText(x) + (DICE_WORD[x.dice] ? " · " + DICE_WORD[x.dice] : "") + "</span>" : "") + "</div></div>").join("") + "</div></div>";
     }
     if (TEAMS.length > 3) {
       return '<div class="pv"><div class="h" style="text-align:center">보스 레이드 최종 순위</div><div class="rank-list glass">' +
@@ -745,10 +798,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     if (!game || !personList().length) return '<p class="small">위의 "게임 준비하기"를 누르면 진행 상태가 만들어져요. 보스·규칙 설정 탭에 명단을 넣었으면 명단대로, 아니면 참여자 자리 6개(A조·B조 3명씩)로 만들어져요.</p>';
     let html = "";
     if (game.stage !== "boss" || !game.round) {
-      html += '<div class="secret">판정 스탯은 여기에만 보여요.<br>' + BOSSES.map((b, i) => (i + 1) + ". " + esc(b.name) + " → <b>" + statsText(b.stats) + "</b> · 체력 " + b.hp).join("<br>") + "</div>";
+      html += '<div class="secret">판정 스탯은 여기에만 보여요.<br>' + BOSSES.map((b, i) => (i + 1) + ". " + esc(b.name) + " → <b>" + statsText(b.stats) + "</b> · HP " + b.hp).join("<br>") + "</div>";
     } else {
       const b = boss(), rows = game.results[game.round] || [];
-      html += '<div class="secret">' + game.round + "번 보스 판정 스탯 <b>" + statsText(b.stats) + "</b> · 체력 " + b.hp + " · 보상 " + b.reward + "점<br>힌트: " + esc(b.hint) + "</div>";
+      html += '<div class="secret">' + game.round + "번 보스 판정 스탯 <b>" + statsText(b.stats) + "</b> · 보스 HP " + b.hp + " · 보상 " + b.reward + "점<br>힌트: " + esc(b.hint) + "</div>";
       html += '<table class="res-table"><thead><tr><th>조</th><th>출전자</th><th class="n">판정 합</th><th class="n">주사위</th><th class="n">공격력</th><th>결과</th></tr></thead><tbody>';
       TEAMS.forEach((name, t) => {
         const k = pickOf(game.round, t), p = k ? people[k.pid] : null, x = rows.find((y) => y.team === t);
@@ -762,7 +815,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     html += '<div class="who-grid">' + personList().map((p) => '<div class="who"><div class="art">' + (p.char ? sprite(p.char) : "") + '</div><div><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b>" +
       '<span class="small">' + TEAMS[p.team] + " · " + (p.char ? (p.char.isDefault ? "기본 캐릭터" : esc(title(p.char))) : "캐릭터 만드는 중") + "</span></div></div>").join("") + "</div>" +
       '<span class="small">초록 점 = 휴대폰으로 들어온 사람 · ' + personList().length + "명 중 " + personList().filter((p) => p.claimed).length + "명" + (JOIN_MODE === "roster" ? " · 명단 판 (아이디로 입장)" : "") + "</span>" +
-      '<button type="button" class="btn quiet" data-host="resetSeats" style="align-self:flex-start;height:32px">' + (JOIN_MODE === "roster" ? "입장 표시 지우기" : "참여자 자리 비우기") + "</button>";
+      '<button type="button" class="btn quiet sm reset-seats" data-host="resetSeats">' + (JOIN_MODE === "roster" ? "입장 표시 지우기" : "참여자 자리 비우기") + "</button>";
     return html;
   }
 
@@ -799,14 +852,14 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       let h = "<h3>나의 캐릭터</h3>" + pcard(p, { big: true });
       if (!game.locked) h += '<div class="row"><button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="reroll"' + (p.rerolls >= RULES.rerolls ? " disabled" : "") + ">다시 뽑기 (" + Math.max(0, RULES.rerolls - p.rerolls) + ")</button>" +
         '<button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="edit">스탯 고치기</button></div>';
-      if (game.stage === "share") h += '<div class="card"><div class="t">조원에게 소개해 주세요 <span class="ptimer" data-deadline="' + game.shareDeadline + '" style="float:right;font-size:17px"></span></div><div class="muted">1) 내 칭호, 맞는지 아닌지<br>2) 가장 높은 스탯의 에피소드<br>3) 가장 낮은 스탯의 고백</div></div>';
+      if (game.stage === "share") h += '<div class="card"><div class="t t-row">조원에게 소개해 주세요 <span class="ptimer inline" data-deadline="' + game.shareDeadline + '"></span></div><div class="muted">1) 내 칭호, 맞는지 아닌지<br>2) 가장 높은 스탯의 에피소드<br>3) 가장 낮은 스탯의 고백</div></div>';
       h += '<div class="card"><div class="t">우리 조 캐릭터</div>' + team.filter((m) => m.id !== pid).map((m) => pcard(m)).join("") + "</div>";
       return h;
     }
-    if (game.phase === "idle" || !game.round) return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">라운드마다 조에서 1명 출전 · 한 사람은 한 번만<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 체력 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
+    if (game.phase === "idle" || !game.round) return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">라운드마다 조에서 1명 출전 · 한 사람은 한 번만<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 HP 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
     const b = boss();
-    let h = '<div class="card"><div class="muted">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="t" style="font-size:16px">' + esc(b.name) + '</div><div class="muted">' + esc(b.desc) + "</div>" +
-      '<div class="phone-chips"><span>체력 ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + (b.event ? '<span class="hot">돌발 이벤트</span>' : "") + "</div>" +
+    let h = '<div class="card"><div class="boss-mini">' + bossSprite(game.round) + '<div><div class="muted">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="t">' + esc(b.name) + '</div></div></div><div class="muted">' + esc(b.desc) + "</div>" +
+      '<div class="phone-chips"><span class="hpc">HP ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + (b.event ? '<span class="hot">돌발 이벤트</span>' : "") + "</div>" +
       (game.hint && game.phase === "meeting" ? '<div class="muted"><b>힌트</b> ' + esc(b.hint) + "</div>" : "") +
       (game.phase === "meeting" ? '<div class="ptimer" data-deadline="' + game.deadline + '"></div>' : "") + "</div>";
     const k = pickOf(game.round, p.team), pick = k ? people[k.pid] : null;
@@ -828,7 +881,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     if (game.phase === "revealed" && x) {
       const f = people[x.pid];
       return h + '<div class="card"><div class="outcome' + (x.cleared ? " win" : "") + '">' + (x.cleared ? "격파!" : "아쉽게 실패") + "</div>" +
-        '<div class="pfight' + (x.cleared ? "" : " lose") + '"><div class="art">' + (f ? sprite(charOf(f)) : "") + "</div><div><b>" + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 체력 " + b.hp + "</div></div>" +
+        '<div class="pfight' + (x.cleared ? "" : " lose") + '"><div class="art">' + (f ? sprite(charOf(f)) : "") + "</div><div><b>" + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div></div>" +
         '<div class="muted">판정 스탯 ' + statsText(b.stats) + " 합 " + x.base + (x.dice ? " · " + diceText(x) + (x.bonus ? " (" + sign(x.bonus) + ")" : "") : "") + "</div>" +
         '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + '</div><div class="muted">' + esc(b.reveal) + '</div><div class="muted"><b>' + esc(resultLine(game.results[game.round] || [], b)) + "</b></div></div>" +
         '<div class="muted">누적 점수와 순위는 마지막에 공개돼요.</div>';
@@ -850,9 +903,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       luck = "<br>운 " + RULES.luckStep + "점마다 주사위를 1개 더 굴리고, 그중 <b>가장 좋은 눈</b>을 써요 (" + parts.join(" · ") + ").";
     }
     const die = (n) => '<span class="mini-die">' + dieSvg(n) + "</span>";
-    return '<div class="modal-back" data-info-close><div class="modal" role="dialog" aria-modal="true" aria-label="점수 규칙"><div class="modal-head"><h3>점수는 이렇게 매겨요</h3><button type="button" class="info-btn" data-info-close aria-label="닫기" style="font-style:normal">✕</button></div>' +
+    return '<div class="modal-back" data-info-close><div class="modal" role="dialog" aria-modal="true" aria-label="점수 규칙"><div class="modal-head"><h3>점수는 이렇게 매겨요</h3><button type="button" class="info-btn x" data-info-close aria-label="닫기">✕</button></div>' +
       '<div class="card"><div class="t">공격력</div><div class="muted">출전자의 <b>판정 스탯 합</b>이 공격력이에요. 어떤 스탯이 판정되는지는 비공개이고, 결과 공개 때 알려 줘요. 돌발 이벤트 보스는 여기에 주사위 결과가 더해져요.</div></div>' +
-      '<div class="card"><div class="t">격파 / 실패</div><div class="muted">공격력이 <b>보스 체력 이상이면 격파</b> → 그 보스의 보상 점수를 받아요. 모자라면 <b>실패 → 0점</b>.<br>' + BOSSES.map((b, i) => i + 1 + "번 " + b.reward + "점").join(" · ") + "</div></div>" +
+      '<div class="card"><div class="t">격파 / 실패</div><div class="muted">공격력이 <b>보스 HP 이상이면 격파</b> → 그 보스의 보상 점수를 받아요. 모자라면 <b>실패 → 0점</b>.<br>' + BOSSES.map((b, i) => i + 1 + "번 " + b.reward + "점").join(" · ") + "</div></div>" +
       '<div class="card"><div class="t">MVP</div><div class="muted">라운드마다 공격력이 가장 높은 조가 <b>' + sign(RULES.mvpBonus) + "점</b>을 더 받아요. 격파하지 못해도 받을 수 있고, 동점이면 모두 받아요.</div></div>" +
       '<div class="card"><div class="t">돌발 이벤트 주사위</div><div class="muted">' + die(1) + "1이 나오면 공격력이 줄고, " + die(2) + "~" + die(5) + "2~5는 그대로, " + die(6) + "6이 나오면 공격력이 늘어요." +
         (ev.length ? "<br>" + ev.join("<br>") : "<br>지금은 돌발 이벤트 보스가 없어요.") + luck + "</div></div>" +
@@ -861,27 +914,27 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   }
   const infoBtn = '<button type="button" class="info-btn" data-info aria-label="점수 규칙 보기">i</button>';
   function joinHtml() {
-    if (!ready.state || !ready.people) return '<div class="joinview"><div class="screen"><h3>불러오는 중…</h3></div></div>';
-    if (!game || !personList().length) return '<div class="joinview"><div class="screen"><h3>곧 시작해요</h3><div class="muted">진행자가 아직 게임을 준비하지 않았어요. 준비되면 이 화면이 자동으로 바뀌어요.</div></div></div>';
+    if (!ready.state || !ready.people) return '<div class="joinview"><div class="pwrap"><div class="screen"><h3>불러오는 중…</h3></div></div></div>';
+    if (!game || !personList().length) return '<div class="joinview"><div class="pwrap"><div class="screen"><h3>곧 시작해요</h3><div class="muted">진행자가 아직 게임을 준비하지 않았어요. 준비되면 이 화면이 자동으로 바뀌어요.</div></div></div></div>';
     // 명단이 바뀌어 같은 번호가 다른 사람이 됐으면 다시 입장
     if (JOIN_MODE === "roster" && myPid != null && people[myPid] && myName && people[myPid].name !== myName) myPid = null;
     // 조는 명단대로 고정: 참여자는 바꿀 수 없고, 진행자가 "입장 표시 지우기"를 누르면 아이디부터 다시 입력
     if (JOIN_MODE === "roster" && myPid != null && people[myPid] && people[myPid].claimed === false) myPid = null;
     if ((myPid == null || !people[myPid]) && JOIN_MODE === "roster") {
-      return '<div class="joinview"><div class="screen"><h3>보스 레이드에<br>참여해 주세요</h3>' +
+      return '<div class="joinview"><div class="pwrap"><div class="screen"><h3>보스 레이드에<br>참여해 주세요</h3>' +
         '<form class="card" data-idlogin><div class="t">아이디</div><input class="namebox" id="uid-in" maxlength="40" placeholder="명단에 있는 아이디" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false">' +
         '<div class="muted">아이디를 입력하면 이름과 조가 명단대로 정해져요. 조는 바꿀 수 없어요.</div><button type="submit" class="pbtn">입장하기</button></form>' +
-        '<button type="button" class="pbtn ghost" data-info>점수 규칙 보기</button>' + lostNote() + "</div>" + (infoOpen ? infoHtml() : "") + "</div>";
+        '<button type="button" class="pbtn ghost" data-info>점수 규칙 보기</button>' + lostNote() + "</div>" + (infoOpen ? infoHtml() : "") + "</div></div>";
     }
     if (myPid == null || !people[myPid]) {
-      return '<div class="joinview"><div class="screen"><h3>보스 레이드에<br>참여해 주세요</h3>' +
+      return '<div class="joinview"><div class="pwrap"><div class="screen"><h3>보스 레이드에<br>참여해 주세요</h3>' +
         '<div class="card"><div class="t">이름 (선택)</div><input class="namebox" id="name-in" maxlength="12" placeholder="화면에 보일 이름" autocomplete="off"><div class="muted">이름을 적고 아래에서 내 자리를 눌러 주세요. 비워 두면 자리 이름 그대로 써요.</div></div>' +
         TEAMS.map((tn, t) => '<div class="card"><div class="t">' + tn + "</div>" + teamOf(t).map((m) => '<button type="button" class="slot' + (m.claimed ? " taken" : "") + '" data-claim="' + m.id + '"><span><b>' + esc(m.name) + '</b><br><span class="muted">' + (m.claimed ? "다른 기기가 사용 중 · 눌러서 이어받기" : "비어 있음") + '</span></span><span class="tag">고르기</span></button>').join("") + "</div>").join("") +
-        lostNote() + "</div></div>";
+        lostNote() + "</div></div></div>";
     }
     const p = people[myPid];
-    return '<div class="joinview"><div class="phone-bar"><b>' + esc(p.name) + "</b><span>" + TEAMS[p.team] + "</span>" + (JOIN_MODE === "roster" ? "" : '<button type="button" class="btn quiet" data-leave style="height:28px;padding:0 8px;font-size:12px">자리 바꾸기</button>') + infoBtn + '</div><div class="screen" id="screen-me">' + phoneHtml(myPid) +
-      lostNote() + "</div>" + (infoOpen ? infoHtml() : "") + "</div>";
+    return '<div class="joinview"><div class="pwrap"><div class="phone-bar"><b>' + esc(p.name) + "</b><span>" + TEAMS[p.team] + "</span>" + (JOIN_MODE === "roster" ? "" : '<button type="button" class="btn quiet" data-leave>자리 바꾸기</button>') + infoBtn + '</div><div class="screen" id="screen-me">' + phoneHtml(myPid) +
+      lostNote() + "</div>" + (infoOpen ? infoHtml() : "") + "</div></div>";
   }
 
   // ── 보스·규칙 설정 탭 (진행자만) ─────────────────────────────────
@@ -976,13 +1029,13 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       const level = isFinite(exp) && isFinite(hp) ? (exp >= hp ? " · 쉬움" : exp + 3 >= hp ? " · 보통" : " · 어려움") : "";
       const f = (k) => 'data-f="b.' + i + "." + k + '"';
       const num = (k, label) => '<label class="f"><span>' + label + '</span><input type="number" inputmode="numeric" step="1" ' + f(k) + ' value="' + esc(b[k]) + '"></label>';
-      h += '<div class="bcard"><div class="bcard-h"><b>' + (i + 1) + '번 보스</b><span class="bexp">평균 공격력 ' + (isFinite(exp) ? exp : "?") + " / 체력 " + (isFinite(hp) ? hp : "?") + level + "</span>" +
+      h += '<div class="bcard"><div class="bcard-h"><b>' + (i + 1) + '번 보스</b><span class="bexp">평균 공격력 ' + (isFinite(exp) ? exp : "?") + " / 보스 HP " + (isFinite(hp) ? hp : "?") + level + "</span>" +
         '<span class="bact"><button type="button" class="btn sm" data-set="up:' + i + '"' + (i === 0 ? " disabled" : "") + ' aria-label="' + (i + 1) + '번 보스 위로">↑</button>' +
         '<button type="button" class="btn sm" data-set="down:' + i + '"' + (i === d.bosses.length - 1 ? " disabled" : "") + ' aria-label="' + (i + 1) + '번 보스 아래로">↓</button>' +
         '<button type="button" class="btn sm" data-set="del:' + i + '"' + (d.bosses.length <= 1 ? " disabled" : "") + ">삭제</button></span></div>" +
         '<label class="f"><span>이름</span><input type="text" maxlength="60" ' + f("name") + ' value="' + esc(b.name) + '"></label>' +
         '<label class="f"><span>설명 (모두에게 보임)</span><textarea rows="2" maxlength="300" ' + f("desc") + ">" + esc(b.desc) + "</textarea></label>" +
-        '<div class="f-row">' + num("hp", "체력") + num("reward", "격파 보상 점수") + "</div>" +
+        '<div class="f-row">' + num("hp", "보스 HP") + num("reward", "격파 보상 점수") + "</div>" +
         '<div class="f"><span>판정 스탯 (공격력 = 고른 스탯의 합)</span><div class="checks">' + STATS.map((s) =>
           '<label class="chk"><input type="checkbox" ' + f("stat." + s.key) + (b.stats.includes(s.key) ? " checked" : "") + '><span style="color:' + s.color + '">' + s.label + "</span></label>").join("") + "</div></div>" +
         '<div class="f"><label class="chk"><input type="checkbox" ' + f("event") + (b.event ? " checked" : "") + "><span>돌발 이벤트 (주사위)</span></label>" +
@@ -1108,20 +1161,20 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   function hostHtml() {
     const preview = game && personList().length && personList().length <= 12;
     const needLogin = MODE === "supabase" && !isHost;
-    return '<header class="host"><div class="host-in"><div class="brand"><h1>보스 레이드 시뮬레이터</h1><span class="live' + (MODE === "supabase" && connected ? " on" : "") + '"><i></i>' + esc(liveWord()) + "</span></div>" +
-      '<span class="step">' + esc(stepWord()) + '</span><div class="actions">' + (needLogin ? loginHtml() : hostTab === "settings" && canSettings() ? "" : hostButtons().map((x) => '<button type="button" class="btn ' + (x.cls || "") + '" data-host="' + x.fn + '">' + esc(x.label) + "</button>").join("")) + "</div></div></header>" +
+    return '<header class="host"><div class="host-in"><div class="brand"><h1>보스 레이드 <span>시뮬레이터</span></h1><span class="live' + (MODE === "supabase" && connected ? " on" : "") + '"><i></i>' + esc(liveWord()) + "</span></div>" +
+      '<span class="step">' + esc(stepWord()) + '</span><div class="actions">' + (needLogin ? loginHtml() : hostTab === "settings" && canSettings() ? "" : hostButtons().map((x) => '<button type="button" class="btn ' + (x.cls || "") + '" data-host="' + x.fn + '">' + esc(x.label) + "</button>").join("")) + "</div></div></header><div class=\"hostview\">" +
       (canSettings() ? '<nav class="tabs" aria-label="진행자 화면"><button type="button" data-tab="run"' + (hostTab === "run" ? ' class="on" aria-current="page"' : "") + ">진행</button>" +
         '<button type="button" data-tab="settings"' + (hostTab === "settings" ? ' class="on" aria-current="page"' : "") + ">보스·규칙 설정</button></nav>" : "") +
       (hostTab === "settings" && canSettings() ? settingsHtml() :
       '<main class="wrap"><div class="top"><section><p class="sec-title">발표 화면 (프로젝터)' + (MODE === "supabase" ? ' · <a href="' + esc(location.href.split("#")[0]) + '#screen" target="_blank" rel="noopener">이 화면만 따로 열기</a>' : "") + '</p><div class="proj-box"><div class="proj">' + projHtml() + "</div></div></section>" +
-      '<div class="side"><section class="panel"><h2>참여자 링크 (휴대폰)</h2><div class="join-box"><div class="qr">' + qrSvg(JOIN_URL) + '</div><div style="display:flex;flex-direction:column;gap:8px;min-width:0"><div class="link">' + JOIN_URL + "</div>" +
-      '<div class="row" style="flex-wrap:wrap"><button type="button" class="btn" data-copy style="flex:0 0 auto">링크 복사</button><a class="btn" href="' + JOIN_URL + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;flex:0 0 auto">새 탭에서 열기</a></div>' +
+      '<div class="side"><section class="panel"><h2>참여자 링크 (휴대폰)</h2><div class="join-box"><div class="qr">' + qrSvg(JOIN_URL) + '</div><div class="join-side"><div class="link">' + JOIN_URL + "</div>" +
+      '<div class="row left"><button type="button" class="btn sm" data-copy>링크 복사</button><a class="btn sm" href="' + JOIN_URL + '" target="_blank" rel="noopener">새 탭에서 열기</a></div>' +
       '<span class="small">' + (MODE === "supabase" ? "휴대폰 데이터나 아무 Wi-Fi로 열면 돼요. 로그인은 필요 없어요." : "이 브라우저 안에서만 동작하는 연습 모드예요. 휴대폰과 연결하려면 ?local 없이 배포한 주소로 열어 주세요.") + "</span></div></div></section>" +
       '<section class="panel"><h2>진행자 전용 (참여자에게는 안 보임)</h2>' + adminHtml() + "</section></div></div>" +
       (preview ? '<section><p class="sec-title">휴대폰 ' + personList().length + '대 미리보기 · 여기서 눌러도 실제 휴대폰과 같은 데이터가 바뀌어요</p><div class="phones">' +
       TEAMS.map((tn, t) => '<div class="team-group"><div class="team-label">' + tn + '</div><div class="team-phones">' + teamOf(t).map((p) =>
         '<div class="phone"><div class="phone-bar"><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b><span>" + tn + '</span></div><div class="screen" id="screen-' + p.id + '">' + phoneHtml(p.id) + "</div></div>").join("") + "</div></div>").join("") +
-      "</div></section>" : game && personList().length ? '<p class="small">참여자가 12명보다 많아서 휴대폰 미리보기는 숨겼어요. 각자 휴대폰으로 진행해 주세요.</p>' : "") + "</main>");
+      "</div></section>" : game && personList().length ? '<p class="small">참여자가 12명보다 많아서 휴대폰 미리보기는 숨겼어요. 각자 휴대폰으로 진행해 주세요.</p>' : "") + "</main>") + "</div>";
   }
 
   let lastHtml = "";
