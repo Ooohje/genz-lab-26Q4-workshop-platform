@@ -114,7 +114,7 @@
       return null;
   }
   function checkBosses(list) {
-    if (!Array.isArray(list) || list.length < 1 || list.length > 10) return "보스는 1~10명이어야 해요";
+    if (!Array.isArray(list) || list.length < 1 || list.length > 20) return "보스는 1~20명이어야 해요";
     for (let i = 0; i < list.length; i++) { const e = checkBoss(list[i], i + 1 + "번 보스: "); if (e) return e; }
     return null;
   }

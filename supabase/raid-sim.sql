@@ -21,7 +21,7 @@
 
 -- 판정 스탯이 든 보스 표. 공개 키로는 읽을 수 없습니다.
 create table if not exists public.raid_sim_bosses (
-  round       smallint primary key check (round between 1 and 10),
+  round       smallint primary key check (round between 1 and 20),
   name        text     not null,
   description text     not null,
   hp          smallint not null,
@@ -32,6 +32,9 @@ create table if not exists public.raid_sim_bosses (
   reveal      text     not null default ''
 );
 -- 돌발 이벤트 주사위 효과 (1이 나왔을 때 / 6이 나왔을 때 공격력 변화)
+-- 보스는 20명까지 (예전에 10명으로 만든 표도 늘림)
+alter table public.raid_sim_bosses drop constraint if exists raid_sim_bosses_round_check;
+alter table public.raid_sim_bosses add  constraint raid_sim_bosses_round_check check (round between 1 and 20);
 alter table public.raid_sim_bosses add column if not exists dice_low  smallint not null default -2;
 alter table public.raid_sim_bosses add column if not exists dice_high smallint not null default 3;
 
@@ -151,7 +154,7 @@ create or replace function public.raid_sim_check_bosses(p jsonb) returns text
 language plpgsql immutable as $$
 declare v jsonb; i bigint; pre text; st text; seen text[];
 begin
-  if p is null or jsonb_typeof(p) <> 'array' or jsonb_array_length(p) not between 1 and 10 then return '보스는 1~10명이어야 해요'; end if;
+  if p is null or jsonb_typeof(p) <> 'array' or jsonb_array_length(p) not between 1 and 20 then return '보스는 1~20명이어야 해요'; end if;
   for v, i in select x.value, x.ord from jsonb_array_elements(p) with ordinality as x(value, ord) loop
     pre := i || '번 보스: ';
     if jsonb_typeof(v) is distinct from 'object' then return pre || '형식이 잘못됐어요'; end if;
@@ -588,6 +591,20 @@ begin
     when 'final' then
       if v_phase <> 'revealed' then err := '결과 공개 뒤에 최종 순위를 띄울 수 있어요';
       else s := jsonb_set(s, '{game,phase}', '"final"'); end if;
+    when 'setStories' then
+      -- AI 서술(Edge Function raid-sim 의 story)을 이번 라운드 결과에 붙임. p_data = {"_sig": 판정 서명, "조 번호": "서술", …}
+      -- 그사이 다시 마감해 판정이 바뀌었으면(서명이 다르면) 붙이지 않습니다.
+      if p_arg is null or p_arg <> v_round or s#>array['game', 'results', p_arg::text] is null then err := '이번 라운드 판정이 없어요';
+      elsif p_data is null or jsonb_typeof(p_data) <> 'object'
+         or p_data->>'_sig' is distinct from (select string_agg((x->>'pid') || ':' || (x->>'power'), ',' order by o)
+                                               from jsonb_array_elements(s#>array['game', 'results', p_arg::text]) with ordinality as t(x, o)) then
+        err := '판정이 바뀌어서 서술을 다시 만들어야 해요';
+      else
+        s := jsonb_set(s, array['game', 'results', p_arg::text], (
+          select coalesce(jsonb_agg(case when jsonb_typeof(p_data->(x->>'team')) = 'string'
+                                         then x || jsonb_build_object('story', left(p_data->>(x->>'team'), 240)) else x end order by o), '[]'::jsonb)
+            from jsonb_array_elements(s#>array['game', 'results', p_arg::text]) with ordinality as t(x, o)));
+      end if;
     when 'back' then
       -- 한 단계 전으로 (js/raid-sim-engine.js 의 back 과 같음)
       if v_stage is null or v_stage = 'lobby' then err := '더 이전 단계가 없어요';

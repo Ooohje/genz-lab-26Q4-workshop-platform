@@ -458,6 +458,11 @@ window.WCRaid = (function () {
           '<td class="n">' + (base != null ? base : "") + '</td><td class="n">' + (x && x.effect ? esc(effLabel(x.effect)) : "") + '</td><td class="n"><b>' + (x ? x.power : "") + "</b></td><td" + (x && x.cleared ? ' class="ok"' : "") + ">" + (x ? (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? " MVP" : "") : "") + "</td></tr>";
       });
       html += "</tbody></table>";
+      if (rows.length && rows[0].power != null) {
+        html += '<div class="stories"><div class="between"><b>AI 서술</b><button type="button" class="btn quiet sm" data-story' + (storyBusy ? " disabled" : "") + ">" + (storyBusy ? "만드는 중…" : "다시 만들기") + "</button></div>" +
+          (storyError ? '<div class="small" style="color:var(--coral-deep)">' + esc(storyError) + "</div>" : "") +
+          rows.map((x) => '<div class="story-row"><b>' + TEAMS[x.team] + "</b> " + (x.story ? esc(x.story) : '<span class="small">' + (storyBusy ? "만드는 중…" : "아직 없어요") + "</span>") + "</div>").join("") + "</div>";
+      }
       html += '<div class="small">누적: ' + scoreboard().map((x) => x.rank + "위 " + TEAMS[x.team] + " " + x.total + "점").join(" · ") + "</div>";
     }
     html += '<div class="who-grid">' + personList().map((p) => '<div class="who"><div class="art">' + (p.char ? sprite(p.char) : "") + '</div><div><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b>" +
@@ -530,6 +535,7 @@ window.WCRaid = (function () {
       const f = people[x.pid];
       return h + '<div class="card"><div class="outcome' + (x.cleared ? " win" : "") + '">' + (x.cleared ? "격파!" : "아쉽게 실패") + "</div>" +
         '<div class="pfight' + (x.cleared ? " win" : " lose") + '"><div class="art">' + (f ? sprite(charOf(f)) : "") + '</div><div class="pvs"><b class="pdmg">' + x.power + '</b><span>공격력</span></div><div class="pboss">' + bossSprite(game.round) + (x.cleared ? '<b class="ko-stamp">K.O.</b>' : "") + "</div></div>" +
+        (x.story ? '<div class="story">' + esc(x.story) + "</div>" : "") +
         '<div class="php"><i style="--left:' + Math.max(0, (b.hp - x.power) / b.hp * 100) + '%"></i></div>' +
         '<div class="php-t">' + (x.cleared ? "보스 HP " + b.hp + " → 0 · 격파!" : "보스 HP " + b.hp + " → " + (b.hp - x.power) + " 남음 · " + (b.hp - x.power) + "점만 더 있었으면!") + "</div>" +
         '<div class="muted"><b>' + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div>" +
@@ -630,7 +636,7 @@ window.WCRaid = (function () {
       '<button type="button" class="btn" data-set="sadd"' + (d.roulette.length >= 10 ? " disabled" : "") + ' style="align-self:flex-start">+ 칸 추가</button></section>';
     const minCount = game && game.stage === "boss" ? Math.max(1, game.round || 0) : 1;
     h += '<section class="panel"><div class="bcount"><h2>보스</h2><label class="chk">보스 수 <select data-count aria-label="보스 수">' +
-      Array.from({ length: 10 }, (_, k) => k + 1).map((n) => '<option value="' + n + '"' + (n === d.bosses.length ? " selected" : "") + (n < minCount ? " disabled" : "") + ">" + n + "명</option>").join("") +
+      Array.from({ length: 20 }, (_, k) => k + 1).map((n) => '<option value="' + n + '"' + (n === d.bosses.length ? " selected" : "") + (n < minCount ? " disabled" : "") + ">" + n + "명</option>").join("") +
       "</select></label><span class=\"small\">늘리면 맨 뒤에 새 보스가 생기고, 줄이면 맨 뒤 보스부터 지워져요. 저장해야 반영돼요." + (minCount > 1 ? " 이미 진행한 " + game.round + "라운드보다 줄일 수 없어요." : "") + "</span></div>" +
       '<p class="small">판정 스탯·힌트·결과 설명은 결과 공개 전까지 참여자에게 보이지 않아요. "평균 공격력"은 모든 스탯이 평균(' + (isFinite(avg) ? Math.round(avg * 10) / 10 : "?") + "점)인 캐릭터가 이 보스에서 내는 공격력이에요.</p>";
     d.bosses.forEach((b, i) => {
@@ -652,7 +658,7 @@ window.WCRaid = (function () {
         '<label class="f"><span>힌트 (진행자가 "힌트 공개"를 누르면 보임)</span><input type="text" maxlength="200" ' + f("hint") + ' value="' + esc(b.hint) + '"></label>' +
         '<label class="f"><span>결과 공개 때 설명</span><textarea rows="2" maxlength="300" ' + f("reveal") + ">" + esc(b.reveal) + "</textarea></label></div>";
     });
-    h += '<button type="button" class="btn" data-set="add"' + (d.bosses.length >= 10 ? " disabled" : "") + ' style="align-self:flex-start">+ 보스 추가</button></section>';
+    h += '<button type="button" class="btn" data-set="add"' + (d.bosses.length >= 20 ? " disabled" : "") + ' style="align-self:flex-start">+ 보스 추가</button></section>';
     h += '<div class="save-bar"><span class="small" data-dirty>' + (d.dirty ? "저장하지 않은 변경이 있어요" : "저장된 내용과 같아요") + "</span>" +
       '<button type="button" class="btn quiet" data-set="defaults">보스 기본값으로</button><button type="button" class="btn" data-set="revert">변경 취소</button>' +
       '<button type="button" class="btn go" data-set="save">저장</button></div></main>';
@@ -773,7 +779,7 @@ window.WCRaid = (function () {
       return;
     }
     if (!L) return;
-    if (what === "add" && L.length < 10) L.push(newBoss());
+    if (what === "add" && L.length < 20) L.push(newBoss());
     else if (what === "del" && L.length > 1) { if (!confirm((i + 1) + "번 보스 '" + L[i].name + "'를 지울까요? (저장해야 반영돼요)")) return; L.splice(i, 1); }
     else if (what === "up" && i > 0) L.splice(i - 1, 0, L.splice(i, 1)[0]);
     else if (what === "down" && i < L.length - 1) L.splice(i + 1, 0, L.splice(i, 1)[0]);
@@ -894,6 +900,26 @@ window.WCRaid = (function () {
   // ── 누르기 ──────────────────────────────────────────────────────
   addEventListener("keydown", (e) => { if (e.key === "Escape" && infoOpen) { infoOpen = false; invalidate(); } });
   let hostBusy = false;
+  // AI 서술: 마감하면 Gemini 에게 부탁해 결과 공개 전까지 만들어 둡니다 (Edge Function raid-sim 의 story). 미리보기 모드는 간단한 문장으로.
+  let storyBusy = false, storyError = "";
+  function localStory(x, b) {
+    const c = charOf(people[x.pid] || {}), st = (b.stats || []).map((k) => ({ k, v: c[k] || 0 })).sort((p, q) => q.v - p.v);
+    const hi = st[0], lo = st[st.length - 1];
+    return x.cleared ? x.name + " 님은 " + LABEL[hi.k] + " " + hi.v + "의 힘으로 끝까지 밀어붙여 " + b.name + "을(를) 무너뜨렸어요."
+      : x.name + " 님은 " + LABEL[lo.k] + "이(가) " + lo.v + "에 그쳐 마지막 고비를 넘지 못했어요. " + (b.hp - x.power) + "점만 더 있었으면!";
+  }
+  async function requestStories() {
+    if (MODE === "local") {
+      const g = LOCAL.S.game, b = game.round === 0 ? PRACTICE : BOSSES[game.round - 1];
+      (g.results[g.round] || []).forEach((x) => { x.story = localStory(x, b || {}); });
+      apply(LOCAL.engine.snapshot(LOCAL.S, true), true);
+      return;
+    }
+    storyBusy = true; storyError = ""; invalidate();
+    try { apply(await callAdmin("story"), true); }
+    catch (e) { storyError = e.message; }
+    storyBusy = false; invalidate();
+  }
   async function onClick(e) {
     if (e.target.closest("[data-info]")) { infoOpen = true; invalidate(); return; }
     if (e.target.closest("[data-bgm]")) { if (window.RaidSimBgm) { window.RaidSimBgm.toggle(); sfxKey = curSfxKey(); } invalidate(); return; }
@@ -914,9 +940,15 @@ window.WCRaid = (function () {
       const [fn, arg] = hb.dataset.host.split(":");
       if (fn === "back" && !confirm(game && game.phase === "closed" ? "마감을 취소하고 회의로 돌아갈까요? 이번 라운드 판정은 마감할 때 다시 해요." : "한 단계 전으로 돌아갈까요?")) return;
       if (fn === "reset" && !confirm("처음부터 다시 할까요? 캐릭터와 결과가 모두 지워져요.")) return;
-      if (!hostBusy) { hostBusy = true; hb.disabled = true; try { await backend.host(fn, arg ? Number(arg) : undefined); } finally { hostBusy = false; invalidate(); } }
+      if (!hostBusy) {
+        hostBusy = true; hb.disabled = true;
+        let ok = false;
+        try { ok = await backend.host(fn, arg ? Number(arg) : undefined); } finally { hostBusy = false; invalidate(); }
+        if (ok && fn === "close") requestStories();
+      }
       return;
     }
+    if (e.target.closest("[data-story]")) { if (!storyBusy) requestStories(); return; }
     const b = e.target.closest("[data-a]");
     if (b && !b.disabled) personAct(Number(b.dataset.p), b.dataset.a, b.dataset.a === "pick" ? Number(b.dataset.m) : b.dataset.k);
   }
