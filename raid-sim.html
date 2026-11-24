@@ -250,6 +250,9 @@ a { color: var(--blue); }
 .dice-team { display: flex; flex-direction: column; align-items: center; gap: 1cqw; padding: 1.6cqw 1.2cqw; text-align: center; min-width: 0; }
 .dice-team .dwho { font-size: 1.5cqw; font-weight: 700; color: #545C7A; }
 .dice-team .dwho b { font-weight: 800; font-size: 2.6cqw; color: var(--stage-ink); display: block; }
+.ev-alert { color: var(--coral-deep); animation: alert 0.5s steps(2) 4; }
+@keyframes alert { 50% { opacity: 0.25; transform: scale(1.04); } }
+.card .ev-alert { font-size: 5.6cqw; font-weight: 900; text-align: center; }
 .dice-row { display: flex; gap: 0.8cqw; justify-content: center; flex-wrap: wrap; }
 .dice-team .eff { font-weight: 800; font-size: 2.3cqw; }
 .eff.up { color: var(--coral-deep); }
@@ -442,16 +445,9 @@ a { color: var(--blue); }
   let JOIN_MODE = "seats";            // "roster": 휴대폰에서 아이디로 입장 · "seats": 6자리 중 고르기
   // 보스 정보는 Supabase(또는 js/raid-sim-engine.js)가 보내 줍니다. 판정 스탯은 결과 공개 전까지 진행자에게만 옵니다.
   let BOSSES = [];
-  // 돌발 이벤트 주사위 눈별 카드 (판정은 js/raid-sim-engine.js · supabase/raid-sim.sql 과 같음)
-  const DICE_NAME = { 1: "노트북 업데이트", 2: "회의 하나 더", 3: "커피 수혈", 4: "칭찬 릴레이", 5: "보험 처리", 6: "동기가 자료를 먼저 보내 줌" };
+  // 돌발 이벤트 주사위 눈별 효과 (판정은 js/raid-sim-engine.js · supabase/raid-sim.sql 과 같음)
   const diceEff = (b, d) => d === 1 ? "공격력 " + sign(b.diceLow) : d === 2 ? "공격력 −1" : d === 3 ? "공격력 +1" : d === 4 ? "격파하면 +1점" : d === 5 ? "실패해도 +1점" : "공격력 " + sign(b.diceHigh);
   const diceRules = (b) => [1, 2, 3, 4, 5, 6].map((d) => d + " " + diceEff(b, d)).join(" · ");
-  // 운에 따른 눈별 확률 (엔진의 luckWeights 와 같은 식)
-  function luckProbs(luck) {
-    const span = RULES.statMax - RULES.statMin, t = span > 0 ? Math.min(1, Math.max(0, (luck - RULES.statMin) / span)) : 0;
-    const r = Math.pow(1 + (RULES.luckPower || 0) / 100, t), w = [0, 1, 2, 3, 4, 5].map((k) => Math.pow(r, k)), sum = w.reduce((a, c) => a + c, 0);
-    return w.map((x) => Math.round(x / sum * 100));
-  }
 
   // ── 픽셀 캐릭터 (js/raid-common.js 와 같은 그림) ───────────────
   function rng(seed) {
@@ -539,7 +535,7 @@ a { color: var(--blue); }
   const defaultStats = () => Object.fromEntries(KEYS.map((k, i) => [k, Math.floor(RULES.statTotal / KEYS.length) + (i < RULES.statTotal % KEYS.length ? 1 : 0)]));
   const blankDraft = () => Object.fromEntries(KEYS.map((k) => [k, RULES.statMin]));
   const sign = (n) => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n);
-  const diceText = (x) => !x.dice ? "" : "주사위 " + x.dice + " " + DICE_NAME[x.dice];
+  const diceText = (x) => !x.dice ? "" : "주사위 " + x.dice + " · " + diceEff(boss(), x.dice);
   const luckNote = () => (RULES.luckPower > 0 ? "운이 높을수록 큰 눈이 잘 나와요" : "");
   const qrCache = {};
   function qrSvg(text) {
@@ -766,7 +762,7 @@ a { color: var(--blue); }
     let used = false;
     return '<div class="dice-row">' + rolls.map((d) => { const best = !used && d === x.dice; if (best) used = true; return '<span class="die' + (best ? " best" : rolls.length > 1 ? " dim" : "") + '">' + dieSvg(d) + "</span>"; }).join("") + "</div>";
   }
-  const diceEffect = (x) => rolling() ? "굴리는 중…" : x.dice + " " + DICE_NAME[x.dice] + "<br>" + diceEff(boss(), x.dice);
+  const diceEffect = (x) => rolling() ? "굴리는 중…" : x.dice + " → " + diceEff(boss(), x.dice);
   const diceGood = (x) => !rolling() && x.dice >= 3;
   setInterval(() => { document.querySelectorAll("[data-roll]").forEach((el) => { el.innerHTML = dieSvg(1 + rand(6)); }); }, 110);
   let rollTimer = null;
@@ -777,7 +773,7 @@ a { color: var(--blue); }
   // 우리 조 결과 문장 (휴대폰에만): 몇 점 모자랐는지, 받은 점수
   function myResultLine(x, b) {
     const out = [x.cleared ? "보스 HP " + b.hp + " 돌파 → 격파 +" + b.reward + "점" : "보스 HP " + b.hp + "까지 " + (b.hp - x.power) + "점 부족 → 0점"];
-    if (x.extra) out.push(DICE_NAME[x.dice] + " +1점");
+    if (x.extra) out.push("주사위 " + x.dice + " +1점");
     if (x.mvp) out.push("MVP +" + RULES.mvpBonus + "점");
     return out.join(" · ");
   }
@@ -816,17 +812,17 @@ a { color: var(--blue); }
       "<li>판정 스탯은 <b>비공개</b>. 보스 설명을 보고 조원과 추리해서 출전자를 고르세요.</li>" +
       "<li>공격력(판정 스탯 합)이 <b>보스 HP 이상이면 격파</b> → 그 보스의 보상 점수(" + rewardRange() + "), <b>실패하면 0점</b>.</li>" +
       "<li>라운드 공격력 1위 조는 <b>MVP " + sign(RULES.mvpBonus) + "점</b> (격파 못 해도, 동점이면 모두).</li>" +
-      "<li>돌발 이벤트 보스는 주사위를 굴려요. <b>눈마다 효과</b>가 달라요(공격력 또는 점수)." + (RULES.luckPower > 0 ? " <b>운</b>이 높을수록 큰 눈이 잘 나와요." : "") + "</li>" +
+      "<li>결과 공개 전에 <b>돌발 이벤트</b>가 터질 수도 있어요. 그때는 주사위 눈에 따라 공격력이나 점수가 바뀌어요.</li>" +
       "<li>점수를 모두 더한 <b>총점 순위는 마지막에 공개</b>돼요.</li></ol></div></div>";
     const b = boss();
     const head = '<div class="boss-row glass">' + bossSprite(game.round) + '<div><div class="eyebrow">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="boss-name">' + esc(b.name) + '</div><div class="boss-desc">' + esc(b.desc) + "</div>" +
-      '<div class="chips"><span class="hpc">HP ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + (b.event ? '<span class="hot">돌발 이벤트</span>' : "") + "</div></div></div>";
+      '<div class="chips"><span class="hpc">HP ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + "</div></div></div>";
     if (game.phase === "meeting") {
       const n = TEAMS.filter((_, t) => pickOf(game.round, t)).length;
       return '<div class="pv">' + head + '<div class="meet-foot">' +
         (game.hint ? '<div class="hint glass"><em>힌트</em>' + esc(b.hint) + "</div>" : '<div class="hint glass"><em>회의</em>판정 스탯을 추리하고 출전자를 골라 주세요</div>') +
         '<div class="timer glass" data-deadline="' + game.deadline + '"></div><div class="mini-count glass"><span>출전자 확정</span><b>' + n + "</b><span>/ " + TEAMS.length + "</span></div></div>" +
-        (b.event ? '<div class="event-note glass">돌발 이벤트 주사위 ' + diceRules(b) + (luckNote() ? " · " + luckNote() : "") + "</div>" : "") + "</div>";
+        "</div>";
     }
     const rows = game.results[game.round] || [];
     if (game.phase === "closed") {
@@ -834,8 +830,8 @@ a { color: var(--blue); }
         rows.map((x) => '<div class="fighter glass"><div class="art">' + sprite(charOf(people[x.pid] || {})) + "</div><div><span>" + TEAMS[x.team] + (x.auto ? " · 랜덤" : "") + "</span><b>" + esc(x.name) + "</b></div></div>").join("") + "</div></div>";
     }
     if (game.phase === "rolled") {
-      return '<div class="pv"><div><div class="eyebrow">' + esc(b.name) + '</div><div class="h">돌발 이벤트! 주사위를 굴려요</div>' +
-        '<div class="sub">' + diceRules(b) + (luckNote() ? " · " + luckNote() : "") + "</div></div>" +
+      return '<div class="pv"><div><div class="eyebrow">' + esc(b.name) + '</div><div class="h ev-alert">!! 돌발 이벤트 발생 !!</div>' +
+        '<div class="sub">' + diceRules(b) + "</div></div>" +
         '<div class="dice-grid' + (rows.length > 12 ? " many dense" : rows.length > 4 ? " many" : "") + '" style="--n:' + (rows.length > 12 ? 7 : Math.min(rows.length, 6)) + '">' + rows.map((x) =>
           '<div class="dice-team glass"><div class="dwho">' + TEAMS[x.team] + "<b>" + esc(x.name) + "</b></div>" + diceRow(x) + '<div class="eff' + (diceGood(x) ? " up" : "") + '">' + diceEffect(x) + "</div></div>").join("") + "</div></div>";
     }
@@ -874,7 +870,7 @@ a { color: var(--blue); }
         const k = pickOf(game.round, t), p = k ? people[k.pid] : null, x = rows.find((y) => y.team === t);
         const base = p ? b.stats.reduce((n, s) => n + (charOf(p)[s] || 0), 0) : null;
         html += "<tr><td><b>" + name + "</b></td><td>" + (p ? esc(p.name) + (k.auto ? ' <span class="small">(랜덤)</span>' : k.by != null && people[k.by] ? ' <span class="small">· ' + esc(people[k.by].name) + " 선택</span>" : "") : '<span class="small">선택 전</span>') + "</td>" +
-          '<td class="n">' + (base != null ? base : "") + '</td><td class="n">' + (x && x.dice ? x.dice + " " + DICE_NAME[x.dice] + " (" + diceEff(b, x.dice) + ")" : "") + '</td><td class="n"><b>' + (x ? x.power : "") + "</b></td><td" + (x && x.cleared ? ' class="ok"' : "") + ">" + (x ? (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? " MVP" : "") : "") + "</td></tr>";
+          '<td class="n">' + (base != null ? base : "") + '</td><td class="n">' + (x && x.dice ? x.dice + " (" + diceEff(b, x.dice) + ")" : "") + '</td><td class="n"><b>' + (x ? x.power : "") + "</b></td><td" + (x && x.cleared ? ' class="ok"' : "") + ">" + (x ? (x.cleared ? "격파" : "실패") + " +" + x.points + (x.mvp ? " MVP" : "") : "") + "</td></tr>";
       });
       html += "</tbody></table>";
       html += '<div class="small">누적: ' + scoreboard().map((x) => x.rank + "위 " + TEAMS[x.team] + " " + x.total + "점").join(" · ") + "</div>";
@@ -926,7 +922,7 @@ a { color: var(--blue); }
     if (game.phase === "idle" || !game.round) return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">라운드마다 조에서 1명 출전 · 한 사람은 한 번만<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 HP 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
     const b = boss();
     let h = '<div class="card"><div class="boss-mini">' + bossSprite(game.round) + '<div><div class="muted">보스 ' + game.round + " / " + BOSSES.length + '</div><div class="t">' + esc(b.name) + '</div></div></div>' + fold("d" + game.round, b.desc) +
-      '<div class="phone-chips"><span class="hpc">HP ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + (b.event ? '<span class="hot">돌발 이벤트</span>' : "") + "</div>" +
+      '<div class="phone-chips"><span class="hpc">HP ' + b.hp + "</span><span>보상 " + b.reward + "점</span>" + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + "</div>" +
       (game.hint && game.phase === "meeting" ? '<div class="muted"><b>힌트</b> ' + esc(b.hint) + "</div>" : "") +
       (game.phase === "meeting" ? '<div class="ptimer" data-deadline="' + game.deadline + '"></div>' : "") + "</div>";
     const k = pickOf(game.round, p.team), pick = k ? people[k.pid] : null;
@@ -939,10 +935,10 @@ a { color: var(--blue); }
         }).join("") + '<div class="muted">누르면 확인 창이 떠요. 마감 전까지는 조원 누구나 바꿀 수 있고, 마감 때 고른 사람이 최종이에요.' + (JOIN_MODE === "roster" ? " 아이디로 입장한 사람만 고를 수 있어요." : "") + " 아무도 안 고르면 마감 때 아직 안 나간 사람 중 랜덤.</div></div>";
     }
     const x = (game.results[game.round] || []).find((y) => y.team === p.team);
-    if (game.phase === "closed") return h + '<div class="card"><div class="t">' + (x ? esc(x.name) + " 님 출전!" : "마감") + '</div><div class="muted">' + (x && x.auto ? "아무도 안 골라서 랜덤으로 정해졌어요. " : "") + (b.event ? "곧 돌발 이벤트 주사위를 굴려요." : "앞쪽 화면에서 결과 공개를 기다려 주세요.") + "</div></div>";
+    if (game.phase === "closed") return h + '<div class="card"><div class="t">' + (x ? esc(x.name) + " 님 출전!" : "마감") + '</div><div class="muted">' + (x && x.auto ? "아무도 안 골라서 랜덤으로 정해졌어요. " : "") + "앞쪽 화면에서 결과 공개를 기다려 주세요." + "</div></div>";
     // 9) 우리 조 주사위만
     if (game.phase === "rolled" && x) {
-      return h + '<div class="card pdice"><div class="t">돌발 이벤트 주사위 · ' + TEAMS[p.team] + "</div><div class=\"muted\">" + esc(x.name) + " 님이 굴려요</div>" + diceRow(x) +
+      return h + '<div class="card pdice"><div class="t ev-alert">!! 돌발 이벤트 발생 !!</div><div class="t">' + TEAMS[p.team] + " 주사위</div><div class=\"muted\">" + esc(x.name) + " 님이 굴려요</div>" + diceRow(x) +
         '<div class="eff' + (diceGood(x) ? " up" : "") + '">' + diceEffect(x) + '</div><div class="muted">' + diceRules(b) + "</div></div>";
     }
     if (game.phase === "revealed" && x) {
@@ -952,7 +948,7 @@ a { color: var(--blue); }
         '<div class="php"><i style="--left:' + Math.max(0, (b.hp - x.power) / b.hp * 100) + '%"></i></div>' +
         '<div class="php-t">' + (x.cleared ? "보스 HP " + b.hp + " → 0 · 격파!" : "보스 HP " + b.hp + " → " + (b.hp - x.power) + " 남음 · " + (b.hp - x.power) + "점만 더 있었으면!") + "</div>" +
         '<div class="muted"><b>' + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div>" +
-        '<div class="muted">판정 스탯 ' + statsText(b.stats) + " 합 " + x.base + (x.dice ? " · " + diceText(x) + " (" + diceEff(b, x.dice) + ")" : "") + "</div>" +
+        '<div class="muted">판정 스탯 ' + statsText(b.stats) + " 합 " + x.base + (x.dice ? " · " + diceText(x) : "") + "</div>" +
         '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + '</div>' + fold("r" + game.round, b.reveal) + '<div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
         '<div class="muted">누적 점수와 순위는 마지막에 공개돼요.</div>';
     }
@@ -973,18 +969,13 @@ a { color: var(--blue); }
     const evB = BOSSES.filter((b) => b.event), b0 = evB[0] || { diceLow: -2, diceHigh: 3 };
     const odd = evB.some((b) => b.diceLow !== b0.diceLow || b.diceHigh !== b0.diceHigh);
     const die = (n) => '<span class="mini-die">' + dieSvg(n) + "</span>";
-    const cards = [1, 2, 3, 4, 5, 6].map((d) => die(d) + "<b>" + DICE_NAME[d] + "</b> " + diceEff(b0, d)).join("<br>");
-    let luck = "";
-    if (RULES.luckPower > 0) {
-      const mid = Math.round((RULES.statMin + RULES.statMax) / 2), row = (L) => "운 " + L + ": " + luckProbs(L).map((v, k) => k + 1 + "→" + v + "%").join(" ");
-      luck = "<br><br>주사위는 1개예요. <b>운이 높을수록 큰 눈</b>이 잘 나와요.<br>" + [RULES.statMin, mid, RULES.statMax].filter((v, i, a) => a.indexOf(v) === i).map(row).join("<br>");
-    }
+    const cards = [1, 2, 3, 4, 5, 6].map((d) => die(d) + diceEff(b0, d)).join("<br>");
     return '<div class="modal-back" data-info-close><div class="modal" role="dialog" aria-modal="true" aria-label="점수 규칙"><div class="modal-head"><h3>점수는 이렇게 매겨요</h3><button type="button" class="info-btn x" data-info-close aria-label="닫기">✕</button></div>' +
-      '<div class="card"><div class="t">공격력</div><div class="muted">출전자의 <b>판정 스탯 합</b>이 공격력이에요. 어떤 스탯이 판정되는지는 비공개이고, 결과 공개 때 알려 줘요. 돌발 이벤트 보스는 여기에 주사위 결과가 더해져요.</div></div>' +
+      '<div class="card"><div class="t">공격력</div><div class="muted">출전자의 <b>판정 스탯 합</b>이 공격력이에요. 어떤 스탯이 판정되는지는 비공개이고, 결과 공개 때 알려 줘요. 돌발 이벤트가 터지면 여기에 주사위 결과가 더해져요.</div></div>' +
       '<div class="card"><div class="t">격파 / 실패</div><div class="muted">공격력이 <b>보스 HP 이상이면 격파</b> → 그 보스의 보상 점수를 받아요. 모자라면 <b>실패 → 0점</b>.<br>' + BOSSES.map((b, i) => i + 1 + "번 " + b.reward + "점").join(" · ") + "</div></div>" +
       '<div class="card"><div class="t">MVP</div><div class="muted">라운드마다 공격력이 가장 높은 조가 <b>' + sign(RULES.mvpBonus) + "점</b>을 더 받아요. 격파하지 못해도 받을 수 있고, 동점이면 모두 받아요.</div></div>" +
       '<div class="card"><div class="t">돌발 이벤트 주사위</div><div class="muted">' + cards +
-        (odd ? "<br>(1·6의 공격력 변화는 보스마다 달라요)" : "") + (evB.length ? "" : "<br>지금은 돌발 이벤트 보스가 없어요.") + luck + "</div></div>" +
+        (odd ? "<br>(1·6의 공격력 변화는 보스마다 달라요)" : "") + (evB.length ? "" : "<br>지금은 돌발 이벤트 보스가 없어요.") + "</div></div>" +
       '<div class="card"><div class="t">순위</div><div class="muted">라운드 점수(격파 보상 + MVP + 주사위 점수)를 모두 더한 <b>총점</b> 순이에요. 총점이 같으면 공격력 합이 높은 조가 위예요. 누적 점수와 순위는 <b>마지막에 공개</b>돼요.</div></div>' +
       '<div class="card"><div class="t">출전</div><div class="muted">라운드마다 조에서 <b>1명</b>이 나가요. 한 사람은 한 번만 나갈 수 있고(모두 나갔으면 다시 가능), ' + (JOIN_MODE === "roster" ? "아이디로 입장한 사람만 고를 수 있어요. " : "") + "아무도 안 고르면 마감 때 아직 안 나간 사람 중 랜덤이에요.</div></div></div></div>";
   }
@@ -1264,7 +1255,7 @@ a { color: var(--blue); }
   function syncBgm(v) {
     const B = window.RaidSimBgm, g = game;
     if (!B || v === "join") return;
-    B.setTrack(!g || g.stage !== "boss" || !g.round ? "lobby" : g.phase === "meeting" ? "meeting" : g.phase === "closed" ? "wait" : g.phase === "rolled" ? (rolling() ? "dice" : "wait") : g.phase === "revealed" ? "calm" : g.phase === "final" ? "victory" : "lobby");
+    B.setTrack(!g || g.stage !== "boss" || !g.round ? "lobby" : g.phase === "meeting" ? "meeting" : g.phase === "closed" ? "wait" : g.phase === "rolled" ? (rolling() ? "dice" : "wait") : g.phase === "revealed" ? "wait" : g.phase === "final" ? "victory" : "lobby");
     const key = curSfxKey();
     if (key && key !== sfxKey) {
       if (key[0] === "d") { if (rolling()) B.sfx("land", (g.rollAt + ROLL_MS - now()) / 1000); }   // 주사위 눈이 나오는 순간에 맞춰
