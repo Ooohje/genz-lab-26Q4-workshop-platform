@@ -5,6 +5,7 @@
 //   돌발 이벤트 룰렛: 진행자가 정한 칸(config.roulette, 2~10칸) 중 하나. 칸 효과 kind: power(공격력 ±value) · clear(격파하면 +value점) · fail(실패해도 +value점) · none
 //   운: 운이 높을수록 아래쪽 칸이 잘 나옵니다. k번째 칸의 가중치 = r^(k-1), r = (1 + luckPower/100)^t, t = (운 − 스탯 최소) / (스탯 최대 − 스탯 최소).
 //   연습 라운드: 0번 라운드(config.practiceBoss). 룰렛은 항상 터지고, 출전 기록과 점수에는 들어가지 않습니다.
+//   출전: 라운드마다 조에서 1명. 한 사람 최대 2번 (조원 6명 미만인 조는 3번), 입장한 조원이 모두 다 썼으면 가장 적게 나간 사람.
 //   라운드 공격력 1위 조는 MVP 점수. 순위는 총점, 같으면 격파 횟수, 그것도 같으면 같은 등수 (js/raid.js scoreboard).
 (function (root) {
   "use strict";
@@ -149,14 +150,25 @@
   const personList = (S) => Object.keys(S.people).map(Number).sort((a, b) => a - b).map((i) => S.people[i]);
   const teamOf = (S, t) => personList(S).filter((p) => p.team === t);
   const pickOf = (S, r, t) => S.picks["r" + r + "t" + t];
-  function played(S, pid, before) {
-    for (let r = 1; r < before; r++) for (let t = 0; t < S.teams.length; t++) { const k = pickOf(S, r, t); if (k && k.pid === pid) return true; }
-    return false;
+  // before 라운드 전까지 몇 번 출전했는지 (연습 라운드는 세지 않음)
+  function plays(S, pid, before) {
+    let n = 0;
+    for (let r = 1; r < before; r++) for (let t = 0; t < S.teams.length; t++) { const k = pickOf(S, r, t); if (k && k.pid === pid) n++; }
+    return n;
   }
+  // 출전 제한: 한 사람 최대 2번, 조원이 6명 미만인 조는 3번
+  const MAX_PLAYS = 2, SMALL_TEAM = 6, SMALL_MAX_PLAYS = 3;
+  const capOf = (S, t) => (teamOf(S, t).length < SMALL_TEAM ? SMALL_MAX_PLAYS : MAX_PLAYS);
   // 명단 판에서는 아이디로 입장한 사람만 출전 후보 (6자리 연습판은 모두)
   const present = (S, p) => S.mode !== "roster" || !!(p && p.claimed);
-  const canPick = (S, pid, t) => present(S, S.people[pid]) &&
-    (!played(S, pid, S.game.round) || teamOf(S, t).filter((m) => present(S, m)).every((m) => played(S, m.id, S.game.round)));
+  // 고를 수 있는 사람: 입장했고 출전 횟수가 남은 사람. 입장한 조원이 모두 다 썼으면 그중 가장 적게 나간 사람
+  function canPick(S, pid, t) {
+    if (!present(S, S.people[pid])) return false;
+    const r = S.game.round, cap = capOf(S, t), n = plays(S, pid, r);
+    if (n < cap) return true;
+    const mates = teamOf(S, t).filter((m) => present(S, m)).map((m) => plays(S, m.id, r));
+    return !mates.some((x) => x < cap) && n === Math.min(...mates);
+  }
   const charOf = (S, p) => p.char || Object.assign(defaultStats(S.config), { seed: p.seed || 1, isDefault: true });
   // 0번 라운드 = 연습 보스 (룰렛 항상, 보상 없음)
   const bossAt = (S, r) => r === 0 ? Object.assign({ reward: 0, event: true, diceLow: 0, diceHigh: 0 }, S.config.practiceBoss) : S.bosses[r - 1];
@@ -172,8 +184,8 @@
     const g = S.game, r = g.round, b = bossAt(S, r), cfg = S.config;
     for (let t = 0; t < S.teams.length; t++) {
       if (pickOf(S, r, t)) continue;
-      // 아무도 안 골랐으면: 아직 안 나간 사람 → 입장한 사람을 먼저, 그 안에서 랜덤
-      const all = teamOf(S, t), rank = (m) => (played(S, m.id, r) ? 2 : 0) + (present(S, m) ? 0 : 1);
+      // 아무도 안 골랐으면: 입장한 사람 → 출전 횟수가 남은 사람 → 덜 나간 사람 순으로, 그 안에서 랜덤
+      const all = teamOf(S, t), cap = capOf(S, t), rank = (m) => { const n = plays(S, m.id, r); return (present(S, m) ? 0 : 1000) + (n >= cap ? 100 : 0) + n; };
       const best = Math.min(...all.map(rank)), list = all.filter((m) => rank(m) === best);
       S.picks["r" + r + "t" + t] = { pid: list[rand(list.length)].id, by: null, auto: true };
     }
@@ -362,7 +374,7 @@
       if (g.phase !== "meeting") return "회의 시간이 끝났어요";
       if (!m || m.team !== p.team) return "우리 조원만 고를 수 있어요";
       if (!present(S, m)) return "아직 입장하지 않은 사람이에요. 아이디로 입장한 사람만 고를 수 있어요";
-      if (!canPick(S, m.id, p.team)) return "이미 출전한 사람이에요";
+      if (!canPick(S, m.id, p.team)) return "출전 횟수를 다 쓴 사람이에요";
       S.picks["r" + g.round + "t" + p.team] = { pid: m.id, by: pid, auto: false };
       return null;
     }

@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261125d";
+  const V = "20261125e";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
 
@@ -251,13 +251,25 @@ window.WCRaid = (function () {
   // 출전자의 판정 스탯 값 (예: 체력 6 + 멘탈 5)
   const statLine = (x, b) => (b.stats || []).map((k) => LABEL[k] + " " + (charOf(people[x.pid] || {})[k] ?? "?")).join(" + ");
   const pickOf = (r, t) => picks["r" + r + "t" + t];
-  function played(pid, before) {
-    for (let r = 1; r < before; r++) for (let t = 0; t < TEAMS.length; t++) { const k = pickOf(r, t); if (k && k.pid === pid) return true; }
-    return false;
+  // before 라운드 전까지 몇 번 출전했는지 (연습 라운드는 세지 않음)
+  function plays(pid, before) {
+    let n = 0;
+    for (let r = 1; r < before; r++) for (let t = 0; t < TEAMS.length; t++) { const k = pickOf(r, t); if (k && k.pid === pid) n++; }
+    return n;
   }
+  // 출전 제한: 한 사람 최대 2번, 조원이 6명 미만인 조는 3번 (js/raid-sim-engine.js · supabase/raid-sim.sql 과 같음)
+  const MAX_PLAYS = 2, SMALL_TEAM = 6, SMALL_MAX_PLAYS = 3;
+  const capOf = (t) => (teamOf(t).length < SMALL_TEAM ? SMALL_MAX_PLAYS : MAX_PLAYS);
   // 2) 명단 판에서는 아이디로 입장한 사람만 출전 후보 (6자리 연습판은 모두)
   const present = (m) => JOIN_MODE !== "roster" || !!(m && m.claimed);
-  const canPick = (pid, t) => present(people[pid]) && (!played(pid, game.round) || teamOf(t).filter(present).every((m) => played(m.id, game.round)));
+  // 고를 수 있는 사람: 입장했고 출전 횟수가 남은 사람. 입장한 조원이 모두 다 썼으면 그중 가장 적게 나간 사람
+  function canPick(pid, t) {
+    if (!present(people[pid])) return false;
+    const r = game.round, cap = capOf(t), n = plays(pid, r);
+    if (n < cap) return true;
+    const mates = teamOf(t).filter(present).map((m) => plays(m.id, r));
+    return !mates.some((x) => x < cap) && n === Math.min(...mates);
+  }
   const charOf = (p) => p.char || Object.assign(defaultStats(), { seed: p.seed || 1, isDefault: true });
   function scoreboard() {
     const res = game.results || {};
@@ -385,7 +397,7 @@ window.WCRaid = (function () {
   const defaultRulesTitle = () => "보스 " + BOSSES.length + "명이 기다리고 있어요";
   const defaultRuleLines = () => [
     "먼저 **연습 보스**와 한 판 해 봐요. 연습은 점수와 출전 기록에 들어가지 않아요.",
-    "라운드마다 조에서 **1명**이 출전해요. 한 사람은 한 번만 나갈 수 있어요.",
+    "보스는 총 **" + BOSSES.length + "판**. 라운드마다 조에서 **1명**이 출전해요. 한 사람은 **최대 " + MAX_PLAYS + "번**까지 나갈 수 있어요(조원이 " + SMALL_TEAM + "명 미만인 조는 **" + SMALL_MAX_PLAYS + "번**).",
     "판정 스탯은 **비공개**. 보스 설명을 보고 조원과 추리해서 출전자를 고르세요.",
     "공격력(판정 스탯 합)이 **보스 HP 이상이면 격파** → 그 보스의 보상 점수(" + rewardRange() + "), **실패하면 0점**.",
     "라운드 공격력 1위 조는 **MVP " + sign(RULES.mvpBonus) + "점** (격파 못 해도, 동점이면 모두).",
@@ -528,7 +540,7 @@ window.WCRaid = (function () {
       h += '<div class="card"><div class="t">우리 조 캐릭터</div>' + team.filter((m) => m.id !== pid).map((m) => pcard(m)).join("") + "</div>";
       return h;
     }
-    if (game.phase === "idle") return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">먼저 연습 보스와 한 판 (점수 없음)<br>라운드마다 조에서 1명 출전 · 한 사람은 한 번만<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 HP 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
+    if (game.phase === "idle") return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">먼저 연습 보스와 한 판 (점수 없음)<br>보스 ' + BOSSES.length + '판 · 라운드마다 조에서 1명 출전<br>한 사람은 최대 ' + capOf(p.team) + '번까지<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 HP 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
     const b = boss();
     let h = '<div class="card"><div class="boss-mini">' + bossSprite(game.round) + '<div><div class="muted">' + rlabel() + '</div><div class="t">' + esc(b.name) + '</div></div></div>' + fold("d" + game.round, b.desc) +
       '<div class="phone-chips"><span class="hpc">HP ' + b.hp + "</span>" + (game.round === 0 ? "<span>연습</span>" : "<span>보상 " + b.reward + "점</span>") + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + "</div>" +
@@ -539,7 +551,8 @@ window.WCRaid = (function () {
       return h + '<div class="card"><div class="t">출전자 고르기</div><div class="muted">' + (pick ? "<b>" + esc(pick.name) + "</b> 님이 출전해요" + (k.by != null && people[k.by] ? " · " + esc(people[k.by].name) + " 님이 골랐어요" : "") : "아직 출전자가 없어요. 조원 누구나 고를 수 있어요.") + "</div>" +
         team.map((m) => {
           const ok = canPick(m.id, p.team);
-          const tag = !present(m) ? "미입장" : !ok ? "출전함" : pick && pick.id === m.id ? "출전" : m.id === pid ? "나" : "";
+          const n = plays(m.id, game.round);
+          const tag = !present(m) ? "미입장" : pick && pick.id === m.id ? "출전" : !ok ? n + "번 다 나감" : m.id === pid ? "나" : n ? n + "번 나감" : "";
           return pcard(m, { tag, on: pick && pick.id === m.id, button: 'data-p="' + pid + '" data-a="pick" data-m="' + m.id + '"' + (ok ? "" : " disabled") });
         }).join("") + '<div class="muted">마감 전까지는 조원 누구나 바꿀 수 있고, 마감 때 고른 사람이 최종이에요. 만약 회의 시간이 끝나도 정해지지 않았다면, 랜덤으로 지정돼요.</div></div>';
     }
@@ -582,7 +595,7 @@ window.WCRaid = (function () {
     { title: "MVP", body: "라운드마다 공격력이 가장 높은 조가 **{MVP}점**을 더 받아요. 격파하지 못해도 받을 수 있고, 동점이면 모두 받아요." },
     { title: "돌발 이벤트 룰렛", body: "룰렛에 걸린 칸의 효과를 받아요.\n{룰렛}" },
     { title: "순위", body: "라운드 점수(격파 보상 + MVP + 룰렛 점수)를 모두 더한 **총점** 순이에요. 총점이 같으면 **격파 횟수**가 많은 조가 위이고, 격파 횟수까지 같으면 같은 등수예요. 누적 점수와 순위는 **마지막에 공개**돼요." },
-    { title: "출전", body: "연습 라운드는 점수와 출전 기록에 들어가지 않아요. 라운드마다 조에서 **1명**이 나가요. 한 사람은 한 번만 나갈 수 있고(모두 나갔으면 다시 가능), 입장한 사람만 고를 수 있어요. 아무도 안 고르면 마감 때 아직 안 나간 사람 중 랜덤이에요." },
+    { title: "출전", body: "연습 라운드는 점수와 출전 기록에 들어가지 않아요. 라운드마다 조에서 **1명**이 나가요. 한 사람은 **최대 2번**까지 나갈 수 있고(조원이 6명 미만인 조는 **3번**), 입장한 사람만 고를 수 있어요. 회의 시간이 끝날 때까지 아무도 안 고르면 덜 나간 사람 중에서 랜덤으로 정해져요." },
   ];
   const fillInfo = (t) => String(t || "")
     .replace(/\{보상\}/g, BOSSES.map((b, i) => i + 1 + "번 " + b.reward + "점").join(" · "))

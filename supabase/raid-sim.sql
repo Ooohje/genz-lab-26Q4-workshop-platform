@@ -13,6 +13,7 @@
 --   돌발 이벤트 룰렛: 진행자가 정한 칸(config.roulette, 2~10칸) 중 하나. 칸 효과 kind: power(공격력 ±value) · clear(격파하면 +value점) · fail(실패해도 +value점) · none
 --   운: 운이 높을수록 아래쪽 칸이 잘 나옵니다. k번째 칸의 가중치 = r^(k-1), r = (1 + luckPower/100)^t, t = (운 − 스탯 최소) / (스탯 최대 − 스탯 최소).
 --   연습 라운드: 0번 라운드(config.practiceBoss). 룰렛은 항상 터지고, 출전 기록과 점수에는 들어가지 않습니다.
+--   출전: 라운드마다 조에서 1명. 한 사람 최대 2번 (조원 6명 미만인 조는 3번), 입장한 조원이 모두 다 썼으면 가장 적게 나간 사람.
 --   라운드 공격력 1위 조는 MVP 점수(mvpBonus). 순위는 총점, 같으면 격파 횟수, 그것도 같으면 같은 등수 (js/raid.js scoreboard).
 -- 보스와 규칙은 진행자 화면의 "보스·규칙 설정" 탭에서 고칩니다.
 -- =====================================================================
@@ -304,15 +305,32 @@ language sql immutable as $$
   select s->>'mode' is distinct from 'roster' or coalesce((p->>'claimed')::boolean, false)
 $$;
 
--- 이번 라운드에 고를 수 있는지 (입장한 조원이 모두 나갔으면 입장한 사람 누구나)
+-- pid 가 before 라운드 전까지 몇 번 출전했는지 (연습 라운드는 세지 않음)
+create or replace function public.raid_sim_plays(s jsonb, p_pid integer, p_before integer) returns integer
+language sql immutable as $$
+  select count(*)::integer from jsonb_each(coalesce(s->'picks', '{}'::jsonb)) k
+  where (substring(k.key from '^r(\d+)t\d+$'))::integer between 1 and p_before - 1 and (k.value->>'pid')::integer = p_pid
+$$;
+
+-- 출전 제한: 한 사람 최대 2번, 조원이 6명 미만인 조는 3번 (js/raid.js · js/raid-sim-engine.js 와 같음)
+create or replace function public.raid_sim_cap(s jsonb, p_team integer) returns integer
+language sql immutable as $$
+  select case when (select count(*) from jsonb_each(s->'people') p where (p.value->>'team')::integer = p_team) < 6 then 3 else 2 end
+$$;
+
+-- 이번 라운드에 고를 수 있는지: 입장했고 출전 횟수가 남은 사람.
+-- 입장한 조원이 모두 다 썼으면 그중 가장 적게 나간 사람.
 create or replace function public.raid_sim_can_pick(s jsonb, p_pid integer, p_team integer) returns boolean
 language sql immutable as $$
+  with v as (select (s#>>'{game,round}')::integer as r, public.raid_sim_cap(s, p_team) as cap),
+       mates as (select public.raid_sim_plays(s, (p.value->>'id')::integer, v.r) as n
+                 from jsonb_each(s->'people') p, v
+                 where (p.value->>'team')::integer = p_team and public.raid_sim_present(s, p.value)),
+       me as (select public.raid_sim_plays(s, p_pid, v.r) as n from v)
   select public.raid_sim_present(s, s->'people'->(p_pid::text))
-     and (not public.raid_sim_played(s, p_pid, (s#>>'{game,round}')::integer)
-          or not exists (select 1 from jsonb_each(s->'people') p
-                         where (p.value->>'team')::integer = p_team
-                           and public.raid_sim_present(s, p.value)
-                           and not public.raid_sim_played(s, (p.value->>'id')::integer, (s#>>'{game,round}')::integer)))
+     and ((select me.n from me) < (select v.cap from v)
+          or (not exists (select 1 from mates, v where mates.n < v.cap)
+              and (select me.n from me) = (select min(mates.n) from mates)))
 $$;
 
 create or replace function public.raid_sim_char(p jsonb) returns jsonb
@@ -457,7 +475,7 @@ begin
 end $$;
 revoke all on function public.raid_sim_roll(jsonb, integer) from public, anon, authenticated;
 
--- 마감: 안 고른 조는 아직 안 나간 사람 중 랜덤, 그다음 스탯 판정
+-- 마감: 안 고른 조는 덜 나간 사람 중 랜덤, 그다음 스탯 판정
 create or replace function public.raid_sim_close(s jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -480,10 +498,12 @@ begin
   for t in 0..v_last loop
     v_key := 'r' || r || 't' || t;
     if s->'picks'->v_key is null then
-      -- 아무도 안 골랐으면: 아직 안 나간 사람 → 입장한 사람을 먼저, 그 안에서 랜덤
+      -- 아무도 안 골랐으면: 입장한 사람 → 출전 횟수가 남은 사람 → 덜 나간 사람 순으로, 그 안에서 랜덤
       select (pp.value->>'id')::integer into v_pid from jsonb_each(s->'people') pp
        where (pp.value->>'team')::integer = t
-       order by public.raid_sim_played(s, (pp.value->>'id')::integer, r), not public.raid_sim_present(s, pp.value), random()
+       order by not public.raid_sim_present(s, pp.value),
+                public.raid_sim_plays(s, (pp.value->>'id')::integer, r) >= public.raid_sim_cap(s, t),
+                public.raid_sim_plays(s, (pp.value->>'id')::integer, r), random()
        limit 1;
       s := jsonb_set(s, array['picks', v_key], jsonb_build_object('pid', v_pid, 'by', null, 'auto', true));
     end if;
@@ -805,7 +825,7 @@ begin
       return jsonb_build_object('ok', false, 'error', '아직 입장하지 않은 사람이에요. 아이디로 입장한 사람만 고를 수 있어요');
     end if;
     if not public.raid_sim_can_pick(s, (m->>'id')::integer, (p->>'team')::integer) then
-      return jsonb_build_object('ok', false, 'error', '이미 출전한 사람이에요');
+      return jsonb_build_object('ok', false, 'error', '출전 횟수를 다 쓴 사람이에요');
     end if;
     v_round := (g->>'round')::integer;
     s := jsonb_set(s, array['picks', 'r' || v_round || 't' || (p->>'team')], jsonb_build_object('pid', (m->>'id')::integer, 'by', p_pid, 'auto', false));
@@ -845,7 +865,7 @@ revoke all on function
   public.raid_sim_ms(), public.raid_sim_keys(), public.raid_sim_default_bosses(), public.raid_sim_default_config(), public.raid_sim_cfg(),
   public.raid_sim_is_int(jsonb, integer, integer), public.raid_sim_check_config(jsonb), public.raid_sim_check_bosses(jsonb, integer), public.raid_sim_check_roster(jsonb),
   public.raid_sim_seed_bosses(), public.raid_sim_initial_game(), public.raid_sim_seed(), public.raid_sim_random_stats(),
-  public.raid_sim_default_stats(), public.raid_sim_played(jsonb, integer, integer), public.raid_sim_present(jsonb, jsonb), public.raid_sim_can_pick(jsonb, integer, integer),
+  public.raid_sim_default_stats(), public.raid_sim_played(jsonb, integer, integer), public.raid_sim_plays(jsonb, integer, integer), public.raid_sim_cap(jsonb, integer), public.raid_sim_present(jsonb, jsonb), public.raid_sim_can_pick(jsonb, integer, integer),
   public.raid_sim_char(jsonb), public.raid_sim_lock(jsonb), public.raid_sim_view(jsonb, boolean),
   public.raid_sim_store(jsonb), public.raid_sim_fresh(), public.raid_sim_close(jsonb),
   public.raid_sim_admin(text, integer, jsonb), public.raid_sim_act(integer, text, jsonb), public.raid_sim_login(text)
