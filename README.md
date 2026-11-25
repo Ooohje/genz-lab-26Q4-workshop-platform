@@ -150,7 +150,7 @@
 |---|---|
 | <img src="docs/screenshots/join.jpg" width="260" alt="참여 화면"> | <img src="docs/screenshots/admin.jpg" width="560" alt="관리 화면"> |
 
-- **참여**: 답변은 익명으로 보내집니다(Knox ID와 연결하지 않습니다). 입력칸 2개가 기본이고 "입력칸 추가"로 늘립니다(한 칸 15자, 한 사람 30개까지). 보낸 답변은 칩으로 쌓이고 계속 추가할 수 있습니다. 마감되면 입력이 닫힙니다.
+- **참여**: 답변은 익명으로 보내집니다(Knox ID와 연결하지 않습니다). 입력칸 2개가 기본이고 "입력칸 추가"로 늘립니다(한 칸 30자, 한 사람 30개까지). 보낸 답변은 칩으로 쌓이고 계속 추가할 수 있습니다. 마감되면 입력이 닫힙니다.
 - **발표**: 많이 나온 단어일수록 크고 굵게, 가운데에 놓입니다. 새 단어는 떠오르며 나타나고, 같은 단어가 또 들어오면 커지면서 살짝 튕깁니다. 아직 단어가 없으면 QR이 중앙에 크게 보입니다.
 - **관리**: **워드클라우드** 탭에서 질문 변경, 응답 시작/마감, 단어 숨기기, AI 정리, 내려받기, 초기화를 합니다.
 
@@ -206,6 +206,7 @@ supabase/       아래 표
 | `platform.sql` | 참가자 · 조 · 프로그램 관제 · 석식 투표 |
 | `teamvote.sql` | 발표 우수팀 투표 |
 | `leave.sql` | 로그아웃하면 입장 취소 |
+| `wordlen.sql` | 워드클라우드 답변 길이를 30자로 (예전 15자로 만든 프로젝트용) |
 | `raid-sim.sql` | 보스 레이드: 진행 · 판정 · 점수 |
 | `functions/admin` | 관리 화면의 모든 동작과 워드클라우드 AI 정리 (Edge Function) |
 | `functions/raid-sim` | 보스 레이드 진행 버튼과 AI 서술 (Edge Function) |
@@ -219,7 +220,7 @@ supabase/       아래 표
 
 ## 처음 설정하기
 
-1. **Supabase**: [supabase/SETUP.md](supabase/SETUP.md)를 위에서부터 따라 합니다. SQL은 `schema.sql` → `platform.sql` → `teamvote.sql` → `leave.sql` → `raid-sim.sql` 순서로 실행하고, secrets와 Edge Function(`admin`, `raid-sim`)을 넣습니다.
+1. **Supabase**: [supabase/SETUP.md](supabase/SETUP.md)를 위에서부터 따라 합니다. SQL은 `schema.sql` → `platform.sql` → `teamvote.sql` → `leave.sql` → `raid-sim.sql` 순서로(15자 제한으로 만든 예전 프로젝트는 `wordlen.sql`도) 실행하고, secrets와 Edge Function(`admin`, `raid-sim`)을 넣습니다.
 2. **config.js**: Project URL과 anon(publishable) 키를 넣습니다. 이 두 값은 공개되어도 됩니다.
 3. **GitHub Pages**: 아래 "배포" 참고.
 

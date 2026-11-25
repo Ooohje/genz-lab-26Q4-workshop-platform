@@ -68,7 +68,10 @@
     const minS = 44 - 22 * t;
     return items.map((d) => {
       const ratio = max > 1 ? (d.count - 1) / (max - 1) : 0.35;
-      const size = minS + (maxS - minS) * Math.pow(ratio, 0.7);
+      // 긴 답변(최대 30자)은 글자를 줄여 한 줄에 들어가게 합니다. 그러지 않으면 긴 문장 하나 때문에 전체가 작아집니다.
+      const len = [...String(d.text)].length;
+      const fit = len > 10 ? Math.pow(10 / len, 0.75) : 1;
+      const size = (minS + (maxS - minS) * Math.pow(ratio, 0.7)) * fit;
       const weight = ratio >= 0.5 ? 800 : ratio >= 0.25 ? 700 : ratio > 0.08 ? 600 : 500;
       return { key: d.key, text: d.text, count: d.count, base: size, weight };
     });
