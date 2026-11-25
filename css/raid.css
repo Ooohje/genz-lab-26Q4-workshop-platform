@@ -600,3 +600,9 @@ a { color: var(--blue); }
 .bars.cols .mid .stv { font-size: 1.5cqw; }
 .bars.cols .track { height: 1.9cqw; }
 .sc-parts > span { white-space: nowrap; }
+
+/* 진행자: 팀별 점수 현황 */
+.score-now { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.4rem; padding-top: 0.6rem; border-top: 0.0625rem solid var(--line); }
+.tbl-scroll { overflow-x: auto; }
+.score-now .res-table td.n, .score-now .res-table th.n { min-width: 2.2rem; }
+.score-now .between { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }

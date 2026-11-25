@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261125j";
+  const V = "20261125k";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
   // 발표 화면에 크게 보여 줄 주소: 설정의 "짧은 참여 주소"가 있으면 그것, 없으면 실제 주소에서 https:// 를 뗀 것
@@ -539,6 +539,21 @@ window.WCRaid = (function () {
           '<span class="st-sub">격파 ' + x.cleared + "회" + (r ? ' · <em>이번 +' + r.points + "</em>" : "") + "</span></div>"; }).join("") + "</div></div>";
   }
 
+  // 진행자용 팀별 점수 현황: 순위 · 총점 · 격파 횟수 · 라운드별 점수 (결과 공개된 본게임 라운드만)
+  function hostScoreHtml() {
+    const res = game.results || {};
+    const rounds = Object.keys(res).map(Number).filter((r) => r >= 1 && (r < game.round || (r === game.round && (game.phase === "revealed" || game.phase === "final")))).sort((a, c) => a - c);
+    let h = '<div class="score-now"><div class="between"><b>팀별 점수 현황</b><span class="small">' + (rounds.length ? rounds[rounds.length - 1] + "라운드까지 · " : "") + "진행자에게만 보여요</span></div>";
+    if (!rounds.length) return h + '<div class="small">1번 보스 결과를 공개하면 여기에 점수가 쌓여요.</div></div>';
+    h += '<div class="tbl-scroll"><table class="res-table"><thead><tr><th>순위</th><th>조</th><th class="n">총점</th><th class="n">격파</th>' +
+      rounds.map((r) => '<th class="n" title="' + esc((BOSSES[r - 1] || {}).name || "") + '">' + r + "R</th>").join("") + "</tr></thead><tbody>";
+    scoreboard().forEach((x) => {
+      h += "<tr><td><b>" + x.rank + "위</b></td><td><b>" + TEAMS[x.team] + '</b></td><td class="n"><b>' + x.total + '</b></td><td class="n">' + x.cleared + "</td>" +
+        rounds.map((r) => { const y = (res[r] || []).find((z) => z.team === x.team); return '<td class="n' + (y && y.cleared ? " ok" : "") + '">' + (y ? (y.points || 0) + (y.mvp ? "★" : "") : "") + "</td>"; }).join("") + "</tr>";
+    });
+    return h + '</tbody></table></div><div class="small">빨간 숫자 = 격파한 라운드 · ★ = MVP · 순위는 총점, 같으면 격파 횟수</div></div>';
+  }
+
   function adminHtml() {
     if (!isHost) return '<p class="small">' + esc(hostError || "관리자 비밀번호로 확인하는 중이에요…") + "</p>";
     if (!game || !personList().length) return '<p class="small">위의 "게임 준비하기"를 누르면 워크샵 명단(명단 · 조 탭, Chief Crew 조 제외)으로 보스 레이드 판이 만들어져요.</p>';
@@ -567,8 +582,8 @@ window.WCRaid = (function () {
           (storyError ? '<div class="small" style="color:var(--coral-deep)">' + esc(storyError) + "</div>" : "") +
           rows.map((x) => '<div class="story-row"><b>' + TEAMS[x.team] + "</b> " + (x.story ? esc(x.story) : '<span class="small">' + (storyBusy ? "만드는 중…" : "아직 없어요") + "</span>") + "</div>").join("") + "</div>";
       }
-      html += '<div class="small">누적: ' + scoreboard().map((x) => x.rank + "위 " + TEAMS[x.team] + " " + x.total + "점").join(" · ") + "</div>";
     }
+    if (game.stage === "boss") html += hostScoreHtml();
     html += '<div class="who-grid">' + personList().map((p) => '<div class="who"><div class="art">' + (p.char ? sprite(p.char) : "") + '</div><div><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b>" +
       '<span class="small">' + TEAMS[p.team] + " · " + (p.char ? (p.char.isDefault ? "기본 캐릭터" : esc(title(p.char))) : "캐릭터 만드는 중") + "</span></div></div>").join("") + "</div>" +
       '<span class="small">초록 점 = 휴대폰으로 들어온 사람 · ' + personList().length + "명 중 " + personList().filter((p) => p.claimed).length + "명" + (JOIN_MODE === "roster" ? " · 명단 판 (아이디로 입장)" : "") + "</span>" +
