@@ -271,7 +271,7 @@
       const g = S.game, b = bossAt(S, g.round);
       if (v != null) {
         if (g.phase !== "revealed") return "결과 공개 뒤에 넘길 수 있어요";
-        if (!Number.isInteger(v) || v < 0 || v > 2 || (v > 0 && g.round === 0)) return "그 화면은 없어요";
+        if (!Number.isInteger(v) || v < 0 || v > 2 || (v === 2 && g.round === 0)) return "그 화면은 없어요";
         g.view = v; return;
       }
       if (g.phase === "closed" && b && b.event) return "돌발 이벤트 라운드예요. 먼저 \"룰렛 돌리기\"를 눌러 주세요";

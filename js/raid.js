@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261125h";
+  const V = "20261125i";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
   // 발표 화면에 크게 보여 줄 주소: 설정의 "짧은 참여 주소"가 있으면 그것, 없으면 실제 주소에서 https:// 를 뗀 것
@@ -322,7 +322,11 @@ window.WCRaid = (function () {
     else if (game.phase === "meeting") { add("마감하기", "close", "go"); if (!game.hint) add("힌트 공개", "hint"); }
     else if (game.phase === "closed") { if (boss().event) add("룰렛 돌리기", "roll", "go"); else add("결과 공개", "reveal", "go"); add(game.round ? game.round + "라운드 다시" : "연습 다시", "start:" + game.round); }
     else if (game.phase === "rolled") { add("결과 공개", "reveal", "go"); add(game.round ? game.round + "라운드 다시" : "연습 다시", "start:" + game.round); }
-    else if (game.phase === "revealed" && game.round === 0) { add("1번 보스 시작 (본게임)", "start:1", "go"); add("연습 다시", "start:0"); }
+    else if (game.phase === "revealed" && game.round === 0) {
+      if (game.view === 1) { add("1번 보스 시작 (본게임)", "start:1", "go"); add("공격력 화면", "reveal:0"); }
+      else { add("점수표 보기", "reveal:1", "go"); add("1번 보스 시작 (본게임)", "start:1"); }
+      add("연습 다시", "start:0");
+    }
     else if (game.phase === "revealed") {
       // 결과 화면 3장: reveal:0 공격력 · reveal:1 점수표 · reveal:2 중간 집계 (3라운드마다 중간 집계를 먼저 권함)
       const v = game.view || 0, last = game.round >= BOSSES.length, mid = game.round % 3 === 0 && !last;
@@ -338,7 +342,7 @@ window.WCRaid = (function () {
   }
   const stepWord = () => !game ? "준비 전" : game.stage === "lobby" ? "대기" : game.stage === "make" ? "1. 캐릭터 만들기" : game.stage === "share" ? "2. 조 내 공유"
     : game.phase === "idle" ? "3. 보스 레이드 규칙" : game.phase === "meeting" ? rname() + " · 회의" : game.phase === "closed" ? rname() + " · 마감" : game.phase === "rolled" ? rname() + " · 룰렛"
-    : game.phase === "revealed" ? rname() + " · " + (game.round && game.view === 1 ? "점수표" : game.round && game.view === 2 ? "중간 집계" : "결과") : "최종 순위";
+    : game.phase === "revealed" ? rname() + " · " + (game.view === 1 ? "점수표" : game.round && game.view === 2 ? "중간 집계" : "결과") : "최종 순위";
 
   // ── 참여자 동작 (스탯 고르기는 이 기기에서, 저장·외형 랜덤 뽑기·출전자 선택은 Supabase 로) ──
   async function personAct(pid, a, extra) {
@@ -483,15 +487,15 @@ window.WCRaid = (function () {
     }
     if (game.phase === "revealed") {
       const sorted = rows.slice().sort((a, c) => a.team - c.team);
-      const view = game.round === 0 ? 0 : game.view || 0;
+      const view = game.round === 0 && game.view === 2 ? 0 : game.view || 0;   // 연습은 중간 집계 없음
       // 2장: 이번 라운드 점수표 (격파 몇 조 · 실패 몇 조 · 조마다 얻은 점수와 내역)
       if (view === 1) {
         const win = rows.filter((x) => x.cleared).length;
         return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + " · " + rlabel() + '</div><div class="h score-h">이번 라운드 점수</div>' +
-          '<div class="tally"><span class="tw">격파 성공 <b>' + win + '</b>조</span><span class="tl">실패 <b>' + (rows.length - win) + "</b>조</span><span>보상 " + b.reward + "점 · MVP " + sign(RULES.mvpBonus) + "점</span></div></div>" +
+          '<div class="tally"><span class="tw">격파 성공 <b>' + win + '</b>조</span><span class="tl">실패 <b>' + (rows.length - win) + "</b>조</span><span>" + (game.round === 0 ? "연습 라운드" : "보상 " + b.reward + "점 · MVP " + sign(RULES.mvpBonus) + "점") + "</span></div></div>" +
           '<div class="score-grid glass' + (rows.length > 6 ? " cols" : "") + '" style="--rows:' + (rows.length > 6 ? Math.ceil(rows.length / 2) : rows.length) + '">' +
           sorted.map((x) => '<div class="sc-row' + (x.cleared ? " win" : "") + '"><b class="sc-team">' + TEAMS[x.team] + '</b><span class="sc-name">' + esc(x.name) + "</span>" +
-            '<span class="sc-out">' + (x.cleared ? "격파" : "실패") + '</span><span class="sc-parts">' + scoreParts(x, b) + '</span><b class="sc-pt">+' + x.points + "점</b></div>").join("") + "</div></div>";
+            '<span class="sc-out">' + (x.cleared ? "격파" : "실패") + '</span><span class="sc-parts">' + scoreParts(x, b) + '</span><b class="sc-pt">' + (game.round === 0 ? "—" : "+" + x.points + "점") + "</b></div>").join("") + "</div></div>";
       }
       // 3장: 중간 집계 (지금까지의 조별 총점)
       if (view === 2) return standingsHtml("중간 집계 · " + game.round + "라운드까지", "이번 라운드에 얻은 점수는 오른쪽에 따로 보여요. 최종 순위는 마지막에 공개돼요.");
@@ -514,8 +518,8 @@ window.WCRaid = (function () {
 
   // 점수표 한 줄의 내역: 격파 보상 · MVP · 룰렛(다른 색)
   function scoreParts(x, b) {
-    const out = [x.cleared ? "격파 +" + b.reward : "격파 0"];
-    if (x.mvp) out.push("MVP " + sign(RULES.mvpBonus));
+    const out = game.round === 0 ? [] : [x.cleared ? "격파 +" + b.reward : "격파 0"];
+    if (x.mvp) out.push(game.round === 0 ? "공격력 1위" : "MVP " + sign(RULES.mvpBonus));
     let h = out.map((t) => "<span>" + t + "</span>").join("");
     if (x.effect && x.effect.kind !== "none") {
       const pts = x.effect.kind === "power" ? "" : x.extra ? " → " + sign(x.extra) + "점" : " → 해당 없음";

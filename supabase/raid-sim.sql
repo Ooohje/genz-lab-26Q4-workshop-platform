@@ -635,10 +635,10 @@ begin
       elsif v_round > 0 and not coalesce((select has_event from public.raid_sim_bosses where round = v_round), false) then err := '이번 보스는 돌발 이벤트가 없어요';
       else s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'rolled', 'rollAt', v_now)); end if;
     when 'reveal' then
-      -- p_arg 가 있으면(결과 공개 뒤): 발표 화면 결과 장 바꾸기 0 공격력 · 1 점수표 · 2 중간 집계
+      -- p_arg 가 있으면(결과 공개 뒤): 발표 화면 결과 장 바꾸기 0 공격력 · 1 점수표 · 2 중간 집계 (연습은 0 · 1만)
       if p_arg is not null then
         if v_phase <> 'revealed' then err := '결과 공개 뒤에 넘길 수 있어요';
-        elsif p_arg not between 0 and 2 or (p_arg > 0 and v_round = 0) then err := '그 화면은 없어요';
+        elsif p_arg not between 0 and 2 or (p_arg = 2 and v_round = 0) then err := '그 화면은 없어요';
         else s := jsonb_set(s, '{game,view}', to_jsonb(p_arg)); end if;
       elsif v_phase = 'closed' and (v_round = 0 or coalesce((select has_event from public.raid_sim_bosses where round = v_round), false)) then
         err := '돌발 이벤트 라운드예요. 먼저 "룰렛 돌리기"를 눌러 주세요';
