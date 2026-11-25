@@ -5,7 +5,7 @@
 //   돌발 이벤트 룰렛: 진행자가 정한 칸(config.roulette, 2~10칸) 중 하나. 칸 효과 kind: power(공격력 ±value) · clear(격파하면 +value점) · fail(실패해도 +value점) · none
 //   운: 운이 높을수록 아래쪽 칸이 잘 나옵니다. k번째 칸의 가중치 = r^(k-1), r = (1 + luckPower/100)^t, t = (운 − 스탯 최소) / (스탯 최대 − 스탯 최소).
 //   연습 라운드: 0번 라운드(config.practiceBoss). 룰렛은 항상 터지고, 출전 기록과 점수에는 들어가지 않습니다.
-//   라운드 공격력 1위 조는 MVP 점수. 순위는 총점, 같으면 공격력 합.
+//   라운드 공격력 1위 조는 MVP 점수. 순위는 총점, 같으면 격파 횟수, 그것도 같으면 같은 등수 (js/raid.js scoreboard).
 (function (root) {
   "use strict";
 

@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261125c";
+  const V = "20261125d";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
 
@@ -266,8 +266,9 @@ window.WCRaid = (function () {
       let total = 0, power = 0, cleared = 0;
       counted.forEach((r) => { const x = (res[r] || []).find((y) => y.team === t); if (x) { total += x.points || 0; power += x.power || 0; cleared += x.cleared ? 1 : 0; } });
       return { team: t, total, power, cleared };
-    }).sort((a, b) => b.total - a.total || b.power - a.power);
-    rows.forEach((x, i) => { x.rank = i && rows[i - 1].total === x.total && rows[i - 1].power === x.power ? rows[i - 1].rank : i + 1; });
+    }).sort((a, b) => b.total - a.total || b.cleared - a.cleared || a.team - b.team);
+    // 순위: 총점 → 격파 횟수. 둘 다 같으면 같은 등수
+    rows.forEach((x, i) => { x.rank = i && rows[i - 1].total === x.total && rows[i - 1].cleared === x.cleared ? rows[i - 1].rank : i + 1; });
     return rows;
   }
 
@@ -580,7 +581,7 @@ window.WCRaid = (function () {
     { title: "격파 / 실패", body: "공격력이 **보스 HP 이상이면 격파** → 그 보스의 보상 점수를 받아요. 모자라면 **실패 → 0점**.\n{보상}" },
     { title: "MVP", body: "라운드마다 공격력이 가장 높은 조가 **{MVP}점**을 더 받아요. 격파하지 못해도 받을 수 있고, 동점이면 모두 받아요." },
     { title: "돌발 이벤트 룰렛", body: "룰렛에 걸린 칸의 효과를 받아요.\n{룰렛}" },
-    { title: "순위", body: "라운드 점수(격파 보상 + MVP + 룰렛 점수)를 모두 더한 **총점** 순이에요. 총점이 같으면 공격력 합이 높은 조가 위예요. 누적 점수와 순위는 **마지막에 공개**돼요." },
+    { title: "순위", body: "라운드 점수(격파 보상 + MVP + 룰렛 점수)를 모두 더한 **총점** 순이에요. 총점이 같으면 **격파 횟수**가 많은 조가 위이고, 격파 횟수까지 같으면 같은 등수예요. 누적 점수와 순위는 **마지막에 공개**돼요." },
     { title: "출전", body: "연습 라운드는 점수와 출전 기록에 들어가지 않아요. 라운드마다 조에서 **1명**이 나가요. 한 사람은 한 번만 나갈 수 있고(모두 나갔으면 다시 가능), 입장한 사람만 고를 수 있어요. 아무도 안 고르면 마감 때 아직 안 나간 사람 중 랜덤이에요." },
   ];
   const fillInfo = (t) => String(t || "")
