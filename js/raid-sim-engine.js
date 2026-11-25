@@ -22,14 +22,30 @@
     // i 창(점수 규칙) 문구 (비어 있으면 기본 문구)
     infoTitle: "", infoSections: [] };
   const SPIN_KINDS = ["power", "clear", "fail", "none"];
+  const POOL_MAX = 30;   // 보스 목록 (출전은 20명까지)
   // stats · hint · reveal 은 결과 공개 전까지 참여자에게 보내지 않습니다 (snapshot 참고).
+  // 기본 출전 보스 9명 (처음 설치 · "보스 기본값으로")
   const DEFAULT_BOSSES = [
+    {"name":"일요일 밤 메신저 '혹시 지금 잠깐 돼요?'","desc":"일요일 저녁 9시, 침대에 누워 드라마를 보는데 휴대폰이 울린다. \"주말에 죄송한데 지난번 그 파일 어디 있었죠? 지금 바로 좀 알려 줘요.\" 읽음 표시가 뜨는 순간 주말은 끝난다.","hp":11,"reward":1,"event":false,"diceLow":-2,"diceHigh":3,"stats":["mental","luck"],"hint":"답장보다 중요한 건 내 주말을 지키는 마음.","reveal":"주말 메신저를 이긴 건 '내일 아침에 확인할게요'를 보낼 수 있는 단단한 멘탈, 그리고 마침 휴대폰을 무음으로 해 둔 운이었습니다. 지력으로 파일 위치를 바로 찾아 줘도 다음 질문이 또 올 뿐이었어요."},
+    {"name":"점심 5분 컷 '다 먹었으면 일어나지?'","desc":"회의가 길어진 팀장님을 30분이나 기다려 겨우 같이 앉은 점심. 내 찌개가 나오자마자 팀장님이 숟가락을 내려놓는다. \"다 먹었지? 이제 슬슬 일어나자.\" 내 밥은 아직 반도 안 줄었다.","hp":11,"reward":1,"event":false,"diceLow":-2,"diceHigh":3,"stats":["hp","luck"],"hint":"빨리 먹거나, 빨리 나오거나.","reveal":"5분 점심을 이긴 건 뜨거운 찌개도 순식간에 비우는 체력, 그리고 주문한 메뉴가 제일 먼저 나오는 운이었습니다. 친화력으로 '천천히 드세요'를 끌어내 보려 해도 팀장님은 이미 일어나 계셨어요."},
+    {"name":"퇴근 붙잡기 '에이~ 나도 약속 있어~'","desc":"\"오늘 저녁 약속이 있어서 먼저 들어가 보겠습니다.\" 가방을 메는 순간 선배가 웃으며 팔을 잡는다. \"에이~ 나도 약속 있는데~ 30분만 같이 보고 가자.\" 그 30분이 두 시간이 될 걸 우리는 안다.","hp":12,"reward":2,"event":false,"diceLow":-2,"diceHigh":3,"stats":["social","mental"],"hint":"웃으면서, 그러나 단호하게.","reveal":"약속을 지켜 낸 건 분위기를 해치지 않고 웃으며 빠져나오는 친화력, 그리고 '그래도 가 보겠습니다'를 끝까지 말하는 멘탈이었습니다. 체력으로 두 시간을 버티면 약속도 일도 둘 다 놓쳤어요."},
+    {"name":"칼퇴 상사 '그럼 이것만 부탁해요~'","desc":"오후 5시 55분, 팀장님이 서류 뭉치를 책상에 내려놓는다. \"이거 내일 아침 회의 자료니까 정리 좀 부탁해요. 난 먼저 갈게, 수고~\" 엘리베이터 문이 닫히고 사무실에는 나와 서류만 남았다.","hp":12,"reward":2,"event":false,"diceLow":-2,"diceHigh":3,"stats":["hp","intel"],"hint":"빨리 끝내는 머리와 오래 버티는 몸.","reveal":"혼자 남은 밤을 이긴 건 서류 더미에서 꼭 필요한 것만 골라 정리하는 지력, 그리고 늦게까지 버틸 체력이었습니다. 멘탈로 억울함을 삭여 봐도 서류는 줄어들지 않았어요."},
+    {"name":"우유부단 상사 '음… 둘 다 괜찮은데?'","desc":"A안과 B안을 들고 간 지 벌써 세 번째. 팀장님은 한참을 들여다보다 말한다. \"음… 둘 다 괜찮은데? 조금만 더 고민해 보고 다시 얘기하죠.\" 마감은 내일인데 결정은 아직 아무도 안 했다.","hp":12,"reward":2,"event":true,"diceLow":-2,"diceHigh":3,"stats":["intel","luck"],"hint":"결국 누군가는 대신 골라 줘야 한다.","reveal":"결정을 끌어낸 건 선택지를 한 장으로 정리해 '이걸로 가시죠'를 내미는 지력, 그리고 팀장님이 마침 그 안을 고르는 운이었습니다. 멘탈로 기다리기만 하면 고민은 다음 주까지 이어졌어요."},
+    {"name":"답정너 '이건 좀 아닌 것 같은데…'","desc":"보고서를 올릴 때마다 돌아오는 한마디. \"음… 이건 좀 아닌 것 같은데, 다시 해 와 봐요.\" 무엇이 정답인지는 말해 주지 않는다. 팀장님 머릿속에는 이미 답이 있는데, 그걸 맞힐 때까지 끝나지 않는다.","hp":13,"reward":3,"event":false,"diceLow":-2,"diceHigh":3,"stats":["intel","social"],"hint":"정답은 문서가 아니라 사람 마음속에 있다.","reveal":"답정너를 이긴 건 지난 피드백 속 단서로 숨은 답을 읽어 내는 지력, 그리고 '혹시 이런 방향 말씀이세요?' 하고 슬쩍 물어보는 친화력이었습니다. 체력으로 열 번 다시 해 가도 답을 모르면 열한 번째가 기다렸어요."},
+    {"name":"밤 10시 '번개 회식 가자!'","desc":"야근을 마치고 겨우 노트북을 덮은 밤 10시. 부장님이 외투를 챙기며 외친다. \"다들 고생했어! 간단하게 딱 한 잔만 하고 가자!\" 그 '한 잔'이 새벽 1시까지 간다는 건 모두가 알고 있다.","hp":13,"reward":3,"event":true,"diceLow":-2,"diceHigh":3,"stats":["hp","social"],"hint":"피할 수 없다면, 웃으며 버텨라.","reveal":"늦은 번개 회식을 이긴 건 새벽까지 버티는 체력, 그리고 피곤한 와중에도 분위기를 살리는 친화력이었습니다. 지력으로 빠져나갈 핑계를 찾았을 때는 이미 2차 자리였어요."},
+    {"name":"월요일 해외 출장 '내일 출발 가능하죠?'","desc":"일요일 밤 11시, 메신저가 울린다. \"내일 월요일인데, 혹시 내일 해외 출장 갈 수 있나요? 비행기는 아침 7시예요.\" 짐도, 자료도, 마음의 준비도 하나도 안 돼 있다. 공항까지 남은 시간은 단 8시간.","hp":16,"reward":3,"event":true,"diceLow":-2,"diceHigh":3,"stats":["hp","mental","luck"],"hint":"밤새 짐 싸는 몸, 흔들리지 않는 마음, 그리고 남은 비행기 좌석.","reveal":"갑작스러운 출장을 이긴 건 밤새 짐을 꾸리고 새벽 공항까지 달려갈 체력, 당황하지 않고 하나씩 챙기는 멘탈, 그리고 마지막 남은 좌석을 잡는 운이었습니다. 이번만큼은 머리를 굴릴 시간조차 없었어요."},
+    {"name":"최종 보스: '1차, 2차, 3차… 피드백이 다 달라요'","desc":"1차 피드백: \"좀 더 화려하게.\" 2차 피드백: \"너무 화려한데? 심플하게.\" 3차 피드백: \"처음 버전이 제일 낫네요.\" 파일 이름은 어느새 '최종_진짜최종_이게마지막'. 오늘 밤 4차 피드백이 온다.","hp":17,"reward":4,"event":true,"diceLow":-2,"diceHigh":3,"stats":["hp","intel","mental"],"hint":"모든 버전을 기억하는 사람이 마지막에 웃는다.","reveal":"바뀌는 피드백을 이긴 건 모든 버전과 말씀을 기록해 두고 근거로 내미는 지력, 몇 번을 뒤집혀도 무너지지 않는 멘탈, 그리고 끝까지 고쳐 내는 체력이었습니다. 친화력으로 웃어넘기기엔 피드백이 너무 많았어요."},
+  ];
+  // 예전 기본 보스 5명: 보스 목록에만 있고 처음에는 출전하지 않음
+  const OLD_BOSSES = [
     {"name":"무한 회의 루프 '리:미팅'","desc":"회의가 끝나면 '방금 회의를 정리하는 회의'가 소환된다. 벌써 세 번째 회의, 의자는 딱딱하고 결론은 또 다음 회의로 미뤄진다. 이 보스는 쓰러뜨리는 게 아니라 끝날 때까지 버텨야 사라진다.","hp":11,"reward":1,"event":false,"diceLow":-2,"diceHigh":3,"stats":["hp","mental"],"hint":"끝까지 남는 사람이 이긴다.","reveal":"끝없는 회의를 이긴 건 말솜씨가 아니라 버티는 힘이었습니다. 몇 시간째 이어지는 회의를 견딜 체력, 결론 없는 말들에 지치지 않을 멘탈이 필요했어요. 지력으로 정리해 보려 해도 회의는 또 다른 회의를 낳을 뿐이었습니다."},
     {"name":"알림 폭탄 '안읽음 999+'","desc":"점심 먹고 왔더니 단톡방 9개에 안 읽은 메시지가 999개. 그 사이 어딘가에 팀장님의 \"이거 확인 가능?\"이 숨어 있다. 하나씩 다 읽다가는 퇴근 시간이 지나 버린다.","hp":12,"reward":2,"event":false,"diceLow":-2,"diceHigh":3,"stats":["intel","mental"],"hint":"999개를 다 읽을 필요는 없다.","reveal":"999개를 다 읽는 사람이 아니라 중요한 한 개를 골라내는 사람이 이겼습니다. 쏟아지는 알림 속에서 우선순위를 가려낼 지력, 빨간 숫자에 흔들리지 않을 멘탈이 핵심이었어요. 체력으로 하나하나 다 읽으면 오히려 늦었습니다."},
     {"name":"팀장님의 '편하게 얘기해 봐요'","desc":"회의 끝 무렵, 팀장님이 웃으며 말한다. \"부담 갖지 말고 편하게 얘기해 봐요.\" 회의실에 정적이 흐르고 모두의 시선이 바닥으로 향한다. 침묵도 정답이 아니고, 아무 말이나 꺼내도 정답이 아니다.","hp":12,"reward":2,"event":false,"diceLow":-2,"diceHigh":3,"stats":["intel","social"],"hint":"아무 말도 안 하면 지고, 아무 말이나 해도 진다.","reveal":"할 말을 빠르게 정리하는 지력과, 그 말을 분위기에 맞게 꺼내는 친화력이 함께 필요했습니다. 정리만 하고 말을 못 꺼내면 침묵이 되고, 분위기만 읽고 내용이 없으면 공허한 말이 됐어요."},
     {"name":"금요일 17:58 '긴급 수정 요청'","desc":"퇴근 2분 전 도착한 메일. 제목: [긴급] 최종_진짜최종_수정본 확인 부탁드립니다. 첨부 파일은 세 개, 수정 요청은 스무 군데. 금요일 저녁에는 무슨 일이 생길지 아무도 모른다.","hp":13,"reward":3,"event":true,"diceLow":-2,"diceHigh":3,"stats":["social","hp"],"hint":"혼자 하면 밤 10시, 같이 하면 7시.","reveal":"혼자 밤새 붙잡고 있기보다 동료를 불러 일을 나누는 게 정답이었습니다. 도움을 청하고 함께 움직일 친화력, 마지막 수정까지 밀어붙일 체력이 필요했어요. 금요일 저녁의 변수는 주사위가 정했습니다."},
     {"name":"최종 보스: 연말 회식 '건배사 지명'","desc":"1차, 2차, 노래방까지 이어진 연말 회식. 자정 무렵 마이크가 나에게 넘어온다. \"자, 올해 마무리 한마디!\" 수십 명의 눈이 나만 보고 있고, 분위기는 이미 무르익었다.","hp":16,"reward":4,"event":true,"diceLow":-2,"diceHigh":3,"stats":["hp","social","mental"],"hint":"이 자리에서 머리를 쓰는 사람은 없다.","reveal":"자정까지 버틸 체력, 분위기를 읽고 사람들을 웃길 친화력, 수십 명 앞에서도 떨지 않을 멘탈이 모두 필요했습니다. 이 자리에서 머리를 굴리는 사람은 없었어요. 지력만 빠진 이유입니다."},
   ];
+  // 보스 목록 기본값 (진행자가 이 중에서 출전 보스를 고름). config.bossPool 로 저장
+  DEFAULT_CONFIG.bossPool = DEFAULT_BOSSES.concat(OLD_BOSSES);
 
   const rand = (n) => Math.floor(Math.random() * n);
   const newSeed = () => 1 + rand(2147483000);
@@ -82,6 +98,8 @@
       c.infoSections.some((x) => !x || typeof x.title !== "string" || !x.title.trim() || x.title.length > 40 || typeof x.body !== "string" || x.body.length > 800)) return "i 창은 12칸까지, 칸 제목 40자 · 내용 800자까지예요";
     if (!Array.isArray(c.roulette) || c.roulette.length < 2 || c.roulette.length > 10) return "룰렛 칸은 2~10개예요";
     if (c.roulette.some((x) => !x || typeof x !== "object" || !SPIN_KINDS.includes(x.kind) || !isInt(x.value, -50, 50))) return "룰렛 칸의 효과 값은 -50~50이에요";
+    if (!Array.isArray(c.bossPool) || c.bossPool.length > POOL_MAX) return "보스 목록은 " + POOL_MAX + "명까지예요";
+    if (c.bossPool.length) { const e = checkBosses(c.bossPool, POOL_MAX); if (e) return "보스 목록 " + e; }
     return checkBoss(Object.assign({ reward: 0, event: true, diceLow: 0, diceHigh: 0 }, c.practiceBoss), "연습 보스: ");
   }
   // 명단 [{uid, name, team}] 확인 (빈 배열 = 6자리 연습판)
@@ -118,12 +136,14 @@
       if (typeof b.reveal !== "string" || b.reveal.length > 300) return pre + "공개 설명은 300자 이하예요";
       return null;
   }
-  function checkBosses(list) {
-    if (!Array.isArray(list) || list.length < 1 || list.length > 20) return "보스는 1~20명이어야 해요";
+  function checkBosses(list, max) {
+    const hi = max || 20;
+    if (!Array.isArray(list) || list.length < 1 || list.length > hi) return "보스는 1~" + hi + "명이어야 해요";
     for (let i = 0; i < list.length; i++) { const e = checkBoss(list[i], i + 1 + "번 보스: "); if (e) return e; }
     return null;
   }
 
+  const bossClean = (b) => ({ name: b.name.trim(), desc: b.desc, hp: b.hp, reward: b.reward, event: b.event, diceLow: b.diceLow, diceHigh: b.diceHigh, stats: b.stats.slice(), hint: b.hint, reveal: b.reveal });
   // S = { game, people: {0..}, picks: {"r{라운드}t{조}": {pid, by, auto}}, teams: [조 이름], mode: "seats"|"roster", roster, config, bosses }
   const create = () => ({ game: null, people: {}, picks: {}, teams: TEAMS.slice(), mode: "seats", roster: [], config: clone(DEFAULT_CONFIG), bosses: clone(DEFAULT_BOSSES) });
   const personList = (S) => Object.keys(S.people).map(Number).sort((a, b) => a - b).map((i) => S.people[i]);
@@ -281,6 +301,7 @@
       next.roulette = next.roulette.map((x) => ({ kind: x.kind, value: x.value }));
       const p = next.practiceBoss;
       next.practiceBoss = { name: p.name.trim(), desc: p.desc, hp: p.hp, stats: p.stats.slice(), hint: p.hint, reveal: p.reveal };
+      next.bossPool = next.bossPool.map(bossClean);
       next.rulesLines = next.rulesLines.map((x) => x.trim()).filter(Boolean);
       next.infoSections = next.infoSections.map((x) => ({ title: x.title.trim(), body: x.body.trim() }));
       S.config = clone(next);
@@ -291,13 +312,14 @@
       const err = checkBosses(data);
       if (err) return err;
       if (g && g.stage === "boss" && data.length < g.round) return "이미 진행한 " + g.round + "라운드보다 보스 수를 줄일 수 없어요";
-      S.bosses = data.map((b) => ({ name: b.name.trim(), desc: b.desc, hp: b.hp, reward: b.reward, event: b.event, diceLow: b.diceLow, diceHigh: b.diceHigh, stats: b.stats.slice(), hint: b.hint, reveal: b.reveal }));
+      S.bosses = data.map(bossClean);
     },
     resetBosses(S) {
       const g = S.game;
       if (g && (g.phase === "meeting" || g.phase === "closed" || g.phase === "rolled")) return "라운드 진행 중(회의·마감)에는 보스를 바꿀 수 없어요";
       if (g && g.stage === "boss" && g.round > DEFAULT_BOSSES.length) return "이미 진행한 라운드보다 보스 수를 줄일 수 없어요";
       S.bosses = clone(DEFAULT_BOSSES);
+      S.config.bossPool = clone(DEFAULT_CONFIG.bossPool);
     },
   };
   const NO_GAME_OK = ["setup", "saveConfig", "saveBosses", "resetBosses", "saveRoster"];
@@ -382,7 +404,7 @@
     const people = clone(S.people);
     if (!isHost) Object.values(people).forEach((p) => { delete p.uid; });   // 참여자 화면에는 아이디를 보내지 않음
     const config = clone(S.config);
-    if (!isHost) delete config.practiceBoss;   // 연습 보스의 판정 스탯은 진행자에게만
+    if (!isHost) { delete config.practiceBoss; delete config.bossPool; }   // 판정 스탯은 진행자에게만
     return { game: g, people, picks: clone(S.picks), teams: S.teams.slice(), mode: S.mode, bosses, practice, config, isHost: !!isHost, now: Date.now() };
   }
 

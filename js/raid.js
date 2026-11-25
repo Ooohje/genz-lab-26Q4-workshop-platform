@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261125b";
+  const V = "20261125c";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
 
@@ -623,13 +623,22 @@ window.WCRaid = (function () {
   function makeDraft() {
     return { dirty: false,
       config: Object.fromEntries(CFG_FIELDS.map((f) => [f.k, String(RULES[f.k])])),
-      bosses: BOSSES.map((b) => { const o = bossOut(b); ["hp", "reward", "diceLow", "diceHigh"].forEach((k) => { o[k] = String(o[k]); }); return o; }),
+      bosses: poolDraft(),
       roulette: (RULES.roulette || []).map((x) => ({ kind: x.kind, value: String(x.value) })),
       texts: { lobbyTitle: RULES.lobbyTitle || "", lobbySub: RULES.lobbySub || "", rulesTitle: RULES.rulesTitle || "", rulesLines: (RULES.rulesLines || []).join("\n"),
         infoTitle: RULES.infoTitle || "", infoText: infoToText(RULES.infoSections || []) },
       practice: (() => { const p = RULES.practiceBoss || {}; return { name: p.name || "", desc: p.desc || "", hp: String(p.hp == null ? 10 : p.hp), stats: (p.stats || []).slice(), hint: p.hint || "", reveal: p.reveal || "" }; })() };
   }
-  const newBoss = () => ({ name: "새 보스", desc: "", hp: "12", reward: "2", event: false, diceLow: "-2", diceHigh: "3", stats: ["hp", "mental"], hint: "", reveal: "" });
+  // 보스 목록 초안: 지금 출전 보스가 순서대로 위에(on), 그 아래 보스 목록의 나머지(off). 같은 이름이면 출전 보스 쪽 내용
+  const POOL_MAX = 30, LINEUP_MAX = 20;
+  const openBoss = new Set();   // 편집 칸을 연 보스 이름 (화면을 다시 그려도 유지)
+  function poolDraft() {
+    const str = (b, on) => { const o = bossOut(b); ["hp", "reward", "diceLow", "diceHigh"].forEach((k) => { o[k] = String(o[k]); }); return Object.assign(o, { on, open: openBoss.has(String(b.name).trim()) }); };
+    const list = BOSSES.map((b) => str(b, true)), names = new Set(list.map((b) => String(b.name).trim()));
+    (RULES.bossPool || []).forEach((b) => { const n = String(b.name || "").trim(); if (n && !names.has(n)) { names.add(n); list.push(str(b, false)); } });
+    return list;
+  }
+  const newBoss = () => ({ on: true, open: true, name: "새 보스", desc: "", hp: "12", reward: "2", event: false, diceLow: "-2", diceHigh: "3", stats: ["hp", "mental"], hint: "", reveal: "" });
   const toInt = (v) => (/^\s*-?\d+\s*$/.test(String(v)) ? Number(String(v).trim()) : NaN);
   const roundBusy = () => !!game && (game.phase === "meeting" || game.phase === "closed" || game.phase === "rolled");
   const canSettings = () => MODE === "local" || (MODE === "supabase" && isHost);
@@ -680,30 +689,40 @@ window.WCRaid = (function () {
         '<button type="button" class="btn sm" data-set="sdel:' + i + '"' + (d.roulette.length <= 2 ? " disabled" : "") + ">삭제</button></span></div>").join("") +
       '<button type="button" class="btn" data-set="sadd"' + (d.roulette.length >= 10 ? " disabled" : "") + ' style="align-self:flex-start">+ 칸 추가</button></section>';
     const minCount = game && game.stage === "boss" ? Math.max(1, game.round || 0) : 1;
-    h += '<section class="panel"><div class="bcount"><h2>보스</h2><label class="chk">보스 수 <select data-count aria-label="보스 수">' +
-      Array.from({ length: 20 }, (_, k) => k + 1).map((n) => '<option value="' + n + '"' + (n === d.bosses.length ? " selected" : "") + (n < minCount ? " disabled" : "") + ">" + n + "명</option>").join("") +
-      "</select></label><span class=\"small\">늘리면 맨 뒤에 새 보스가 생기고, 줄이면 맨 뒤 보스부터 지워져요. 저장해야 반영돼요." + (minCount > 1 ? " 이미 진행한 " + game.round + "라운드보다 줄일 수 없어요." : "") + "</span></div>" +
+    const nOn = d.bosses.filter((b) => b.on).length;
+    h += '<section class="panel"><div class="bcount"><h2>보스</h2><span class="bnum">출전 ' + nOn + "명 · 목록 " + d.bosses.length + "명</span></div>" +
+      '<p class="small"><b>출전</b>에 체크한 보스만 위에서부터 순서대로 1라운드, 2라운드…로 나와요(1~' + LINEUP_MAX + "명). 체크를 빼도 목록에 남아 있어서 다음에 다시 고를 수 있어요(목록은 " + POOL_MAX + "명까지). " +
+      "↑↓로 순서를 바꾸고, <b>편집</b>을 눌러 내용을 고쳐요. 저장해야 반영돼요." + (minCount > 1 ? " 이미 진행한 " + game.round + "라운드보다 출전 보스를 줄일 수 없어요." : "") + "</p>" +
       '<p class="small">판정 스탯·힌트·결과 설명은 결과 공개 전까지 참여자에게 보이지 않아요. "평균 공격력"은 모든 스탯이 평균(' + (isFinite(avg) ? Math.round(avg * 10) / 10 : "?") + "점)인 캐릭터가 이 보스에서 내는 공격력이에요.</p>";
+    let round = 0;
     d.bosses.forEach((b, i) => {
+      if (b.on) round++;
       const hp = toInt(b.hp), exp = isFinite(avg) ? Math.round(b.stats.length * avg * 10) / 10 : NaN;
       const level = isFinite(exp) && isFinite(hp) ? (exp >= hp ? " · 쉬움" : exp + 3 >= hp ? " · 보통" : " · 어려움") : "";
       const f = (k) => 'data-f="b.' + i + "." + k + '"';
       const num = (k, label) => '<label class="f"><span>' + label + '</span><input type="number" inputmode="numeric" step="1" ' + f(k) + ' value="' + esc(b[k]) + '"></label>';
-      h += '<div class="bcard"><div class="bcard-h"><b>' + (i + 1) + '번 보스</b><span class="bexp">평균 공격력 ' + (isFinite(exp) ? exp : "?") + " / 보스 HP " + (isFinite(hp) ? hp : "?") + level + "</span>" +
-        '<span class="bact"><button type="button" class="btn sm" data-set="up:' + i + '"' + (i === 0 ? " disabled" : "") + ' aria-label="' + (i + 1) + '번 보스 위로">↑</button>' +
-        '<button type="button" class="btn sm" data-set="down:' + i + '"' + (i === d.bosses.length - 1 ? " disabled" : "") + ' aria-label="' + (i + 1) + '번 보스 아래로">↓</button>' +
-        '<button type="button" class="btn sm" data-set="del:' + i + '"' + (d.bosses.length <= 1 ? " disabled" : "") + ">삭제</button></span></div>" +
+      const statTxt = STATS.filter((s) => b.stats.includes(s.key)).map((s) => '<span style="color:' + s.color + '">' + s.label + "</span>").join(" + ") || "판정 스탯 없음";
+      h += '<div class="bcard pool' + (b.on ? "" : " off") + '"><div class="bcard-h">' +
+        '<label class="chk"><input type="checkbox" ' + f("on") + (b.on ? " checked" : "") + ' aria-label="' + esc(b.name) + ' 출전"><span class="bround">' + (b.on ? round + "라운드" : "대기") + "</span></label>" +
+        '<b class="bname">' + esc(b.name || "(이름 없음)") + "</b>" +
+        '<span class="bact"><button type="button" class="btn sm" data-set="up:' + i + '"' + (i === 0 ? " disabled" : "") + ' aria-label="' + esc(b.name) + ' 위로">↑</button>' +
+        '<button type="button" class="btn sm" data-set="down:' + i + '"' + (i === d.bosses.length - 1 ? " disabled" : "") + ' aria-label="' + esc(b.name) + ' 아래로">↓</button>' +
+        '<button type="button" class="btn sm" data-set="open:' + i + '" aria-expanded="' + !!b.open + '">' + (b.open ? "접기" : "편집") + "</button>" +
+        '<button type="button" class="btn sm" data-set="del:' + i + '"' + (d.bosses.length <= 1 ? " disabled" : "") + ">삭제</button></span>" +
+        '<span class="bexp">' + statTxt + " · 평균 공격력 " + (isFinite(exp) ? exp : "?") + " / HP " + (isFinite(hp) ? hp : "?") + level + " · 보상 " + esc(b.reward) + "점" + (b.event ? " · 룰렛" : "") + "</span></div>";
+      if (b.open) h +=
         '<label class="f"><span>이름</span><input type="text" maxlength="60" ' + f("name") + ' value="' + esc(b.name) + '"></label>' +
-        '<label class="f"><span>설명 (모두에게 보임)</span><textarea rows="2" maxlength="300" ' + f("desc") + ">" + esc(b.desc) + "</textarea></label>" +
+        '<label class="f"><span>설명 (모두에게 보임)</span><textarea rows="3" maxlength="300" ' + f("desc") + ">" + esc(b.desc) + "</textarea></label>" +
         '<div class="f-row">' + num("hp", "보스 HP") + num("reward", "격파 보상 점수") + "</div>" +
         '<div class="f"><span>판정 스탯 (공격력 = 고른 스탯의 합)</span><div class="checks">' + STATS.map((s) =>
           '<label class="chk"><input type="checkbox" ' + f("stat." + s.key) + (b.stats.includes(s.key) ? " checked" : "") + '><span style="color:' + s.color + '">' + s.label + "</span></label>").join("") + "</div></div>" +
         '<div class="f"><label class="chk"><input type="checkbox" ' + f("event") + (b.event ? " checked" : "") + "><span>돌발 이벤트 (룰렛)</span></label>" +
         (b.event ? "<small>마감 뒤 결과 공개 전에 룰렛이 터져요. 룰렛 칸은 위의 '돌발 이벤트 룰렛'에서 정해요.</small>" : "") + "</div>" +
         '<label class="f"><span>힌트 (진행자가 "힌트 공개"를 누르면 보임)</span><input type="text" maxlength="200" ' + f("hint") + ' value="' + esc(b.hint) + '"></label>' +
-        '<label class="f"><span>결과 공개 때 설명</span><textarea rows="2" maxlength="300" ' + f("reveal") + ">" + esc(b.reveal) + "</textarea></label></div>";
+        '<label class="f"><span>결과 공개 때 설명</span><textarea rows="3" maxlength="300" ' + f("reveal") + ">" + esc(b.reveal) + "</textarea></label>";
+      h += "</div>";
     });
-    h += '<button type="button" class="btn" data-set="add"' + (d.bosses.length >= 20 ? " disabled" : "") + ' style="align-self:flex-start">+ 보스 추가</button></section>';
+    h += '<button type="button" class="btn" data-set="add"' + (d.bosses.length >= POOL_MAX ? " disabled" : "") + ' style="align-self:flex-start">+ 새 보스 만들기</button></section>';
     h += '<div class="save-bar"><span class="small" data-dirty>' + (d.dirty ? "저장하지 않은 변경이 있어요" : "저장된 내용과 같아요") + "</span>" +
       '<button type="button" class="btn quiet" data-set="defaults">보스 기본값으로</button><button type="button" class="btn" data-set="revert">변경 취소</button>' +
       '<button type="button" class="btn go" data-set="save">저장</button></div></main>';
@@ -724,6 +743,7 @@ window.WCRaid = (function () {
       if (!b) return false;
       if (path[2] === "stat") b.stats = KEYS.filter((k) => (k === path[3] ? el.checked : b.stats.includes(k)));
       else if (path[2] === "event") b.event = el.checked;
+      else if (path[2] === "on") b.on = el.checked;
       else b[path[2]] = el.value;
     }
     d.dirty = true;
@@ -735,23 +755,13 @@ window.WCRaid = (function () {
     if (setField(el)) {
       const m = mt.root.querySelector("[data-dirty]"); if (m) m.textContent = "저장하지 않은 변경이 있어요";
       const row = el.closest(".spin-row"), lab = row && row.querySelector(".spin-label");
+      if (el.dataset.f.endsWith(".name")) { const c = el.closest(".bcard"), t = c && c.querySelector(".bname"); if (t) t.textContent = el.value || "(이름 없음)"; }
       if (lab && setDraft) { const x = setDraft.roulette[Number(el.dataset.f.split(".")[1])]; if (x) lab.textContent = "→ " + effLabel({ kind: x.kind, value: toInt(x.value) || 0 }); }
     }
   }
   function onChange(e) {
     const el = e.target;
     if (el.dataset && el.dataset.f && (el.type === "checkbox" || el.tagName === "SELECT") && setField(el)) { invalidate(); }
-    // 보스 수: 늘리면 맨 뒤에 새 보스, 줄이면 맨 뒤부터 지움
-    if (el.matches && el.matches("[data-count]") && setDraft) {
-      const L = setDraft.bosses, n = Number(el.value);
-      if (n < L.length) {
-        const gone = L.slice(n).map((b) => "'" + b.name + "'").join(", ");
-        if (!confirm("보스를 " + n + "명으로 줄이면 " + gone + "가 지워져요. 계속할까요? (저장해야 반영돼요)")) { el.value = String(L.length); return; }
-        L.length = n;
-      } else while (L.length < n) L.push(newBoss());
-      setDraft.dirty = true;
-      invalidate();
-    }
   }
   async function saveSettings() {
     const d = setDraft;
@@ -761,17 +771,27 @@ window.WCRaid = (function () {
       cfg[f.k] = toInt(d.config[f.k]);
       if (!Number.isInteger(cfg[f.k])) { toast(f.label + "에 정수를 적어 주세요"); return; }
     }
-    const bosses = [];
+    const pool = [], bosses = [], seen = new Set();
     for (let i = 0; i < d.bosses.length; i++) {
-      const b = d.bosses[i], o = bossOut(b);
+      const b = d.bosses[i], o = bossOut(b), who = "'" + (String(b.name).trim() || i + 1 + "번째 보스") + "': ";
       ["name", "desc", "hint", "reveal"].forEach((k) => { o[k] = String(o[k]).trim(); });
+      if (!o.name) { toast(i + 1 + "번째 보스: 이름을 적어 주세요"); return; }
+      if (seen.has(o.name)) { toast("보스 이름 '" + o.name + "'가 두 번 있어요. 이름을 다르게 해 주세요"); return; }
+      seen.add(o.name);
       for (const k of ["hp", "reward", "diceLow", "diceHigh"]) {
         o[k] = toInt(b[k]);
-        if (!Number.isInteger(o[k])) { toast(i + 1 + "번 보스: 숫자 칸에 정수를 적어 주세요"); return; }
+        if (!Number.isInteger(o[k])) { toast(who + "숫자 칸에 정수를 적어 주세요"); return; }
       }
-      if (!o.stats.length) { toast(i + 1 + "번 보스: 판정 스탯을 1개 이상 골라 주세요"); return; }
-      bosses.push(o);
+      if (!o.stats.length) { toast(who + "판정 스탯을 1개 이상 골라 주세요"); return; }
+      pool.push(o);
+      if (b.on) bosses.push(o);
     }
+    const minCount = game && game.stage === "boss" ? Math.max(1, game.round || 0) : 1;
+    if (!bosses.length) { toast("출전할 보스를 1명 이상 체크해 주세요"); return; }
+    if (bosses.length > LINEUP_MAX) { toast("출전 보스는 " + LINEUP_MAX + "명까지예요 (지금 " + bosses.length + "명)"); return; }
+    if (bosses.length < minCount) { toast("이미 진행한 " + game.round + "라운드보다 출전 보스를 줄일 수 없어요"); return; }
+    if (pool.length > POOL_MAX) { toast("보스 목록은 " + POOL_MAX + "명까지예요"); return; }
+    cfg.bossPool = pool;
     cfg.roulette = [];
     for (let i = 0; i < d.roulette.length; i++) {
       const x = d.roulette[i], v = x.kind === "none" ? 0 : toInt(x.value);
@@ -795,7 +815,8 @@ window.WCRaid = (function () {
     const rp = RULES.practiceBoss || {};
     const cfgChanged = textChanged || CFG_FIELDS.some((f) => cfg[f.k] !== RULES[f.k]) ||
       JSON.stringify(cfg.roulette) !== JSON.stringify((RULES.roulette || []).map((x) => ({ kind: x.kind, value: x.value }))) ||
-      JSON.stringify(cfg.practiceBoss) !== JSON.stringify({ name: rp.name, desc: rp.desc, hp: rp.hp, stats: rp.stats, hint: rp.hint, reveal: rp.reveal });
+      JSON.stringify(cfg.practiceBoss) !== JSON.stringify({ name: rp.name, desc: rp.desc, hp: rp.hp, stats: rp.stats, hint: rp.hint, reveal: rp.reveal }) ||
+      JSON.stringify(pool) !== JSON.stringify((RULES.bossPool || []).map(bossOut));
     const bossChanged = JSON.stringify(bosses) !== JSON.stringify(BOSSES.map(bossOut));
     if (!cfgChanged && !bossChanged) { setDraft = null; toast("바뀐 내용이 없어요"); return; }
     if (cfgChanged && !(await backend.host("saveConfig", null, cfg))) return;
@@ -808,7 +829,7 @@ window.WCRaid = (function () {
     if (what === "save") { await saveSettings(); return; }
     if (what === "revert") { setDraft = null; return; }
     if (what === "defaults") {
-      if (!confirm("보스를 기본 5명으로 되돌릴까요? 고친 보스 내용이 모두 사라져요.")) return;
+      if (!confirm("보스 목록과 출전 보스를 기본값(직장 빌런 9명 출전)으로 되돌릴까요? 고치거나 새로 만든 보스가 모두 사라져요.")) return;
       if (await backend.host("resetBosses")) { setDraft = null; toast("보스를 기본값으로 되돌렸어요"); }
       return;
     }
@@ -835,8 +856,9 @@ window.WCRaid = (function () {
       return;
     }
     if (!L) return;
-    if (what === "add" && L.length < 20) L.push(newBoss());
-    else if (what === "del" && L.length > 1) { if (!confirm((i + 1) + "번 보스 '" + L[i].name + "'를 지울까요? (저장해야 반영돼요)")) return; L.splice(i, 1); }
+    if (what === "open" && L[i]) { L[i].open = !L[i].open; const n = String(L[i].name).trim(); if (L[i].open) openBoss.add(n); else openBoss.delete(n); return; }   // 펼치기는 저장할 내용이 아님
+    if (what === "add" && L.length < POOL_MAX) L.push(newBoss());
+    else if (what === "del" && L.length > 1) { if (!confirm("보스 '" + L[i].name + "'를 목록에서 지울까요? 다시 고를 수 없어요. 출전만 빼려면 체크를 풀어 주세요. (저장해야 반영돼요)")) return; L.splice(i, 1); }
     else if (what === "up" && i > 0) L.splice(i - 1, 0, L.splice(i, 1)[0]);
     else if (what === "down" && i < L.length - 1) L.splice(i + 1, 0, L.splice(i, 1)[0]);
     else return;

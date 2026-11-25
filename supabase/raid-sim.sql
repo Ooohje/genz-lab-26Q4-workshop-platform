@@ -94,6 +94,23 @@ language sql stable as $$ select (extract(epoch from clock_timestamp()) * 1000):
 create or replace function public.raid_sim_keys() returns text[]
 language sql immutable as $$ select array['hp', 'intel', 'social', 'mental', 'luck'] $$;
 
+-- 기본 출전 보스 9명 (처음 설치 · "보스 기본값으로"). js/raid-sim-engine.js 의 DEFAULT_BOSSES 와 같음
+create or replace function public.raid_sim_default_bosses() returns jsonb
+language sql immutable as $$
+  select '[
+    {"name":"일요일 밤 메신저 ''혹시 지금 잠깐 돼요?''","desc":"일요일 저녁 9시, 침대에 누워 드라마를 보는데 휴대폰이 울린다. \"주말에 죄송한데 지난번 그 파일 어디 있었죠? 지금 바로 좀 알려 줘요.\" 읽음 표시가 뜨는 순간 주말은 끝난다.","hp":11,"reward":1,"event":false,"diceLow":-2,"diceHigh":3,"stats":["mental","luck"],"hint":"답장보다 중요한 건 내 주말을 지키는 마음.","reveal":"주말 메신저를 이긴 건 ''내일 아침에 확인할게요''를 보낼 수 있는 단단한 멘탈, 그리고 마침 휴대폰을 무음으로 해 둔 운이었습니다. 지력으로 파일 위치를 바로 찾아 줘도 다음 질문이 또 올 뿐이었어요."},
+    {"name":"점심 5분 컷 ''다 먹었으면 일어나지?''","desc":"회의가 길어진 팀장님을 30분이나 기다려 겨우 같이 앉은 점심. 내 찌개가 나오자마자 팀장님이 숟가락을 내려놓는다. \"다 먹었지? 이제 슬슬 일어나자.\" 내 밥은 아직 반도 안 줄었다.","hp":11,"reward":1,"event":false,"diceLow":-2,"diceHigh":3,"stats":["hp","luck"],"hint":"빨리 먹거나, 빨리 나오거나.","reveal":"5분 점심을 이긴 건 뜨거운 찌개도 순식간에 비우는 체력, 그리고 주문한 메뉴가 제일 먼저 나오는 운이었습니다. 친화력으로 ''천천히 드세요''를 끌어내 보려 해도 팀장님은 이미 일어나 계셨어요."},
+    {"name":"퇴근 붙잡기 ''에이~ 나도 약속 있어~''","desc":"\"오늘 저녁 약속이 있어서 먼저 들어가 보겠습니다.\" 가방을 메는 순간 선배가 웃으며 팔을 잡는다. \"에이~ 나도 약속 있는데~ 30분만 같이 보고 가자.\" 그 30분이 두 시간이 될 걸 우리는 안다.","hp":12,"reward":2,"event":false,"diceLow":-2,"diceHigh":3,"stats":["social","mental"],"hint":"웃으면서, 그러나 단호하게.","reveal":"약속을 지켜 낸 건 분위기를 해치지 않고 웃으며 빠져나오는 친화력, 그리고 ''그래도 가 보겠습니다''를 끝까지 말하는 멘탈이었습니다. 체력으로 두 시간을 버티면 약속도 일도 둘 다 놓쳤어요."},
+    {"name":"칼퇴 상사 ''그럼 이것만 부탁해요~''","desc":"오후 5시 55분, 팀장님이 서류 뭉치를 책상에 내려놓는다. \"이거 내일 아침 회의 자료니까 정리 좀 부탁해요. 난 먼저 갈게, 수고~\" 엘리베이터 문이 닫히고 사무실에는 나와 서류만 남았다.","hp":12,"reward":2,"event":false,"diceLow":-2,"diceHigh":3,"stats":["hp","intel"],"hint":"빨리 끝내는 머리와 오래 버티는 몸.","reveal":"혼자 남은 밤을 이긴 건 서류 더미에서 꼭 필요한 것만 골라 정리하는 지력, 그리고 늦게까지 버틸 체력이었습니다. 멘탈로 억울함을 삭여 봐도 서류는 줄어들지 않았어요."},
+    {"name":"우유부단 상사 ''음… 둘 다 괜찮은데?''","desc":"A안과 B안을 들고 간 지 벌써 세 번째. 팀장님은 한참을 들여다보다 말한다. \"음… 둘 다 괜찮은데? 조금만 더 고민해 보고 다시 얘기하죠.\" 마감은 내일인데 결정은 아직 아무도 안 했다.","hp":12,"reward":2,"event":true,"diceLow":-2,"diceHigh":3,"stats":["intel","luck"],"hint":"결국 누군가는 대신 골라 줘야 한다.","reveal":"결정을 끌어낸 건 선택지를 한 장으로 정리해 ''이걸로 가시죠''를 내미는 지력, 그리고 팀장님이 마침 그 안을 고르는 운이었습니다. 멘탈로 기다리기만 하면 고민은 다음 주까지 이어졌어요."},
+    {"name":"답정너 ''이건 좀 아닌 것 같은데…''","desc":"보고서를 올릴 때마다 돌아오는 한마디. \"음… 이건 좀 아닌 것 같은데, 다시 해 와 봐요.\" 무엇이 정답인지는 말해 주지 않는다. 팀장님 머릿속에는 이미 답이 있는데, 그걸 맞힐 때까지 끝나지 않는다.","hp":13,"reward":3,"event":false,"diceLow":-2,"diceHigh":3,"stats":["intel","social"],"hint":"정답은 문서가 아니라 사람 마음속에 있다.","reveal":"답정너를 이긴 건 지난 피드백 속 단서로 숨은 답을 읽어 내는 지력, 그리고 ''혹시 이런 방향 말씀이세요?'' 하고 슬쩍 물어보는 친화력이었습니다. 체력으로 열 번 다시 해 가도 답을 모르면 열한 번째가 기다렸어요."},
+    {"name":"밤 10시 ''번개 회식 가자!''","desc":"야근을 마치고 겨우 노트북을 덮은 밤 10시. 부장님이 외투를 챙기며 외친다. \"다들 고생했어! 간단하게 딱 한 잔만 하고 가자!\" 그 ''한 잔''이 새벽 1시까지 간다는 건 모두가 알고 있다.","hp":13,"reward":3,"event":true,"diceLow":-2,"diceHigh":3,"stats":["hp","social"],"hint":"피할 수 없다면, 웃으며 버텨라.","reveal":"늦은 번개 회식을 이긴 건 새벽까지 버티는 체력, 그리고 피곤한 와중에도 분위기를 살리는 친화력이었습니다. 지력으로 빠져나갈 핑계를 찾았을 때는 이미 2차 자리였어요."},
+    {"name":"월요일 해외 출장 ''내일 출발 가능하죠?''","desc":"일요일 밤 11시, 메신저가 울린다. \"내일 월요일인데, 혹시 내일 해외 출장 갈 수 있나요? 비행기는 아침 7시예요.\" 짐도, 자료도, 마음의 준비도 하나도 안 돼 있다. 공항까지 남은 시간은 단 8시간.","hp":16,"reward":3,"event":true,"diceLow":-2,"diceHigh":3,"stats":["hp","mental","luck"],"hint":"밤새 짐 싸는 몸, 흔들리지 않는 마음, 그리고 남은 비행기 좌석.","reveal":"갑작스러운 출장을 이긴 건 밤새 짐을 꾸리고 새벽 공항까지 달려갈 체력, 당황하지 않고 하나씩 챙기는 멘탈, 그리고 마지막 남은 좌석을 잡는 운이었습니다. 이번만큼은 머리를 굴릴 시간조차 없었어요."},
+    {"name":"최종 보스: ''1차, 2차, 3차… 피드백이 다 달라요''","desc":"1차 피드백: \"좀 더 화려하게.\" 2차 피드백: \"너무 화려한데? 심플하게.\" 3차 피드백: \"처음 버전이 제일 낫네요.\" 파일 이름은 어느새 ''최종_진짜최종_이게마지막''. 오늘 밤 4차 피드백이 온다.","hp":17,"reward":4,"event":true,"diceLow":-2,"diceHigh":3,"stats":["hp","intel","mental"],"hint":"모든 버전을 기억하는 사람이 마지막에 웃는다.","reveal":"바뀌는 피드백을 이긴 건 모든 버전과 말씀을 기록해 두고 근거로 내미는 지력, 몇 번을 뒤집혀도 무너지지 않는 멘탈, 그리고 끝까지 고쳐 내는 체력이었습니다. 친화력으로 웃어넘기기엔 피드백이 너무 많았어요."}
+  ]'::jsonb
+$$;
+
+-- 기본 규칙. bossPool = 보스 목록 (기본 9명 + 예전 기본 보스 5명). 진행자가 이 중에서 출전 보스를 고릅니다.
 create or replace function public.raid_sim_default_config() returns jsonb
 language sql immutable as $$
   select '{"statTotal": 25, "statMin": 1, "statMax": 10, "rerolls": 2, "meetingSec": 180, "shareMin": 8, "mvpBonus": 1, "luckPower": 35,
@@ -104,6 +121,13 @@ language sql immutable as $$
                             "hp": 10, "stats": ["hp", "luck"], "hint": "버티거나, 운 좋게 앉거나.",
                             "reveal": "만원 지하철을 이긴 건 끝까지 서서 버티는 체력, 그리고 마침 앞자리가 비는 운이었습니다. 머리를 써도 지하철은 빨리 오지 않아요."},
            "lobbyTitle": "", "lobbySub": "", "rulesTitle": "", "rulesLines": [], "infoTitle": "", "infoSections": []}'::jsonb
+    || jsonb_build_object('bossPool', public.raid_sim_default_bosses() || '[
+    {"name":"무한 회의 루프 ''리:미팅''","desc":"회의가 끝나면 ''방금 회의를 정리하는 회의''가 소환된다. 벌써 세 번째 회의, 의자는 딱딱하고 결론은 또 다음 회의로 미뤄진다. 이 보스는 쓰러뜨리는 게 아니라 끝날 때까지 버텨야 사라진다.","hp":11,"reward":1,"event":false,"diceLow":-2,"diceHigh":3,"stats":["hp","mental"],"hint":"끝까지 남는 사람이 이긴다.","reveal":"끝없는 회의를 이긴 건 말솜씨가 아니라 버티는 힘이었습니다. 몇 시간째 이어지는 회의를 견딜 체력, 결론 없는 말들에 지치지 않을 멘탈이 필요했어요. 지력으로 정리해 보려 해도 회의는 또 다른 회의를 낳을 뿐이었습니다."},
+    {"name":"알림 폭탄 ''안읽음 999+''","desc":"점심 먹고 왔더니 단톡방 9개에 안 읽은 메시지가 999개. 그 사이 어딘가에 팀장님의 \"이거 확인 가능?\"이 숨어 있다. 하나씩 다 읽다가는 퇴근 시간이 지나 버린다.","hp":12,"reward":2,"event":false,"diceLow":-2,"diceHigh":3,"stats":["intel","mental"],"hint":"999개를 다 읽을 필요는 없다.","reveal":"999개를 다 읽는 사람이 아니라 중요한 한 개를 골라내는 사람이 이겼습니다. 쏟아지는 알림 속에서 우선순위를 가려낼 지력, 빨간 숫자에 흔들리지 않을 멘탈이 핵심이었어요. 체력으로 하나하나 다 읽으면 오히려 늦었습니다."},
+    {"name":"팀장님의 ''편하게 얘기해 봐요''","desc":"회의 끝 무렵, 팀장님이 웃으며 말한다. \"부담 갖지 말고 편하게 얘기해 봐요.\" 회의실에 정적이 흐르고 모두의 시선이 바닥으로 향한다. 침묵도 정답이 아니고, 아무 말이나 꺼내도 정답이 아니다.","hp":12,"reward":2,"event":false,"diceLow":-2,"diceHigh":3,"stats":["intel","social"],"hint":"아무 말도 안 하면 지고, 아무 말이나 해도 진다.","reveal":"할 말을 빠르게 정리하는 지력과, 그 말을 분위기에 맞게 꺼내는 친화력이 함께 필요했습니다. 정리만 하고 말을 못 꺼내면 침묵이 되고, 분위기만 읽고 내용이 없으면 공허한 말이 됐어요."},
+    {"name":"금요일 17:58 ''긴급 수정 요청''","desc":"퇴근 2분 전 도착한 메일. 제목: [긴급] 최종_진짜최종_수정본 확인 부탁드립니다. 첨부 파일은 세 개, 수정 요청은 스무 군데. 금요일 저녁에는 무슨 일이 생길지 아무도 모른다.","hp":13,"reward":3,"event":true,"diceLow":-2,"diceHigh":3,"stats":["social","hp"],"hint":"혼자 하면 밤 10시, 같이 하면 7시.","reveal":"혼자 밤새 붙잡고 있기보다 동료를 불러 일을 나누는 게 정답이었습니다. 도움을 청하고 함께 움직일 친화력, 마지막 수정까지 밀어붙일 체력이 필요했어요. 금요일 저녁의 변수는 주사위가 정했습니다."},
+    {"name":"최종 보스: 연말 회식 ''건배사 지명''","desc":"1차, 2차, 노래방까지 이어진 연말 회식. 자정 무렵 마이크가 나에게 넘어온다. \"자, 올해 마무리 한마디!\" 수십 명의 눈이 나만 보고 있고, 분위기는 이미 무르익었다.","hp":16,"reward":4,"event":true,"diceLow":-2,"diceHigh":3,"stats":["hp","social","mental"],"hint":"이 자리에서 머리를 쓰는 사람은 없다.","reveal":"자정까지 버틸 체력, 분위기를 읽고 사람들을 웃길 친화력, 수십 명 앞에서도 떨지 않을 멘탈이 모두 필요했습니다. 이 자리에서 머리를 굴리는 사람은 없었어요. 지력만 빠진 이유입니다."}
+  ]'::jsonb)
 $$;
 
 create or replace function public.raid_sim_cfg() returns jsonb
@@ -152,16 +176,21 @@ begin
              where jsonb_typeof(x) <> 'object' or coalesce(x->>'kind', '') not in ('power', 'clear', 'fail', 'none') or not public.raid_sim_is_int(x->'value', -50, 50)) then
     return '룰렛 칸의 효과 값은 -50~50이에요';
   end if;
+  if jsonb_typeof(c->'bossPool') is distinct from 'array' or jsonb_array_length(c->'bossPool') > 30 then return '보스 목록은 30명까지예요'; end if;
+  if jsonb_array_length(c->'bossPool') > 0 and public.raid_sim_check_bosses(c->'bossPool', 30) is not null then
+    return '보스 목록 ' || public.raid_sim_check_bosses(c->'bossPool', 30);
+  end if;
   if jsonb_typeof(c->'practiceBoss') is distinct from 'object' then return '연습 보스 형식이 잘못됐어요'; end if;
   return replace(public.raid_sim_check_bosses(jsonb_build_array(c->'practiceBoss' || '{"reward": 0, "event": true, "diceLow": 0, "diceHigh": 0}'::jsonb)), '1번 보스: ', '연습 보스: ');
 end $$;
 
 -- 보스 목록 확인. 문제가 없으면 null, 있으면 이유.
-create or replace function public.raid_sim_check_bosses(p jsonb) returns text
+drop function if exists public.raid_sim_check_bosses(jsonb);
+create or replace function public.raid_sim_check_bosses(p jsonb, p_max integer default 20) returns text
 language plpgsql immutable as $$
 declare v jsonb; i bigint; pre text; st text; seen text[];
 begin
-  if p is null or jsonb_typeof(p) <> 'array' or jsonb_array_length(p) not between 1 and 20 then return '보스는 1~20명이어야 해요'; end if;
+  if p is null or jsonb_typeof(p) <> 'array' or jsonb_array_length(p) not between 1 and p_max then return '보스는 1~' || p_max || '명이어야 해요'; end if;
   for v, i in select x.value, x.ord from jsonb_array_elements(p) with ordinality as x(value, ord) loop
     pre := i || '번 보스: ';
     if jsonb_typeof(v) is distinct from 'object' then return pre || '형식이 잘못됐어요'; end if;
@@ -208,37 +237,16 @@ begin
   return null;
 end $$;
 
--- 보스 5명을 기본값으로 (처음 설치할 때와 "보스 기본값으로" 버튼)
+-- 기본 출전 보스 9명으로 (처음 설치할 때와 "보스 기본값으로" 버튼)
 create or replace function public.raid_sim_seed_bosses() returns void
 language plpgsql security definer set search_path = public as $$
 begin
   delete from public.raid_sim_bosses where round >= 1;
-  insert into public.raid_sim_bosses (round, name, description, hp, reward, has_event, dice_low, dice_high, stats, hint, reveal) values
-    (1, '무한 회의 루프 ''리:미팅''',
-        '회의가 끝나면 ''방금 회의를 정리하는 회의''가 소환된다. 벌써 세 번째 회의, 의자는 딱딱하고 결론은 또 다음 회의로 미뤄진다. 이 보스는 쓰러뜨리는 게 아니라 끝날 때까지 버텨야 사라진다.',
-        11, 1, false, -2, 3, array['hp', 'mental'],
-        '끝까지 남는 사람이 이긴다.',
-        '끝없는 회의를 이긴 건 말솜씨가 아니라 버티는 힘이었습니다. 몇 시간째 이어지는 회의를 견딜 체력, 결론 없는 말들에 지치지 않을 멘탈이 필요했어요. 지력으로 정리해 보려 해도 회의는 또 다른 회의를 낳을 뿐이었습니다.'),
-    (2, '알림 폭탄 ''안읽음 999+''',
-        '점심 먹고 왔더니 단톡방 9개에 안 읽은 메시지가 999개. 그 사이 어딘가에 팀장님의 "이거 확인 가능?"이 숨어 있다. 하나씩 다 읽다가는 퇴근 시간이 지나 버린다.',
-        12, 2, false, -2, 3, array['intel', 'mental'],
-        '999개를 다 읽을 필요는 없다.',
-        '999개를 다 읽는 사람이 아니라 중요한 한 개를 골라내는 사람이 이겼습니다. 쏟아지는 알림 속에서 우선순위를 가려낼 지력, 빨간 숫자에 흔들리지 않을 멘탈이 핵심이었어요. 체력으로 하나하나 다 읽으면 오히려 늦었습니다.'),
-    (3, '팀장님의 ''편하게 얘기해 봐요''',
-        '회의 끝 무렵, 팀장님이 웃으며 말한다. "부담 갖지 말고 편하게 얘기해 봐요." 회의실에 정적이 흐르고 모두의 시선이 바닥으로 향한다. 침묵도 정답이 아니고, 아무 말이나 꺼내도 정답이 아니다.',
-        12, 2, false, -2, 3, array['intel', 'social'],
-        '아무 말도 안 하면 지고, 아무 말이나 해도 진다.',
-        '할 말을 빠르게 정리하는 지력과, 그 말을 분위기에 맞게 꺼내는 친화력이 함께 필요했습니다. 정리만 하고 말을 못 꺼내면 침묵이 되고, 분위기만 읽고 내용이 없으면 공허한 말이 됐어요.'),
-    (4, '금요일 17:58 ''긴급 수정 요청''',
-        '퇴근 2분 전 도착한 메일. 제목: [긴급] 최종_진짜최종_수정본 확인 부탁드립니다. 첨부 파일은 세 개, 수정 요청은 스무 군데. 금요일 저녁에는 무슨 일이 생길지 아무도 모른다.',
-        13, 3, true, -2, 3, array['social', 'hp'],
-        '혼자 하면 밤 10시, 같이 하면 7시.',
-        '혼자 밤새 붙잡고 있기보다 동료를 불러 일을 나누는 게 정답이었습니다. 도움을 청하고 함께 움직일 친화력, 마지막 수정까지 밀어붙일 체력이 필요했어요. 금요일 저녁의 변수는 주사위가 정했습니다.'),
-    (5, '최종 보스: 연말 회식 ''건배사 지명''',
-        '1차, 2차, 노래방까지 이어진 연말 회식. 자정 무렵 마이크가 나에게 넘어온다. "자, 올해 마무리 한마디!" 수십 명의 눈이 나만 보고 있고, 분위기는 이미 무르익었다.',
-        16, 4, true, -2, 3, array['hp', 'social', 'mental'],
-        '이 자리에서 머리를 쓰는 사람은 없다.',
-        '자정까지 버틸 체력, 분위기를 읽고 사람들을 웃길 친화력, 수십 명 앞에서도 떨지 않을 멘탈이 모두 필요했습니다. 이 자리에서 머리를 굴리는 사람은 없었어요. 지력만 빠진 이유입니다.');
+  insert into public.raid_sim_bosses (round, name, description, hp, reward, has_event, dice_low, dice_high, stats, hint, reveal)
+  select x.ord, x.v->>'name', x.v->>'desc', (x.v->>'hp')::integer, (x.v->>'reward')::integer, (x.v->>'event')::boolean,
+         (x.v->>'diceLow')::integer, (x.v->>'diceHigh')::integer,
+         array(select jsonb_array_elements_text(x.v->'stats')), x.v->>'hint', x.v->>'reveal'
+  from jsonb_array_elements(public.raid_sim_default_bosses()) with ordinality as x(v, ord);
 end $$;
 
 -- 3) 내부 도우미 ----------------------------------------------------------
@@ -380,7 +388,7 @@ begin
                             'picks', coalesce(s->'picks', '{}'::jsonb),
                             'teams', coalesce(s->'teams', '["A조", "B조"]'::jsonb), 'mode', coalesce(s->>'mode', 'seats'),
                             'storyDrafts', case when p_host then coalesce(s->'storyDrafts', '{}'::jsonb) else '{}'::jsonb end,
-                            'bosses', v_bosses, 'practice', v_practice, 'config', case when p_host then v_cfg else v_cfg - 'practiceBoss' end, 'isHost', p_host, 'now', public.raid_sim_ms());
+                            'bosses', v_bosses, 'practice', v_practice, 'config', case when p_host then v_cfg else v_cfg - 'practiceBoss' - 'bossPool' end, 'isHost', p_host, 'now', public.raid_sim_ms());
 end $$;
 
 -- 상태를 저장하고 공개 상태를 다시 씁니다 (Realtime 으로 모든 화면에 감).
@@ -729,8 +737,11 @@ begin
       end if;
     when 'resetBosses' then
       if v_phase in ('meeting', 'closed', 'rolled') then err := '라운드 진행 중(회의·마감)에는 보스를 바꿀 수 없어요';
-      elsif v_stage = 'boss' and v_round > 5 then err := '이미 진행한 라운드보다 보스 수를 줄일 수 없어요';
-      else perform public.raid_sim_seed_bosses(); end if;
+      elsif v_stage = 'boss' and v_round > jsonb_array_length(public.raid_sim_default_bosses()) then err := '이미 진행한 라운드보다 보스 수를 줄일 수 없어요';
+      else
+        perform public.raid_sim_seed_bosses();
+        update public.raid_sim_config set data = data - 'bossPool', updated_at = now() where id = 1;
+      end if;
     else err := '알 수 없는 동작이에요';
   end case;
 
@@ -831,8 +842,8 @@ end $$;
 
 -- 6) 권한 ----------------------------------------------------------------
 revoke all on function
-  public.raid_sim_ms(), public.raid_sim_keys(), public.raid_sim_default_config(), public.raid_sim_cfg(),
-  public.raid_sim_is_int(jsonb, integer, integer), public.raid_sim_check_config(jsonb), public.raid_sim_check_bosses(jsonb), public.raid_sim_check_roster(jsonb),
+  public.raid_sim_ms(), public.raid_sim_keys(), public.raid_sim_default_bosses(), public.raid_sim_default_config(), public.raid_sim_cfg(),
+  public.raid_sim_is_int(jsonb, integer, integer), public.raid_sim_check_config(jsonb), public.raid_sim_check_bosses(jsonb, integer), public.raid_sim_check_roster(jsonb),
   public.raid_sim_seed_bosses(), public.raid_sim_initial_game(), public.raid_sim_seed(), public.raid_sim_random_stats(),
   public.raid_sim_default_stats(), public.raid_sim_played(jsonb, integer, integer), public.raid_sim_present(jsonb, jsonb), public.raid_sim_can_pick(jsonb, integer, integer),
   public.raid_sim_char(jsonb), public.raid_sim_lock(jsonb), public.raid_sim_view(jsonb, boolean),
@@ -843,14 +854,14 @@ grant execute on function public.raid_sim_admin(text, integer, jsonb) to service
 grant execute on function public.raid_sim_act(integer, text, jsonb) to anon, authenticated, service_role;
 grant execute on function public.raid_sim_login(text) to anon, authenticated, service_role;
 
--- 7) 처음 실행할 때만: 보스 5명, 규칙, 6자리와 대기 상태 (이미 있으면 그대로) -------------
---    보스 글을 새로 쓴 버전(bossVersion 2)은 이 파일을 처음 실행할 때 한 번만 지금 보스를 새 글로 바꿉니다.
+-- 7) 처음 실행할 때만: 보스, 규칙, 6자리와 대기 상태 (이미 있으면 그대로) -------------
+--    보스를 새로 바꾼 버전(bossVersion 3: 직장 빌런 9명 + 보스 목록)은 이 파일을 처음 실행할 때 한 번만 출전 보스를 새 기본값으로 바꿉니다.
 insert into public.raid_sim_config (id) values (1) on conflict (id) do nothing;
 do $$ begin
   if not exists (select 1 from public.raid_sim_bosses)
-     or coalesce((select data->>'bossVersion' from public.raid_sim_config where id = 1), '') <> '2' then
+     or coalesce((select data->>'bossVersion' from public.raid_sim_config where id = 1), '') <> '3' then
     perform public.raid_sim_seed_bosses();
-    update public.raid_sim_config set data = data || '{"bossVersion": "2"}'::jsonb, updated_at = now() where id = 1;
+    update public.raid_sim_config set data = (data - 'bossPool') || '{"bossVersion": "3"}'::jsonb, updated_at = now() where id = 1;
   end if;
 end $$;
 insert into public.raid_sim_roster (id) values (1) on conflict (id) do nothing;

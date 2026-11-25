@@ -93,6 +93,15 @@ a { color: var(--blue); }
 .bcard-h b { font-size: 0.95rem; }
 .bexp { font-size: 0.75rem; color: var(--muted); margin-right: auto; }
 .bact { display: flex; gap: 0.25rem; }
+/* 보스 목록: 출전 체크 · 이름 · 버튼 / 아래 줄에 요약 */
+.bnum { font-size: 0.8rem; font-weight: 700; color: var(--muted); }
+.bcard.pool { gap: 0.5rem; }
+.bcard.pool .bname { flex: 1 1 12rem; min-width: 0; font-size: 0.95rem; }
+.bcard.pool .bexp { flex-basis: 100%; margin-right: 0; }
+.bcard.pool .bexp span { font-weight: 700; }
+.bround { min-width: 4.2em; font-size: 0.8rem; }
+.bcard.off { opacity: 0.55; }
+.bcard.off:hover, .bcard.off:focus-within { opacity: 0.85; }
 .checks { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; }
 .chk { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; font-weight: 700; color: var(--ink); cursor: pointer; }
 .chk input { width: 1.1rem; height: 1.1rem; margin: 0; }
