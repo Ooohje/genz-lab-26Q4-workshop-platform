@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261125a";
+  const V = "20261125b";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
 
@@ -540,7 +540,7 @@ window.WCRaid = (function () {
           const ok = canPick(m.id, p.team);
           const tag = !present(m) ? "미입장" : !ok ? "출전함" : pick && pick.id === m.id ? "출전" : m.id === pid ? "나" : "";
           return pcard(m, { tag, on: pick && pick.id === m.id, button: 'data-p="' + pid + '" data-a="pick" data-m="' + m.id + '"' + (ok ? "" : " disabled") });
-        }).join("") + '<div class="muted">누르면 확인 창이 떠요. 마감 전까지는 조원 누구나 바꿀 수 있고, 마감 때 고른 사람이 최종이에요.' + (JOIN_MODE === "roster" ? " 아이디로 입장한 사람만 고를 수 있어요." : "") + " 아무도 안 고르면 마감 때 아직 안 나간 사람 중 랜덤.</div></div>";
+        }).join("") + '<div class="muted">마감 전까지는 조원 누구나 바꿀 수 있고, 마감 때 고른 사람이 최종이에요. 만약 회의 시간이 끝나도 정해지지 않았다면, 랜덤으로 지정돼요.</div></div>';
     }
     const x = (game.results[game.round] || []).find((y) => y.team === p.team);
     if (game.phase === "closed") return h + '<div class="card"><div class="t">' + (x ? esc(x.name) + " 님 출전!" : "마감") + '</div><div class="muted">' + (x && x.auto ? "아무도 안 골라서 랜덤으로 정해졌어요. " : "") + "앞쪽 화면에서 결과 공개를 기다려 주세요." + "</div></div>";
