@@ -8,9 +8,11 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261125g";
+  const V = "20261125h";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
+  // 발표 화면에 크게 보여 줄 주소: 설정의 "짧은 참여 주소"가 있으면 그것, 없으면 실제 주소에서 https:// 를 뗀 것
+  const joinText = () => (RULES.joinShort || JOIN_URL).replace(/^https?:\/\//, "").replace(/\/$/, "");
 
   const STATS = [
     { key: "hp", label: "체력", desc: "오래 버티는 힘, 몸으로 밀어붙이는 추진력", color: "#E0694E" },
@@ -321,14 +323,22 @@ window.WCRaid = (function () {
     else if (game.phase === "closed") { if (boss().event) add("룰렛 돌리기", "roll", "go"); else add("결과 공개", "reveal", "go"); add(game.round ? game.round + "라운드 다시" : "연습 다시", "start:" + game.round); }
     else if (game.phase === "rolled") { add("결과 공개", "reveal", "go"); add(game.round ? game.round + "라운드 다시" : "연습 다시", "start:" + game.round); }
     else if (game.phase === "revealed" && game.round === 0) { add("1번 보스 시작 (본게임)", "start:1", "go"); add("연습 다시", "start:0"); }
-    else if (game.phase === "revealed") { if (game.round < BOSSES.length) { add((game.round + 1) + "번 보스 시작", "start:" + (game.round + 1), "go"); add("최종 순위", "final"); } else add("최종 순위", "final", "go"); }
+    else if (game.phase === "revealed") {
+      // 결과 화면 3장: reveal:0 공격력 · reveal:1 점수표 · reveal:2 중간 집계 (3라운드마다 중간 집계를 먼저 권함)
+      const v = game.view || 0, last = game.round >= BOSSES.length, mid = game.round % 3 === 0 && !last;
+      const next = () => add((game.round + 1) + "번 보스 시작", "start:" + (game.round + 1), "go");
+      if (v === 0) { add("점수표 보기", "reveal:1", "go"); if (!last) add((game.round + 1) + "번 보스 시작", "start:" + (game.round + 1)); }
+      else if (v === 1) { if (last) add("최종 순위", "final", "go"); else if (mid) { add("중간 집계 보기", "reveal:2", "go"); add((game.round + 1) + "번 보스 시작", "start:" + (game.round + 1)); } else { next(); add("중간 집계 보기", "reveal:2"); } add("공격력 화면", "reveal:0"); }
+      else { if (last) add("최종 순위", "final", "go"); else next(); add("점수표로", "reveal:1"); }
+      if (!last || v === 0) add("최종 순위", "final");
+    }
     if (game.stage !== "lobby") add("← 이전 단계", "back", "quiet");
     add("처음부터", "reset", "quiet");
     return b;
   }
   const stepWord = () => !game ? "준비 전" : game.stage === "lobby" ? "대기" : game.stage === "make" ? "1. 캐릭터 만들기" : game.stage === "share" ? "2. 조 내 공유"
     : game.phase === "idle" ? "3. 보스 레이드 규칙" : game.phase === "meeting" ? rname() + " · 회의" : game.phase === "closed" ? rname() + " · 마감" : game.phase === "rolled" ? rname() + " · 룰렛"
-    : game.phase === "revealed" ? rname() + " · 결과" : "최종 순위";
+    : game.phase === "revealed" ? rname() + " · " + (game.round && game.view === 1 ? "점수표" : game.round && game.view === 2 ? "중간 집계" : "결과") : "최종 순위";
 
   // ── 참여자 동작 (스탯 고르기는 이 기기에서, 저장·외형 랜덤 뽑기·출전자 선택은 Supabase 로) ──
   async function personAct(pid, a, extra) {
@@ -427,16 +437,17 @@ window.WCRaid = (function () {
     "공격력(판정 스탯 합)이 **보스 HP 이상이면 격파** → 그 보스의 보상 점수(" + rewardRange() + "), **실패하면 0점**.",
     "라운드 공격력 1위 조는 **MVP " + sign(RULES.mvpBonus) + "점** (격파 못 해도, 동점이면 모두).",
     "결과 공개 전에 **돌발 이벤트**가 터질 수도 있어요. 그때는 **룰렛**에 걸린 칸에 따라 공격력이나 점수가 바뀌어요.",
-    "점수를 모두 더한 **총점 순위는 마지막에 공개**돼요.",
+    "몇 라운드마다 **중간 집계**로 조별 점수를 함께 보고, **최종 순위는 마지막에 공개**돼요.",
   ];
   const rewardRange = () => { const r = BOSSES.map((b) => b.reward); return !r.length ? "" : Math.min(...r) === Math.max(...r) ? r[0] + "점" : Math.min(...r) + "~" + Math.max(...r) + "점"; };
   function projHtml() {
     if (!game) return '<div class="pv pv-center"><div class="h">보스 레이드 시뮬레이터</div><div class="sub">진행자 화면에서 "게임 준비하기"를 눌러 주세요</div></div>';
-    const qr = '<div class="pv-qr glass"><div class="q">' + qrSvg(JOIN_URL) + "</div><span>휴대폰으로<br>QR을 찍어 참여</span></div>";
+    const qr = '<div class="pv-qr glass"><div class="q">' + qrSvg(JOIN_URL) + '</div><span>휴대폰으로 QR을 찍거나<br>주소를 입력해 참여<b class="addr">' + esc(joinText()) + "</b></span></div>";
     if (game.stage === "lobby") {
       const joined = personList().filter((p) => p.claimed).length;
-      return '<div class="pv pv-center"><div class="eyebrow">오프닝 아이스브레이킹</div><div class="h">' + (RULES.lobbyTitle ? richText(RULES.lobbyTitle) : '나만의 <span class="title-glow">픽셀 캐릭터</span><br>&amp; 보스 레이드') + '</div><div class="sub">' + (RULES.lobbySub ? richText(RULES.lobbySub) : "휴대폰으로 QR을 찍고 Knox ID로 입장해 주세요") + "</div>" +
-        '<div class="lobby-row"><div class="pv-qr glass big"><div class="q">' + qrSvg(JOIN_URL) + '</div><span>QR을 찍어 참여</span></div><div class="count glass"><span>입장</span><b>' + joined + "</b><span>/ " + personList().length + "명</span></div></div></div>";
+      return '<div class="pv pv-center"><div class="eyebrow">오프닝 아이스브레이킹</div><div class="h">' + (RULES.lobbyTitle ? richText(RULES.lobbyTitle) : '나만의 <span class="title-glow">픽셀 캐릭터</span><br>&amp; 보스 레이드') + '</div><div class="sub">' + (RULES.lobbySub ? richText(RULES.lobbySub) : "휴대폰으로 QR을 찍거나 아래 주소를 입력하고, Knox ID로 입장해 주세요") + "</div>" +
+        '<div class="lobby-row"><div class="pv-qr glass big"><div class="q">' + qrSvg(JOIN_URL) + '</div><span>QR을 찍거나 주소를 입력해 참여</span></div><div class="count glass"><span>입장</span><b>' + joined + "</b><span>/ " + personList().length + "명</span></div></div>" +
+        '<div class="join-addr glass"><span>주소</span><b>' + esc(joinText()) + "</b></div></div>";
     }
     if (game.stage === "make") {
       const made = personList().filter((p) => p.char && !p.char.isDefault).length;
@@ -471,17 +482,27 @@ window.WCRaid = (function () {
           '<div class="dice-team glass"><div class="dwho">' + TEAMS[x.team] + "<b>" + esc(x.name) + "</b></div>" + reel(x) + "</div>").join("") + "</div></div>";
     }
     if (game.phase === "revealed") {
-      // 모든 조의 게이지가 동시에 올라가고(0.8초 뒤부터 2.6초), 다 찬 뒤 실패한 캐릭터가 자기 칸 안에서 쓰러집니다 (CSS)
-      const max = Math.max(b.hp + 4, ...rows.map((x) => x.power));
       const sorted = rows.slice().sort((a, c) => a.team - c.team);
-      // 보스 HP 바는 가장 센 공격만큼 줄고, 한 조라도 격파하면 K.O.
-      const best = Math.max(...rows.map((x) => x.power)), left = Math.max(0, (b.hp - best) / b.hp * 100), ko = rows.some((x) => x.cleared);
-      return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-top"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯' + (game.round === 0 ? ' <span class="practice-tag">연습</span>' : "") + '</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + "</div></div>" +
-        '<div class="boss-hit' + (ko ? " ko" : "") + '"><div class="boss-box">' + bossSprite(game.round) + (ko ? '<b class="ko-stamp">K.O.</b>' : "") + '</div><div class="bhp"><i style="--left:' + left + '%"></i></div><div class="bhp-t">보스 HP ' + b.hp + "</div></div></div>" +
+      const view = game.round === 0 ? 0 : game.view || 0;
+      // 2장: 이번 라운드 점수표 (격파 몇 조 · 실패 몇 조 · 조마다 얻은 점수와 내역)
+      if (view === 1) {
+        const win = rows.filter((x) => x.cleared).length;
+        return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + " · " + rlabel() + '</div><div class="h score-h">이번 라운드 점수</div>' +
+          '<div class="tally"><span class="tw">격파 성공 <b>' + win + '</b>조</span><span class="tl">실패 <b>' + (rows.length - win) + "</b>조</span><span>보상 " + b.reward + "점 · MVP " + sign(RULES.mvpBonus) + "점</span></div></div>" +
+          '<div class="score-grid glass' + (rows.length > 6 ? " cols" : "") + '" style="--rows:' + (rows.length > 6 ? Math.ceil(rows.length / 2) : rows.length) + '">' +
+          sorted.map((x) => '<div class="sc-row' + (x.cleared ? " win" : "") + '"><b class="sc-team">' + TEAMS[x.team] + '</b><span class="sc-name">' + esc(x.name) + "</span>" +
+            '<span class="sc-out">' + (x.cleared ? "격파" : "실패") + '</span><span class="sc-parts">' + scoreParts(x, b) + '</span><b class="sc-pt">+' + x.points + "점</b></div>").join("") + "</div></div>";
+      }
+      // 3장: 중간 집계 (지금까지의 조별 총점)
+      if (view === 2) return standingsHtml("중간 집계 · " + game.round + "라운드까지", "이번 라운드에 얻은 점수는 오른쪽에 따로 보여요. 최종 순위는 마지막에 공개돼요.");
+      // 1장: 공격력과 승패. 모든 조의 게이지가 동시에 올라가고(0.8초 뒤부터 2.6초), 다 찬 뒤 실패한 캐릭터가 자기 칸 안에서 쓰러집니다 (CSS)
+      const max = Math.max(b.hp + 4, ...rows.map((x) => x.power));
+      return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯' + (game.round === 0 ? ' <span class="practice-tag">연습</span>' : "") + '</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + "</div></div>" +
         '<div class="bars glass' + (rows.length > 6 ? " cols" + (rows.length > 14 ? " dense" : "") : rows.length > 4 ? " many" : "") + '" style="--hp:' + (b.hp / max * 100) + "%;--rows:" + Math.ceil(rows.length / 2) + '"><div class="hp-note"><i></i>보스 HP ' + b.hp + " · 점선을 넘으면 격파</div>" +
-        sorted.map((x) => '<div class="bar-row' + (x.cleared ? " win" : " lose") + '"><div class="art">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + '</span><em class="stv">' + esc(statLine(x, b)) + "</em></div>" +
-          '<div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i><em class="spark" style="left:' + (Math.max(0, x.power) / max * 100) + '%"></em></div><div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + (game.round === 0 ? "" : " +" + x.points) + (x.mvp && game.round !== 0 ? ' <span class="star">MVP</span>' : "") + "</span>" +
-          (x.dice ? '<span class="dice-note">' + diceText(x) + "</span>" : "") + "</div></div>").join("") + "</div></div>";
+        sorted.map((x) => '<div class="bar-row' + (x.cleared ? " win" : " lose") + '"><div class="art">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + "</span></div>" +
+          '<div class="mid"><div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i><em class="spark" style="left:' + (Math.max(0, x.power) / max * 100) + '%"></em></div>' +
+          '<em class="stv">' + esc(statLine(x, b)) + (x.effect && x.effect.kind !== "none" ? ' <span class="roul">룰렛 ' + esc(effLabel(x.effect)) + "</span>" : "") + "</em></div>" +
+          '<div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + (x.mvp && game.round !== 0 ? ' <span class="star">MVP</span>' : "") + "</span></div></div>").join("") + "</div></div>";
     }
     if (TEAMS.length > 3) {
       return '<div class="pv"><div class="h" style="text-align:center">보스 레이드 최종 순위</div><div class="rank-list glass" style="--rows:' + Math.ceil(TEAMS.length / 2) + '">' +
@@ -489,6 +510,28 @@ window.WCRaid = (function () {
     }
     return '<div class="pv"><div class="h" style="text-align:center">보스 레이드 최종 순위</div><div class="podium" style="grid-template-columns:repeat(' + TEAMS.length + ',1fr)">' +
       scoreboard().slice().sort((a, c) => (a.rank === 1 ? 1 : 0) - (c.rank === 1 ? 1 : 0) || c.rank - a.rank).map((x) => '<div class="r' + x.rank + '"><b>' + TEAMS[x.team] + "</b><span>" + x.total + "점 · 격파 " + x.cleared + '회</span><div class="block glass">' + x.rank + "위</div></div>").join("") + "</div></div>";
+  }
+
+  // 점수표 한 줄의 내역: 격파 보상 · MVP · 룰렛(다른 색)
+  function scoreParts(x, b) {
+    const out = [x.cleared ? "격파 +" + b.reward : "격파 0"];
+    if (x.mvp) out.push("MVP " + sign(RULES.mvpBonus));
+    let h = out.map((t) => "<span>" + t + "</span>").join("");
+    if (x.effect && x.effect.kind !== "none") {
+      const pts = x.effect.kind === "power" ? "" : x.extra ? " → " + sign(x.extra) + "점" : " → 해당 없음";
+      h += '<span class="roul">룰렛 ' + esc(effLabel(x.effect)) + pts + "</span>";
+    }
+    return h;
+  }
+  // 중간 집계: 지금까지의 총점 순위 + 이번 라운드에 얻은 점수
+  function standingsHtml(title, note) {
+    const sb = scoreboard(), top = Math.max(1, ...sb.map((x) => x.total)), cur = game.results[game.round] || [];
+    return '<div class="pv"><div class="reveal-head"><div class="eyebrow">보스 레이드 · ' + game.round + " / " + BOSSES.length + '라운드</div><div class="h score-h">' + esc(title) + '</div><div class="sub">' + esc(note) + "</div></div>" +
+      '<div class="stand glass' + (sb.length > 6 ? " cols" : "") + '" style="--rows:' + (sb.length > 6 ? Math.ceil(sb.length / 2) : sb.length) + '">' +
+      sb.map((x) => { const r = cur.find((y) => y.team === x.team);
+        return '<div class="st-row' + (x.rank === 1 ? " top" : "") + '"><b class="st-rank">' + x.rank + '위</b><b class="st-team">' + TEAMS[x.team] + "</b>" +
+          '<div class="st-bar"><i style="width:' + Math.max(0, x.total) / top * 100 + '%"></i></div><b class="st-pt">' + x.total + "점</b>" +
+          '<span class="st-sub">격파 ' + x.cleared + "회" + (r ? ' · <em>이번 +' + r.points + "</em>" : "") + "</span></div>"; }).join("") + "</div></div>";
   }
 
   function adminHtml() {
@@ -597,7 +640,7 @@ window.WCRaid = (function () {
         '<div class="muted"><b>' + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div>" +
         '<div class="muted">판정 스탯 <b>' + esc(statLine(x, b)) + " = " + x.base + "</b>" + (x.effect ? " · " + esc(diceText(x)) : "") + "</div>" +
         (game.round === 0 ? '<div class="t">연습 라운드 · 점수 없음</div>' : '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + "</div>") + storyBox(x) + '<div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
-        '<div class="muted">누적 점수와 순위는 마지막에 공개돼요.</div>';
+        (game.round && game.view === 2 ? "<h3>중간 집계 · " + game.round + "라운드까지</h3>" + rankHtml(p) : '<div class="muted">누적 점수와 순위는 중간 집계와 마지막에 공개돼요.</div>');
     }
     return "<h3>최종 순위</h3>" + rankHtml(p);
   }
@@ -619,7 +662,7 @@ window.WCRaid = (function () {
     { title: "격파 / 실패", body: "공격력이 **보스 HP 이상이면 격파** → 그 보스의 보상 점수를 받아요. 모자라면 **실패 → 0점**.\n{보상}" },
     { title: "MVP", body: "라운드마다 공격력이 가장 높은 조가 **{MVP}점**을 더 받아요. 격파하지 못해도 받을 수 있고, 동점이면 모두 받아요." },
     { title: "돌발 이벤트 룰렛", body: "룰렛에 걸린 칸의 효과를 받아요.\n{룰렛}" },
-    { title: "순위", body: "라운드 점수(격파 보상 + MVP + 룰렛 점수)를 모두 더한 **총점** 순이에요. 총점이 같으면 **격파 횟수**가 많은 조가 위이고, 격파 횟수까지 같으면 같은 등수예요. 누적 점수와 순위는 **마지막에 공개**돼요." },
+    { title: "순위", body: "라운드 점수(격파 보상 + MVP + 룰렛 점수)를 모두 더한 **총점** 순이에요. 총점이 같으면 **격파 횟수**가 많은 조가 위이고, 격파 횟수까지 같으면 같은 등수예요. 몇 라운드마다 **중간 집계**를 보여 주고, 최종 순위는 **마지막에 공개**돼요." },
     { title: "출전", body: "연습 라운드는 점수와 출전 기록에 들어가지 않아요. 라운드마다 조에서 **1명**이 나가요. 한 사람은 **최대 2번**까지 나갈 수 있고(조원이 6명 미만인 조는 **3번**), 입장한 사람만 고를 수 있어요. 회의 시간이 끝날 때까지 아무도 안 고르면 덜 나간 사람 중에서 랜덤으로 정해져요." },
   ];
   const fillInfo = (t) => String(t || "")
@@ -665,7 +708,7 @@ window.WCRaid = (function () {
       config: Object.fromEntries(CFG_FIELDS.map((f) => [f.k, String(RULES[f.k])])),
       bosses: poolDraft(),
       roulette: (RULES.roulette || []).map((x) => ({ kind: x.kind, value: String(x.value) })),
-      texts: { lobbyTitle: RULES.lobbyTitle || "", lobbySub: RULES.lobbySub || "", rulesTitle: RULES.rulesTitle || "", rulesLines: (RULES.rulesLines || []).join("\n"),
+      texts: { joinShort: RULES.joinShort || "", lobbyTitle: RULES.lobbyTitle || "", lobbySub: RULES.lobbySub || "", rulesTitle: RULES.rulesTitle || "", rulesLines: (RULES.rulesLines || []).join("\n"),
         infoTitle: RULES.infoTitle || "", infoText: infoToText(RULES.infoSections || []) },
       practice: (() => { const p = RULES.practiceBoss || {}; return { name: p.name || "", desc: p.desc || "", hp: String(p.hp == null ? 10 : p.hp), stats: (p.stats || []).slice(), hint: p.hint || "", reveal: p.reveal || "" }; })() };
   }
@@ -697,9 +740,11 @@ window.WCRaid = (function () {
       (f.note ? "<small>" + esc(f.note) + "</small>" : "") + "</label>").join("") + "</div>" +
       '<p class="small">스탯 규칙(합계·최소·최대)은 대기 단계에서만 바꿀 수 있어요' + (ruleLocked ? '. 지금은 잠겨 있어요. 보스 레이드 탭에서 "처음부터"를 누르면 바꿀 수 있어요.' : ".") + " 시간은 다음에 시작하는 단계부터 적용돼요.</p></section>";
     const T = d.texts, tf = (k) => 'data-f="t.' + k + '"';
-    h += '<section class="panel"><h2>첫 화면 · 규칙 화면 문구</h2><p class="small">발표 화면의 첫 화면(대기·QR)과 보스 레이드 규칙 화면에 나오는 글이에요. <b>비워 두면 기본 문구</b>가 나와요. **이렇게** 감싸면 굵게, 줄바꿈은 그대로 보여요.</p>' +
+    h += '<section class="panel"><h2>첫 화면 · 규칙 화면 문구</h2><p class="small">발표 화면의 첫 화면(대기·QR·참여 주소)과 보스 레이드 규칙 화면에 나오는 글이에요. <b>비워 두면 기본 문구</b>가 나와요. **이렇게** 감싸면 굵게, 줄바꿈은 그대로 보여요.</p>' +
+      '<label class="f"><span>짧은 참여 주소 (발표 화면에 크게 보여요)</span><input type="text" maxlength="100" ' + tf("joinShort") + ' placeholder="' + esc(JOIN_URL.replace(/^https?:\/\//, "").replace(/\/$/, "")) + '" value="' + esc(T.joinShort) + '">' +
+      "<small>bit.ly · is.gd 같은 단축 주소를 만들어 적어 두면, QR 옆에 참여자가 보고 칠 수 있게 크게 보여요. 비워 두면 실제 주소가 보여요. QR은 언제나 실제 주소예요.</small></label>" +
       '<label class="f"><span>첫 화면 제목</span><textarea rows="2" maxlength="200" ' + tf("lobbyTitle") + ' placeholder="나만의 픽셀 캐릭터&#10;&amp; 보스 레이드">' + esc(T.lobbyTitle) + "</textarea></label>" +
-      '<label class="f"><span>첫 화면 안내</span><input type="text" maxlength="200" ' + tf("lobbySub") + ' placeholder="휴대폰으로 QR을 찍고 Knox ID로 입장해 주세요" value="' + esc(T.lobbySub) + '"></label>' +
+      '<label class="f"><span>첫 화면 안내</span><input type="text" maxlength="200" ' + tf("lobbySub") + ' placeholder="휴대폰으로 QR을 찍거나 아래 주소를 입력하고, Knox ID로 입장해 주세요" value="' + esc(T.lobbySub) + '"></label>' +
       '<label class="f"><span>규칙 화면 제목</span><input type="text" maxlength="200" ' + tf("rulesTitle") + ' placeholder="' + esc(defaultRulesTitle()) + '" value="' + esc(T.rulesTitle) + '"></label>' +
       '<label class="f"><span>규칙 (한 줄에 한 항목, 12줄까지)</span><textarea rows="8" ' + tf("rulesLines") + ' placeholder="' + esc(defaultRuleLines().join("\n")) + '">' + esc(T.rulesLines) + "</textarea></label>" +
       '<div class="row left"><button type="button" class="btn sm" data-set="rulesFill">기본 규칙 문구를 불러와서 고치기</button></div></section>';
@@ -848,9 +893,11 @@ window.WCRaid = (function () {
     const info = textToInfo(T.infoText);
     if (info.length > 12) { toast("i 창은 12칸까지예요"); return; }
     if (info.some((x) => !x.title || x.title.length > 40 || x.body.length > 800)) { toast("i 창: 칸마다 '## 제목'(40자까지)이 있어야 하고, 내용은 800자까지예요"); return; }
-    Object.assign(cfg, { lobbyTitle: String(T.lobbyTitle).trim(), lobbySub: String(T.lobbySub).trim(), rulesTitle: String(T.rulesTitle).trim(), rulesLines: lines,
+    const short = String(T.joinShort).trim();
+    if (short.length > 100 || /\s/.test(short)) { toast("짧은 참여 주소는 띄어쓰기 없이 100자까지예요"); return; }
+    Object.assign(cfg, { joinShort: short, lobbyTitle: String(T.lobbyTitle).trim(), lobbySub: String(T.lobbySub).trim(), rulesTitle: String(T.rulesTitle).trim(), rulesLines: lines,
       infoTitle: String(T.infoTitle).trim(), infoSections: info });
-    const textChanged = ["lobbyTitle", "lobbySub", "rulesTitle", "infoTitle"].some((k) => cfg[k] !== (RULES[k] || "")) || JSON.stringify(lines) !== JSON.stringify(RULES.rulesLines || []) ||
+    const textChanged = ["joinShort", "lobbyTitle", "lobbySub", "rulesTitle", "infoTitle"].some((k) => cfg[k] !== (RULES[k] || "")) || JSON.stringify(lines) !== JSON.stringify(RULES.rulesLines || []) ||
       JSON.stringify(info) !== JSON.stringify(RULES.infoSections || []);
     const rp = RULES.practiceBoss || {};
     const cfgChanged = textChanged || CFG_FIELDS.some((f) => cfg[f.k] !== RULES[f.k]) ||
@@ -1005,7 +1052,7 @@ window.WCRaid = (function () {
     tick();
   }
   // 같은 장면인지: 장면이 바뀔 때만 애니메이션을 틀고, 같은 장면을 다시 그릴 때는 끝난 모습으로 (css/raid.css 의 .settled)
-  const sceneKey = (m) => !game ? "none" : [game.stage, game.phase, game.round, rolling() ? "spin" : "", m.kind === "phone" ? myPid : ""].join("|");
+  const sceneKey = (m) => !game ? "none" : [game.stage, game.phase, game.round, rolling() ? "spin" : "", m.kind === "phone" ? myPid : game.view || 0].join("|");
   // 긴 글: 두 줄을 넘칠 때만 "더 보기"/"접기"
   function measureFolds(root) {
     root.querySelectorAll(".fold").forEach((f) => {

@@ -189,7 +189,7 @@ async function makeStories(db: any, opt: any) {
   return json({ ok: true, view: call.data.view });
 }
 
-// op: state | setup | make | fillChars | share | raid | start(arg=라운드, 0 = 연습) | hint | close | roll | reveal | final | back(이전 단계) | reset | resetSeats
+// op: state | setup | make | fillChars | share | raid | start(arg=라운드, 0 = 연습) | hint | close | roll | reveal(arg 있으면 결과 화면 장: 0 공격력 · 1 점수표 · 2 중간 집계) | final | back(이전 단계) | reset | resetSeats
 //     saveConfig(data=규칙) | saveBosses(data=보스 배열) | resetBosses | saveRoster(data=명단)   ← "보스·규칙 설정" 탭
 const OPS = new Set(["state", "setup", "make", "fillChars", "share", "raid", "start", "hint", "close", "roll", "reveal", "final", "back", "reset", "resetSeats", "saveRoster",
   "saveConfig", "saveBosses", "resetBosses"]);

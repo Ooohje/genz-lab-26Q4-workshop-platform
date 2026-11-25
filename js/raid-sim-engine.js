@@ -19,7 +19,7 @@
     practiceBoss: { name: "연습 보스: 월요일 아침 '만원 지하철'", desc: "월요일 아침 8시, 지하철 문이 열리자 사람들이 밀려든다. 손잡이 하나 잡기도 힘든 이 전쟁을 버텨야 회사에 도착한다. 연습 판이니 부담 없이 붙어 보자!",
       hp: 10, stats: ["hp", "luck"], hint: "버티거나, 운 좋게 앉거나.", reveal: "만원 지하철을 이긴 건 끝까지 서서 버티는 체력, 그리고 마침 앞자리가 비는 운이었습니다. 머리를 써도 지하철은 빨리 오지 않아요." },
     // 첫 화면 · 규칙 화면 문구 (비어 있으면 기본 문구)
-    lobbyTitle: "", lobbySub: "", rulesTitle: "", rulesLines: [],
+    joinShort: "", lobbyTitle: "", lobbySub: "", rulesTitle: "", rulesLines: [],
     // i 창(점수 규칙) 문구 (비어 있으면 기본 문구)
     infoTitle: "", infoSections: [] };
   const SPIN_KINDS = ["power", "clear", "fail", "none"];
@@ -93,6 +93,7 @@
     if (!isInt(c.shareMin, 1, 60)) return "조 내 공유 시간은 1~60분이에요";
     if (!isInt(c.mvpBonus, 0, 20)) return "MVP 점수는 0~20점이에요";
     if (!isInt(c.luckPower, 0, 100)) return "운 효과 세기는 0~100이에요 (0이면 운과 상관없이 모든 칸이 같은 확률)";
+    if (typeof c.joinShort !== "string" || c.joinShort.length > 100 || /\s/.test(c.joinShort)) return "짧은 참여 주소는 띄어쓰기 없이 100자까지예요";
     for (const k of ["lobbyTitle", "lobbySub", "rulesTitle"]) if (typeof c[k] !== "string" || c[k].length > 200) return "화면 문구는 200자 이하예요";
     if (!Array.isArray(c.rulesLines) || c.rulesLines.length > 12 || c.rulesLines.some((x) => typeof x !== "string" || x.length > 200)) return "규칙 줄은 12줄, 한 줄 200자까지예요";
     if (typeof c.infoTitle !== "string" || c.infoTitle.length > 60) return "i 창 제목은 60자까지예요";
@@ -255,7 +256,7 @@
       lockCharacters(S);
       clearPicksFrom(S, r);
       Object.keys(g.results).forEach((k) => { if (Number(k) >= r) delete g.results[k]; });
-      Object.assign(g, { round: r, phase: "meeting", hint: false, locked: true, deadline: Date.now() + meetingMs(S, r) });
+      Object.assign(g, { round: r, phase: "meeting", hint: false, view: 0, locked: true, deadline: Date.now() + meetingMs(S, r) });
     },
     hint(S) { if (S.game.phase !== "meeting") return "회의 중에만 힌트를 열 수 있어요"; S.game.hint = true; },
     close(S) { if (S.game.phase !== "meeting") return "회의 중에만 마감할 수 있어요"; closeRound(S); },
@@ -265,11 +266,17 @@
       if (!b || !b.event) return "이번 보스는 돌발 이벤트가 없어요";
       Object.assign(g, { phase: "rolled", rollAt: Date.now() });
     },
-    reveal(S) {
+    // arg 가 있으면(결과 공개 뒤): 결과 화면 장 바꾸기 0 공격력 · 1 점수표 · 2 중간 집계
+    reveal(S, v) {
       const g = S.game, b = bossAt(S, g.round);
+      if (v != null) {
+        if (g.phase !== "revealed") return "결과 공개 뒤에 넘길 수 있어요";
+        if (!Number.isInteger(v) || v < 0 || v > 2 || (v > 0 && g.round === 0)) return "그 화면은 없어요";
+        g.view = v; return;
+      }
       if (g.phase === "closed" && b && b.event) return "돌발 이벤트 라운드예요. 먼저 \"룰렛 돌리기\"를 눌러 주세요";
       if (g.phase !== "closed" && g.phase !== "rolled") return "마감한 뒤에 공개할 수 있어요";
-      g.phase = "revealed";
+      g.phase = "revealed"; g.view = 0;
     },
     final(S) { if (S.game.phase !== "revealed") return "결과 공개 뒤에 최종 순위를 띄울 수 있어요"; S.game.phase = "final"; },
     // 한 단계 전으로 (supabase/raid-sim.sql 의 'back' 과 같음)
@@ -293,6 +300,7 @@
         return;
       }
       if (g.phase === "rolled") { Object.assign(g, { phase: "closed", rollAt: null }); return; }
+      if (g.phase === "revealed" && g.view) { g.view = 0; return; }
       if (g.phase === "revealed") { const b = bossAt(S, r); g.phase = b && b.event ? "rolled" : "closed"; return; }
       if (g.phase === "final") { g.phase = "revealed"; return; }
       return "돌아갈 수 없어요";

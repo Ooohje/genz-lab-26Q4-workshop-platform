@@ -121,7 +121,7 @@ language sql immutable as $$
                             "desc": "월요일 아침 8시, 지하철 문이 열리자 사람들이 밀려든다. 손잡이 하나 잡기도 힘든 이 전쟁을 버텨야 회사에 도착한다. 연습 판이니 부담 없이 붙어 보자!",
                             "hp": 10, "stats": ["hp", "luck"], "hint": "버티거나, 운 좋게 앉거나.",
                             "reveal": "만원 지하철을 이긴 건 끝까지 서서 버티는 체력, 그리고 마침 앞자리가 비는 운이었습니다. 머리를 써도 지하철은 빨리 오지 않아요."},
-           "lobbyTitle": "", "lobbySub": "", "rulesTitle": "", "rulesLines": [], "infoTitle": "", "infoSections": []}'::jsonb
+           "joinShort": "", "lobbyTitle": "", "lobbySub": "", "rulesTitle": "", "rulesLines": [], "infoTitle": "", "infoSections": []}'::jsonb
     || jsonb_build_object('bossPool', public.raid_sim_default_bosses() || '[
     {"name":"무한 회의 루프 ''리:미팅''","desc":"회의가 끝나면 ''방금 회의를 정리하는 회의''가 소환된다. 벌써 세 번째 회의, 의자는 딱딱하고 결론은 또 다음 회의로 미뤄진다. 이 보스는 쓰러뜨리는 게 아니라 끝날 때까지 버텨야 사라진다.","hp":11,"reward":1,"event":false,"diceLow":-2,"diceHigh":3,"stats":["hp","mental"],"hint":"끝까지 남는 사람이 이긴다.","reveal":"끝없는 회의를 이긴 건 말솜씨가 아니라 버티는 힘이었습니다. 몇 시간째 이어지는 회의를 견딜 체력, 결론 없는 말들에 지치지 않을 멘탈이 필요했어요. 지력으로 정리해 보려 해도 회의는 또 다른 회의를 낳을 뿐이었습니다."},
     {"name":"알림 폭탄 ''안읽음 999+''","desc":"점심 먹고 왔더니 단톡방 9개에 안 읽은 메시지가 999개. 그 사이 어딘가에 팀장님의 \"이거 확인 가능?\"이 숨어 있다. 하나씩 다 읽다가는 퇴근 시간이 지나 버린다.","hp":12,"reward":2,"event":false,"diceLow":-2,"diceHigh":3,"stats":["intel","mental"],"hint":"999개를 다 읽을 필요는 없다.","reveal":"999개를 다 읽는 사람이 아니라 중요한 한 개를 골라내는 사람이 이겼습니다. 쏟아지는 알림 속에서 우선순위를 가려낼 지력, 빨간 숫자에 흔들리지 않을 멘탈이 핵심이었어요. 체력으로 하나하나 다 읽으면 오히려 늦었습니다."},
@@ -160,6 +160,9 @@ begin
   if not public.raid_sim_is_int(c->'shareMin', 1, 60) then return '조 내 공유 시간은 1~60분이에요'; end if;
   if not public.raid_sim_is_int(c->'mvpBonus', 0, 20) then return 'MVP 점수는 0~20점이에요'; end if;
   if not public.raid_sim_is_int(c->'luckPower', 0, 100) then return '운 효과 세기는 0~100이에요 (0이면 운과 상관없이 모든 칸이 같은 확률)'; end if;
+  if jsonb_typeof(c->'joinShort') is distinct from 'string' or length(c->>'joinShort') > 100 or c->>'joinShort' ~ '\s' then
+    return '짧은 참여 주소는 띄어쓰기 없이 100자까지예요';
+  end if;
   if jsonb_typeof(c->'lobbyTitle') is distinct from 'string' or jsonb_typeof(c->'lobbySub') is distinct from 'string' or jsonb_typeof(c->'rulesTitle') is distinct from 'string'
      or length(c->>'lobbyTitle') > 200 or length(c->>'lobbySub') > 200 or length(c->>'rulesTitle') > 200 then return '화면 문구는 200자 이하예요'; end if;
   if jsonb_typeof(c->'rulesLines') is distinct from 'array' or jsonb_array_length(c->'rulesLines') > 12
@@ -618,7 +621,7 @@ begin
         s := jsonb_set(s, '{game,results}', coalesce((select jsonb_object_agg(key, value) from jsonb_each(s#>'{game,results}')
                                                       where key::integer < p_arg), '{}'::jsonb));
         s := jsonb_set(s, '{storyDrafts}', coalesce(s->'storyDrafts', '{}'::jsonb) - ('r' || p_arg));
-        s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('round', p_arg, 'phase', 'meeting', 'hint', false, 'locked', true,
+        s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('round', p_arg, 'phase', 'meeting', 'hint', false, 'view', 0, 'locked', true,
                                                                     'deadline', v_now + (v_cfg->>(case when p_arg = 0 then 'practiceMeetingSec' else 'meetingSec' end))::integer * 1000));
       end if;
     when 'hint' then
@@ -632,10 +635,15 @@ begin
       elsif v_round > 0 and not coalesce((select has_event from public.raid_sim_bosses where round = v_round), false) then err := '이번 보스는 돌발 이벤트가 없어요';
       else s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'rolled', 'rollAt', v_now)); end if;
     when 'reveal' then
-      if v_phase = 'closed' and (v_round = 0 or coalesce((select has_event from public.raid_sim_bosses where round = v_round), false)) then
+      -- p_arg 가 있으면(결과 공개 뒤): 발표 화면 결과 장 바꾸기 0 공격력 · 1 점수표 · 2 중간 집계
+      if p_arg is not null then
+        if v_phase <> 'revealed' then err := '결과 공개 뒤에 넘길 수 있어요';
+        elsif p_arg not between 0 and 2 or (p_arg > 0 and v_round = 0) then err := '그 화면은 없어요';
+        else s := jsonb_set(s, '{game,view}', to_jsonb(p_arg)); end if;
+      elsif v_phase = 'closed' and (v_round = 0 or coalesce((select has_event from public.raid_sim_bosses where round = v_round), false)) then
         err := '돌발 이벤트 라운드예요. 먼저 "룰렛 돌리기"를 눌러 주세요';
       elsif v_phase not in ('closed', 'rolled') then err := '마감한 뒤에 공개할 수 있어요';
-      else s := jsonb_set(s, '{game,phase}', '"revealed"'); end if;
+      else s := jsonb_set(s, '{game}', s->'game' || '{"phase": "revealed", "view": 0}'::jsonb); end if;
     when 'final' then
       if v_phase <> 'revealed' then err := '결과 공개 뒤에 최종 순위를 띄울 수 있어요';
       else s := jsonb_set(s, '{game,phase}', '"final"'); end if;
@@ -690,6 +698,7 @@ begin
         s := jsonb_set(s, '{game,results}', coalesce(s#>'{game,results}', '{}'::jsonb) - v_round::text);
         s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'meeting', 'deadline', v_now + (v_cfg->>(case when v_round = 0 then 'practiceMeetingSec' else 'meetingSec' end))::integer * 1000));
       elsif v_phase = 'rolled' then s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'closed', 'rollAt', null));
+      elsif v_phase = 'revealed' and coalesce((g->>'view')::integer, 0) > 0 then s := jsonb_set(s, '{game,view}', '0');
       elsif v_phase = 'revealed' then
         s := jsonb_set(s, '{game,phase}', (case when v_round = 0 or coalesce((select has_event from public.raid_sim_bosses where round = v_round), false)
                                                 then '"rolled"' else '"closed"' end)::jsonb);
