@@ -114,7 +114,7 @@ $$;
 -- 기본 규칙. bossPool = 보스 목록 (기본 9명 + 예전 기본 보스 5명). 진행자가 이 중에서 출전 보스를 고릅니다.
 create or replace function public.raid_sim_default_config() returns jsonb
 language sql immutable as $$
-  select '{"statTotal": 25, "statMin": 1, "statMax": 10, "rerolls": 2, "meetingSec": 180, "shareMin": 8, "mvpBonus": 1, "luckPower": 35,
+  select '{"statTotal": 25, "statMin": 1, "statMax": 10, "rerolls": 2, "meetingSec": 180, "practiceMeetingSec": 60, "shareMin": 8, "mvpBonus": 1, "luckPower": 35,
            "roulette": [{"kind": "power", "value": -2}, {"kind": "power", "value": -1}, {"kind": "power", "value": 1},
                         {"kind": "clear", "value": 1}, {"kind": "fail", "value": 1}, {"kind": "power", "value": 3}],
            "practiceBoss": {"name": "연습 보스: 월요일 아침 ''만원 지하철''",
@@ -156,6 +156,7 @@ begin
   end if;
   if not public.raid_sim_is_int(c->'rerolls', 0, 10) then return '다시 뽑기는 0~10번이에요'; end if;
   if not public.raid_sim_is_int(c->'meetingSec', 30, 1800) then return '회의 시간은 30~1800초예요'; end if;
+  if not public.raid_sim_is_int(c->'practiceMeetingSec', 10, 1800) then return '연습 보스 회의 시간은 10~1800초예요'; end if;
   if not public.raid_sim_is_int(c->'shareMin', 1, 60) then return '조 내 공유 시간은 1~60분이에요'; end if;
   if not public.raid_sim_is_int(c->'mvpBonus', 0, 20) then return 'MVP 점수는 0~20점이에요'; end if;
   if not public.raid_sim_is_int(c->'luckPower', 0, 100) then return '운 효과 세기는 0~100이에요 (0이면 운과 상관없이 모든 칸이 같은 확률)'; end if;
@@ -618,7 +619,7 @@ begin
                                                       where key::integer < p_arg), '{}'::jsonb));
         s := jsonb_set(s, '{storyDrafts}', coalesce(s->'storyDrafts', '{}'::jsonb) - ('r' || p_arg));
         s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('round', p_arg, 'phase', 'meeting', 'hint', false, 'locked', true,
-                                                                    'deadline', v_now + (v_cfg->>'meetingSec')::integer * 1000));
+                                                                    'deadline', v_now + (v_cfg->>(case when p_arg = 0 then 'practiceMeetingSec' else 'meetingSec' end))::integer * 1000));
       end if;
     when 'hint' then
       if v_phase <> 'meeting' then err := '회의 중에만 힌트를 열 수 있어요';
@@ -687,7 +688,7 @@ begin
         s := jsonb_set(s, '{picks}', coalesce((select jsonb_object_agg(key, value) from jsonb_each(s->'picks')
                                                where not ((substring(key from '^r(\d+)t\d+$'))::integer = v_round and coalesce((value->>'auto')::boolean, false))), '{}'::jsonb));
         s := jsonb_set(s, '{game,results}', coalesce(s#>'{game,results}', '{}'::jsonb) - v_round::text);
-        s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'meeting', 'deadline', v_now + (v_cfg->>'meetingSec')::integer * 1000));
+        s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'meeting', 'deadline', v_now + (v_cfg->>(case when v_round = 0 then 'practiceMeetingSec' else 'meetingSec' end))::integer * 1000));
       elsif v_phase = 'rolled' then s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'closed', 'rollAt', null));
       elsif v_phase = 'revealed' then
         s := jsonb_set(s, '{game,phase}', (case when v_round = 0 or coalesce((select has_event from public.raid_sim_bosses where round = v_round), false)

@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261125e";
+  const V = "20261125f";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
 
@@ -20,7 +20,7 @@ window.WCRaid = (function () {
     { key: "luck", label: "운", desc: "예상 못 한 변수가 내 편이 되는 힘", color: "#C98A1B" },
   ];
   // 게임 규칙 (진행자가 "보스·규칙 설정" 탭에서 바꿈). Supabase(또는 js/raid-sim-engine.js)가 보내 줍니다.
-  const DEFAULT_RULES = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, shareMin: 8, mvpBonus: 1, luckPower: 35 };
+  const DEFAULT_RULES = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, practiceMeetingSec: 60, shareMin: 8, mvpBonus: 1, luckPower: 35 };
   let RULES = Object.assign({}, DEFAULT_RULES);
   const KEYS = STATS.map((s) => s.key);
   const LABEL = Object.fromEntries(STATS.map((s) => [s.key, s.label]));
@@ -629,6 +629,7 @@ window.WCRaid = (function () {
     { k: "rerolls", label: "외형 다시 뽑기", unit: "번" },
     { k: "shareMin", label: "조 내 공유 시간", unit: "분" },
     { k: "meetingSec", label: "보스 회의 시간", unit: "초" },
+    { k: "practiceMeetingSec", label: "연습 보스 회의 시간", unit: "초", note: "연습 라운드에만 쓰는 회의 시간" },
     { k: "mvpBonus", label: "MVP 점수", unit: "점", note: "라운드 공격력 1위 조가 받는 점수" },
     { k: "luckPower", label: "운 효과 세기", unit: "", note: "운이 높을수록 룰렛의 아래쪽 칸이 잘 나오는 정도 (0~100). 0이면 운과 상관없이 모든 칸이 같은 확률" },
   ];
