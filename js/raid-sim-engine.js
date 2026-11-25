@@ -87,7 +87,7 @@
     if (!isInt(c.statMin, 1, 10)) return "스탯 최소는 1~10점이에요";
     if (!isInt(c.statMax, c.statMin, 30)) return "스탯 최대는 최소 이상, 30점 이하예요";
     if (!isInt(c.statTotal, n * c.statMin, n * c.statMax)) return "스탯 합계는 " + n * c.statMin + "~" + n * c.statMax + "점이어야 해요 (스탯 " + n + "개 × 최소~최대)";
-    if (!isInt(c.rerolls, 0, 10)) return "다시 뽑기는 0~10번이에요";
+    if (!isInt(c.rerolls, 0, 10)) return "외형 랜덤 뽑기는 0~10번이에요";
     if (!isInt(c.meetingSec, 30, 1800)) return "회의 시간은 30~1800초예요";
     if (!isInt(c.practiceMeetingSec, 10, 1800)) return "연습 보스 회의 시간은 10~1800초예요";
     if (!isInt(c.shareMin, 1, 60)) return "조 내 공유 시간은 1~60분이에요";
@@ -365,8 +365,8 @@
       return null;
     }
     if (a === "reroll") {
-      if (!editable(g)) return "지금은 다시 뽑을 수 없어요";
-      if (!p.char || p.rerolls >= cfg.rerolls) return "다시 뽑기를 모두 썼어요";
+      if (!editable(g)) return "지금은 외형 랜덤 뽑기를 할 수 없어요";
+      if (!p.char || p.rerolls >= cfg.rerolls) return "외형 랜덤 뽑기를 모두 썼어요";
       p.seed = newSeed();
       p.rerolls += 1;
       p.char = Object.assign({}, p.char, { seed: p.seed });

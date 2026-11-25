@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261125f";
+  const V = "20261125g";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
 
@@ -38,14 +38,20 @@ window.WCRaid = (function () {
   const effGood = (e) => !!e && e.kind !== "none" && e.value > 0;
   const spinRules = () => (RULES.roulette || []).map(effLabel).join(" · ");
 
-  // ── 픽셀 캐릭터 (js/raid-common.js 와 같은 그림) ───────────────
+  // ── 픽셀 캐릭터 (16×18) ─────────────────────────────────────
+  // 스탯으로 정해지는 것: 옷(1위 스탯) · 손에 든 소품(2위) · 표정(꼴찌) · 반짝이 · 볼터치
+  // 랜덤(seed, "외형 랜덤 뽑기"로 바뀜): 피부 · 머리 색 · 머리 모양 · 액세서리 · 액세서리 색 · 신발 색
   function rng(seed) {
     let a = (seed >>> 0) || 1;
     return function () { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }
   const SKINS = ["#FBE3CF", "#F9D7B9", "#F1C29A", "#E0A87E", "#C68A5E", "#8D5A3B"];
-  const HAIR_COLORS = ["#2B2238", "#4A2F24", "#7A4A2A", "#C8902F", "#B5473D", "#5B4BC4", "#2F4BA8", "#BFC3D2"];
-  const HAIR_STYLES = ["short", "bob", "spiky", "part", "bun", "long", "buzz"];
+  const HAIR_COLORS = ["#2B2238", "#4A2F24", "#7A4A2A", "#C8902F", "#B5473D", "#5B4BC4", "#2F4BA8", "#BFC3D2", "#E97FA8", "#2E8F86", "#E8C76A"];
+  const HAIR_STYLES = ["short", "bob", "spiky", "part", "bun", "long", "buzz", "mohawk", "pigtails", "curly", "ponytail", "sidebang"];
+  // 액세서리 (none 이 두 번 = 아무것도 없는 캐릭터도 꽤 나옴)
+  const ACCS = ["none", "none", "cap", "beanie", "ribbon", "headband", "flower", "headphones", "earring", "bandaid", "freckles"];
+  const ACC_COLORS = [["#F4775C", "#C9573F"], ["#5B7FD6", "#3F5FB0"], ["#2E9E6B", "#1F7A50"], ["#8A63D2", "#6A47B0"], ["#FFC23D", "#D9A21B"], ["#E97FA8", "#C95F88"]];
+  const SHOES = ["#2B2F4A", "#2B2F4A", "#E0694E", "#F2F4FB", "#5B4BC4", "#2E9E6B", "#8A5A3B"];
   const TITLES = { "hp+intel": "야근하는 설계자", "hp+social": "회식의 분위기 메이커", "hp+mental": "불굴의 현장러", "intel+social": "회의실의 조율자", "intel+mental": "냉철한 전략가", "social+mental": "사내 상담소장",
     "hp+luck": "버티다 보면 터지는 행운아", "intel+luck": "찍어도 맞히는 분석가", "social+luck": "인복 터진 마당발", "mental+luck": "흔들려도 운으로 버티는 사람" };
   function parts(c) {
@@ -53,7 +59,8 @@ window.WCRaid = (function () {
     const tie = KEYS.map(() => r());
     const order = KEYS.map((k, i) => ({ k, v: Number(c[k]) || 0, t: tie[i] })).sort((a, b) => b.v - a.v || b.t - a.t).map((x) => x.k);
     return { top: order[0], second: order[1], low: order[order.length - 1], sparkle: (Number(c[order[0]]) || 0) >= 8, blush: (Number(c.social) || 0) >= 7,
-      skin: SKINS[Math.floor(r() * SKINS.length)], hairColor: HAIR_COLORS[Math.floor(r() * HAIR_COLORS.length)], hairStyle: HAIR_STYLES[Math.floor(r() * HAIR_STYLES.length)] };
+      skin: SKINS[Math.floor(r() * SKINS.length)], hairColor: HAIR_COLORS[Math.floor(r() * HAIR_COLORS.length)], hairStyle: HAIR_STYLES[Math.floor(r() * HAIR_STYLES.length)],
+      acc: ACCS[Math.floor(r() * ACCS.length)], accColor: ACC_COLORS[Math.floor(r() * ACC_COLORS.length)], shoes: SHOES[Math.floor(r() * SHOES.length)] };
   }
   function title(c) {
     const avg = KEYS.reduce((n, k) => n + (Number(c[k]) || 0), 0) / KEYS.length;
@@ -75,6 +82,11 @@ window.WCRaid = (function () {
       case "part": px(4, 1, 8, 1, OL); px(3, 2, 10, 2, H); px(3, 4, 4, 1, H); px(3, 5, 1, 2, H); px(12, 4, 1, 2, H); break;
       case "bun": px(4, 1, 8, 1, OL); px(6, 0, 4, 2, H); px(3, 2, 10, 2, H); px(3, 4, 1, 2, H); px(12, 4, 1, 2, H); break;
       case "long": px(4, 1, 8, 1, OL); px(3, 2, 10, 2, H); px(3, 4, 1, 3, H); px(12, 4, 1, 3, H); break;
+      case "mohawk": px(4, 1, 8, 1, OL); px(3, 2, 10, 1, H); px(6, 0, 4, 1, H); px(7, 1, 2, 2, H); break;
+      case "pigtails": px(4, 1, 8, 1, OL); px(3, 2, 10, 2, H); px(3, 4, 1, 1, H); px(12, 4, 1, 1, H); px(1, 3, 2, 4, H); px(13, 3, 2, 4, H); px(1, 7, 1, 1, H); px(14, 7, 1, 1, H); break;
+      case "curly": px(3, 1, 10, 3, H); [3, 5, 7, 9, 11].forEach((x) => px(x, 0, 2, 1, H)); px(2, 3, 2, 5, H); px(12, 3, 2, 5, H); px(4, 4, 1, 1, H); px(11, 4, 1, 1, H); break;
+      case "ponytail": px(4, 1, 8, 1, OL); px(3, 2, 10, 2, H); px(3, 4, 1, 2, H); px(12, 4, 1, 2, H); px(13, 2, 2, 2, H); px(14, 4, 1, 5, H); break;
+      case "sidebang": px(4, 1, 8, 1, OL); px(3, 2, 10, 2, H); px(3, 4, 6, 1, H); px(3, 5, 3, 1, H); px(12, 4, 1, 2, H); break;
       default: px(4, 1, 8, 1, OL); px(3, 2, 10, 1, H);
     }
     if (p.low === "social") { px(5, 6, 2, 1, OL); px(9, 6, 2, 1, OL); px(6, 8, 4, 1, MOUTH); }
@@ -89,7 +101,7 @@ window.WCRaid = (function () {
     const OUTFIT = { hp: ["#E0694E", "#B9503A"], intel: ["#F2F4FB", "#C9CEE0"], social: ["#F7B7C8", "#E48FA7"], mental: ["#5B5F7A", "#454962"], luck: ["#FFC23D", "#D9A21B"] };
     const [main, shade] = OUTFIT[p.top];
     px(3, 11, 10, 5, main); px(4, 16, 8, 1, main); px(4, 12, 1, 4, shade); px(11, 12, 1, 4, shade);
-    px(3, 16, 1, 1, S); px(12, 16, 1, 1, S); px(5, 17, 2, 1, "#2B2F4A"); px(9, 17, 2, 1, "#2B2F4A");
+    px(3, 16, 1, 1, S); px(12, 16, 1, 1, S); 
     if (p.top === "hp") { px(8, 11, 1, 6, "#FBE0D9"); px(3, 11, 1, 5, "#FFFFFF"); px(12, 11, 1, 5, "#FFFFFF"); px(3, 4, 10, 1, "#E0694E"); }
     else if (p.top === "intel") { px(7, 11, 2, 4, "#2F4BA8"); px(5, 11, 2, 1, "#FFFFFF"); px(9, 11, 2, 1, "#FFFFFF"); px(5, 5, 2, 1, OL); px(9, 5, 2, 1, OL); px(7, 6, 2, 1, OL); if (p.low !== "social") { px(5, 6, 1, 1, "#BFD3FF"); px(10, 6, 1, 1, "#BFD3FF"); } }
     else if (p.top === "social") { [5, 7, 9].forEach((x) => px(x, 13, 1, 1, "#FFFFFF")); [6, 8, 10].forEach((x) => px(x, 15, 1, 1, "#FFFFFF")); }
@@ -100,6 +112,19 @@ window.WCRaid = (function () {
     else if (p.second === "social") { px(12, 13, 2, 1, "#6B4A2E"); px(14, 13, 2, 1, "#6B4A2E"); px(12, 14, 2, 3, "#FFFFFF"); px(14, 14, 2, 3, "#FFFFFF"); px(12, 15, 2, 1, "#C98A1B"); px(14, 15, 2, 1, "#C98A1B"); }
     else if (p.second === "mental") { px(14, 12, 1, 3, "#2E9E6B"); px(13, 13, 1, 1, "#2E9E6B"); px(15, 13, 1, 1, "#2E9E6B"); px(13, 15, 3, 2, "#C2462B"); }
     else { px(13, 13, 3, 3, "#FFFFFF"); px(13, 13, 3, 1, "#E6E8F0"); px(14, 14, 1, 1, "#1F2540"); }
+    // 신발 색 (랜덤)
+    px(5, 17, 2, 1, p.shoes); px(9, 17, 2, 1, p.shoes);
+    // 액세서리 (랜덤). 스탯 옷과 겹치는 조합은 건너뜀 (멘탈 1위는 이미 헤드폰·머리띠, 체력 1위는 이미 땀 밴드)
+    const [A, A2] = p.accColor, acc = p.acc;
+    if (acc === "cap") { px(4, 0, 8, 1, A); px(3, 1, 10, 2, A); px(1, 3, 7, 1, A2); px(7, 1, 2, 1, "#FFFFFF"); }
+    else if (acc === "beanie") { px(7, 0, 2, 1, "#FFFFFF"); px(4, 1, 8, 1, A); px(3, 2, 10, 1, A); px(3, 3, 10, 1, A2); }
+    else if (acc === "ribbon") { px(2, 1, 2, 3, A); px(5, 1, 2, 3, A); px(4, 2, 1, 1, A2); }
+    else if (acc === "headband" && p.top !== "mental" && p.top !== "hp") { px(3, 3, 10, 1, A); px(10, 2, 2, 1, A2); }
+    else if (acc === "flower") { px(3, 2, 1, 3, A); px(2, 3, 3, 1, A); px(3, 3, 1, 1, "#FFE36E"); }
+    else if (acc === "headphones" && p.top !== "mental") { px(3, 0, 10, 1, "#3A3F5C"); px(2, 1, 1, 3, "#3A3F5C"); px(13, 1, 1, 3, "#3A3F5C"); px(1, 4, 2, 3, A); px(13, 4, 2, 3, A); }
+    else if (acc === "earring") { px(2, 7, 1, 1, "#FFC23D"); px(2, 8, 1, 1, A); }
+    else if (acc === "bandaid") { px(9, 7, 3, 1, "#F2C7A0"); px(10, 7, 1, 1, "#E3A97C"); }
+    else if (acc === "freckles") { px(5, 7, 1, 1, "#B77A55"); px(4, 8, 1, 1, "#B77A55"); px(10, 7, 1, 1, "#B77A55"); px(11, 8, 1, 1, "#B77A55"); }
     return '<svg viewBox="0 0 16 18" shape-rendering="crispEdges" aria-hidden="true" style="display:block;width:100%;height:100%">' + out.join("") + "</svg>";
   }
   const BOSS_ART = ["..h......h..", "..hh....hh..", ".XXXXXXXXXX.", "XXXXXXXXXXXX", "XXwwXXXXwwXX", "XXwkXXXXwkXX", "XXXXXXXXXXXX", "XXmmmmmmmmXX", "XXmtmtmtmtXX", ".XXXXXXXXXX.", ".XX..XX..XX."];
@@ -305,7 +330,7 @@ window.WCRaid = (function () {
     : game.phase === "idle" ? "3. 보스 레이드 규칙" : game.phase === "meeting" ? rname() + " · 회의" : game.phase === "closed" ? rname() + " · 마감" : game.phase === "rolled" ? rname() + " · 룰렛"
     : game.phase === "revealed" ? rname() + " · 결과" : "최종 순위";
 
-  // ── 참여자 동작 (스탯 고르기는 이 기기에서, 저장·다시 뽑기·출전자 선택은 Supabase 로) ──
+  // ── 참여자 동작 (스탯 고르기는 이 기기에서, 저장·외형 랜덤 뽑기·출전자 선택은 Supabase 로) ──
   async function personAct(pid, a, extra) {
     const p = people[pid];
     if (!p || !game) return;
@@ -534,7 +559,7 @@ window.WCRaid = (function () {
     }
     if (game.stage === "make" || game.stage === "share") {
       let h = "<h3>나의 캐릭터</h3>" + pcard(p, { big: true });
-      if (!game.locked) h += '<div class="row"><button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="reroll"' + (p.rerolls >= RULES.rerolls ? " disabled" : "") + ">다시 뽑기 (" + Math.max(0, RULES.rerolls - p.rerolls) + ")</button>" +
+      if (!game.locked) h += '<div class="row"><button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="reroll"' + (p.rerolls >= RULES.rerolls ? " disabled" : "") + ">외형 랜덤 뽑기 (" + Math.max(0, RULES.rerolls - p.rerolls) + ")</button>" +
         '<button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="edit">스탯 고치기</button></div>';
       if (game.stage === "share") h += '<div class="card"><div class="t t-row">조원에게 소개해 주세요 <span class="ptimer inline" data-deadline="' + game.shareDeadline + '"></span></div><div class="muted">1) 내 칭호, 맞는지 아닌지<br>2) 가장 높은 스탯의 에피소드<br>3) 가장 낮은 스탯의 고백</div></div>';
       h += '<div class="card"><div class="t">우리 조 캐릭터</div>' + team.filter((m) => m.id !== pid).map((m) => pcard(m)).join("") + "</div>";
@@ -626,7 +651,7 @@ window.WCRaid = (function () {
     { k: "statTotal", label: "스탯 합계", unit: "점", note: "캐릭터가 스탯 5개에 나눠 쓰는 점수", rule: true },
     { k: "statMin", label: "스탯 최소", unit: "점", rule: true },
     { k: "statMax", label: "스탯 최대", unit: "점", rule: true },
-    { k: "rerolls", label: "외형 다시 뽑기", unit: "번" },
+    { k: "rerolls", label: "외형 랜덤 뽑기", unit: "번", note: "캐릭터 만들 때 외형(머리·피부·액세서리)을 랜덤으로 다시 뽑을 수 있는 횟수" },
     { k: "shareMin", label: "조 내 공유 시간", unit: "분" },
     { k: "meetingSec", label: "보스 회의 시간", unit: "초" },
     { k: "practiceMeetingSec", label: "연습 보스 회의 시간", unit: "초", note: "연습 라운드에만 쓰는 회의 시간" },

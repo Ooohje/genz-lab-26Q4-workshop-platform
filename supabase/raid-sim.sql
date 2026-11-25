@@ -39,7 +39,7 @@ alter table public.raid_sim_bosses add  constraint raid_sim_bosses_round_check c
 alter table public.raid_sim_bosses add column if not exists dice_low  smallint not null default -2;
 alter table public.raid_sim_bosses add column if not exists dice_high smallint not null default 3;
 
--- 게임 규칙 (스탯 합계·범위, 다시 뽑기, 시간, MVP, 운). 비어 있으면 raid_sim_default_config() 값.
+-- 게임 규칙 (스탯 합계·범위, 외형 랜덤 뽑기, 시간, MVP, 운). 비어 있으면 raid_sim_default_config() 값.
 create table if not exists public.raid_sim_config (
   id         smallint primary key default 1 check (id = 1),
   data       jsonb not null default '{}'::jsonb,
@@ -154,7 +154,7 @@ begin
   if not public.raid_sim_is_int(c->'statTotal', n * v_min, n * v_max) then
     return '스탯 합계는 ' || (n * v_min) || '~' || (n * v_max) || '점이어야 해요 (스탯 ' || n || '개 × 최소~최대)';
   end if;
-  if not public.raid_sim_is_int(c->'rerolls', 0, 10) then return '다시 뽑기는 0~10번이에요'; end if;
+  if not public.raid_sim_is_int(c->'rerolls', 0, 10) then return '외형 랜덤 뽑기는 0~10번이에요'; end if;
   if not public.raid_sim_is_int(c->'meetingSec', 30, 1800) then return '회의 시간은 30~1800초예요'; end if;
   if not public.raid_sim_is_int(c->'practiceMeetingSec', 10, 1800) then return '연습 보스 회의 시간은 10~1800초예요'; end if;
   if not public.raid_sim_is_int(c->'shareMin', 1, 60) then return '조 내 공유 시간은 1~60분이에요'; end if;
@@ -811,9 +811,9 @@ begin
     p := jsonb_set(p, '{char}', v_char || jsonb_build_object('seed', p->'seed'));
 
   elsif p_action = 'reroll' then
-    if not v_editable then return jsonb_build_object('ok', false, 'error', '지금은 다시 뽑을 수 없어요'); end if;
+    if not v_editable then return jsonb_build_object('ok', false, 'error', '지금은 외형 랜덤 뽑기를 할 수 없어요'); end if;
     if p->'char' is null or p->'char' = 'null'::jsonb or (p->>'rerolls')::integer >= (cfg->>'rerolls')::integer then
-      return jsonb_build_object('ok', false, 'error', '다시 뽑기를 모두 썼어요');
+      return jsonb_build_object('ok', false, 'error', '외형 랜덤 뽑기를 모두 썼어요');
     end if;
     v_seed := public.raid_sim_seed();
     p := p || jsonb_build_object('seed', v_seed, 'rerolls', (p->>'rerolls')::integer + 1, 'char', p->'char' || jsonb_build_object('seed', v_seed));
