@@ -7,7 +7,7 @@
 <title>워드클라우드 진행자 관리 · Gen Z Lab.</title>
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="css/style.css?p=20261126d">
+<link rel="stylesheet" href="css/style.css?p=20261126f">
 </head>
 <body>
 <div class="bg" aria-hidden="true"></div>
@@ -99,6 +99,14 @@
 
     <!-- ───────── 명단 · 조 ───────── -->
     <div class="tabpane" id="tab-roster" hidden>
+      <section class="glass" style="margin-bottom:24px">
+        <div class="between">
+          <h2>출석 한눈에 보기</h2>
+          <div class="sub" id="board-note"></div>
+        </div>
+        <div class="sub">초록은 참석, 빨강은 미참석입니다. 이름을 누르면 그 사람의 Knox ID가 복사됩니다. 이름이 같은 사람은 Knox ID를 함께 적었습니다.</div>
+        <div id="board" class="board"></div>
+      </section>
       <div class="cols">
         <div class="left" style="flex:1 1 380px">
           <section class="glass">
@@ -129,8 +137,7 @@
             <button type="button" class="btn danger" id="att-reset" style="height:36px;padding:0 14px;font-size:13px">출석 초기화</button>
           </div>
           <div class="table-scroll">
-            <div class="table" style="min-width:460px">
-              
+            <div class="table roster-table">
               <div id="roster-list"></div>
             </div>
           </div>
@@ -301,11 +308,11 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?p=20261126d"></script>
-<script src="js/common.js?p=20261126d"></script>
+<script src="config.js?p=20261126f"></script>
+<script src="js/common.js?p=20261126f"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="js/raid.js?v=20261126e"></script>
-<script src="js/admin-platform.js?p=20261126d"></script>
-<script src="js/admin.js?p=20261126d"></script>
+<script src="js/admin-platform.js?p=20261126f"></script>
+<script src="js/admin.js?p=20261126f"></script>
 </body>
 </html>
