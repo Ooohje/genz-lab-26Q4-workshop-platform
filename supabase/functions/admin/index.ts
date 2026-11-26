@@ -381,6 +381,20 @@ Deno.serve(async (req) => {
         return json({ ok: true, session: next, ...(await loadRoster(db)) });
       }
 
+      // 출석 초기화: 모든 사람의 입장 표시를 지우고 entry_rev 를 올려 휴대폰을 로그아웃시킵니다.
+      // 명단·조·투표는 그대로 둡니다. (supabase/attendance.sql 을 먼저 실행해야 합니다)
+      case "attendance_reset": {
+        if (!("entry_rev" in session)) return json({ error: "attendance.sql 을 먼저 실행해 주세요" }, 400);
+        const { error } = await db.from("participants")
+          .update({ joined_at: null, last_seen: null }).neq("knox_id", "");
+        if (error) throw new Error(error.message);
+        const next = await update({
+          entry_rev: (session.entry_rev ?? 0) + 1,
+          roster_rev: (session.roster_rev ?? 0) + 1,
+        });
+        return json({ ok: true, session: next, ...(await loadRoster(db)) });
+      }
+
       // ───────────── 플랫폼: 발표 우수팀 투표 ─────────────
 
       case "teamvote_reset": {

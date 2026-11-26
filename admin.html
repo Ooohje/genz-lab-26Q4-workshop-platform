@@ -49,8 +49,8 @@
 
     <nav class="tabs" aria-label="관리 메뉴">
       <button type="button" class="tab" data-tab="control" aria-pressed="true">메인 관제</button>
-      <button type="button" class="tab" data-tab="wordcloud" aria-pressed="false">워드클라우드</button>
       <button type="button" class="tab" data-tab="roster" aria-pressed="false">명단 · 조</button>
+      <button type="button" class="tab" data-tab="wordcloud" aria-pressed="false">워드클라우드</button>
       <button type="button" class="tab" data-tab="dinner" aria-pressed="false">석식 투표</button>
       <button type="button" class="tab" data-tab="teamvote" aria-pressed="false">우수팀 투표</button>
       <button type="button" class="tab" data-tab="raid" aria-pressed="false">보스 레이드</button>
@@ -77,10 +77,10 @@
 
         <div class="left" style="flex:1 1 360px">
           <section class="glass">
-            <h2>입장 현황</h2>
+            <h2>출석 현황</h2>
             <div class="stats">
               <div>명단<b id="c-roster">0명</b></div>
-              <div>입장<b id="c-joined">0명</b></div>
+              <div>참석<b id="c-joined">0명</b></div>
             </div>
             <div class="sub" id="c-note"></div>
           </section>
@@ -122,6 +122,10 @@
           <div class="between">
             <h2>참가자</h2>
             <div class="sub" id="roster-note"></div>
+          </div>
+          <div class="between">
+            <div class="sub">참석한 사람이 위(초록), 아직 오지 않은 사람이 아래(빨강)에 나옵니다. 15초마다 새로 읽습니다.</div>
+            <button type="button" class="btn danger" id="att-reset" style="height:36px;padding:0 14px;font-size:13px">출석 초기화</button>
           </div>
           <div class="table-scroll">
             <div class="table" style="min-width:460px">

@@ -62,8 +62,8 @@
       $("login-name-row").hidden = !needsName;
       $("login-help").textContent = needsName
         ? "명단에 없는 Knox ID예요. 이름을 적으면 입장할 수 있고, 조는 진행자가 배정해 드려요."
-        : "사내 메신저 Knox의 ID를 적어 주세요.";
-      $("login-btn").textContent = busy ? "확인하는 중…" : "입장하기";
+        : "Knox ID를 적으면 출석이 확인돼요.";
+      $("login-btn").textContent = busy ? "확인하는 중…" : "출석하기";
       $("login-btn").disabled = busy;
     }
 
@@ -203,6 +203,11 @@
     // 로그아웃하면 입장도 취소합니다(관리 화면의 입장 인원에서 빠짐). 투표한 내용은 남습니다.
     // leave.sql 을 아직 실행하지 않았으면 조용히 넘어갑니다.
     if (me) db.rpc("wc_leave", { p_knox_id: me.knox_id }).then(() => {}, () => {});
+    clearLocal();
+    render();
+  });
+  // 이 휴대폰에 남은 입장 정보를 지웁니다(서버는 건드리지 않음).
+  function clearLocal() {
     me = null;
     tv = null;
     tvPick = null;
@@ -211,8 +216,26 @@
     save(null);
     $("login-knox").value = "";
     $("login-name").value = "";
-    render();
-  });
+  }
+
+  // ── 출석 초기화 ─────────────────────────────────────────────────
+  // 진행자가 "출석 초기화"를 누르면 sessions.entry_rev 가 1 올라갑니다.
+  // 이 휴대폰이 기억하는 값과 다르면 로그아웃해서 첫 화면(출석)으로 돌아갑니다.
+  // attendance.sql 을 아직 실행하지 않았으면(entry_rev 없음) 아무 일도 하지 않습니다.
+  const REV_KEY = "wc-entry-rev";
+  function syncReset() {
+    if (!session || !("entry_rev" in session)) return false;
+    const cur = String(session.entry_rev);
+    let stored = null;
+    try { stored = localStorage.getItem(REV_KEY); } catch (e) { /* 무시 */ }
+    const out = !!(me || saved()) && (stored || "0") !== cur;
+    if (out) {
+      clearLocal();
+      toast("진행자가 출석을 초기화했어요. 다시 출석해 주세요");
+    }
+    try { localStorage.setItem(REV_KEY, cur); } catch (e) { /* 무시 */ }
+    return out;
+  }
 
   // ── 석식 투표 ───────────────────────────────────────────────────
   // 참석/미참석을 누르면 고르기만 하고, "확인"을 눌러야 저장합니다.
@@ -245,6 +268,7 @@
 
   // ── 내 정보 다시 읽기 (조가 바뀌었을 때 등) ───────────────────────
   async function refreshMe() {
+    syncReset(); // 출석이 초기화됐으면 여기서 로그아웃되어, 아래에서 다시 참석으로 잡히지 않습니다
     const id = me ? me.knox_id : saved();
     if (!id || !isPlatform()) return;
     try {
@@ -272,6 +296,7 @@
       onSession: async (s) => {
         const rosterChanged = s.roster_rev !== session.roster_rev;
         session = s;
+        syncReset();
         await window.WCJoin.setSession(s);
         if (rosterChanged) await refreshMe();
         render();

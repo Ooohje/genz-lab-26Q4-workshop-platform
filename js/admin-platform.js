@@ -98,7 +98,7 @@
     if (!roster.teams.length) chips.textContent = "아직 조가 없어요. 명단을 올리면 자동으로 만들어집니다.";
 
     // 참가자 목록: 조마다 박스 하나 (조 번호 순, 미배정은 맨 끝). 박스 안은 이름 순.
-    $("roster-note").textContent = "전체 " + people.length + "명 · 입장 " + joined + "명";
+    $("roster-note").textContent = "전체 " + people.length + "명 · 참석 " + joined + "명 · 미참석 " + (people.length - joined) + "명";
     const list = $("roster-list");
     // 추가 칸에 적는 중이면 목록을 다시 그리지 않습니다(15초마다 새로 읽을 때 글자가 지워지지 않게).
     const typing = document.activeElement;
@@ -113,7 +113,9 @@
     const boxes = roster.teams.map((t) => ({ no: t.team_no, title: t.name }));
     if (people.some((p) => p.team_no == null)) boxes.push({ no: null, title: "미배정" });
     boxes.forEach((box, index) => {
-      const members = people.filter((p) => p.team_no === box.no).sort((a, b) => a.name.localeCompare(b.name, "ko"));
+      // 참석한 사람이 위, 미참석이 아래. 그 안에서는 이름 순.
+      const members = people.filter((p) => p.team_no === box.no)
+        .sort((a, b) => (a.joined_at ? 0 : 1) - (b.joined_at ? 0 : 1) || a.name.localeCompare(b.name, "ko"));
       const el = document.createElement("div");
       el.className = "teambox " + (box.no == null ? "none" : "c" + (index % 5));
       const head = document.createElement("div");
@@ -121,7 +123,8 @@
       const title = document.createElement("b");
       title.textContent = box.title;
       const count = document.createElement("span");
-      count.textContent = members.length + "명 · 입장 " + members.filter((p) => p.joined_at).length + "명";
+      const here = members.filter((p) => p.joined_at).length;
+      count.textContent = members.length + "명 · 참석 " + here + " · 미참석 " + (members.length - here);
       head.append(title, count);
       el.appendChild(head);
       if (!members.length) {
@@ -182,7 +185,7 @@
   function personRow(p) {
     {
       const tr = document.createElement("div");
-      tr.className = "tr roster";
+      tr.className = "tr roster " + (p.joined_at ? "in" : "out");
       const name = document.createElement("span");
       name.className = "w";
       name.textContent = p.name;
@@ -190,8 +193,8 @@
       knox.className = "k";
       knox.textContent = p.knox_id;
       const state = document.createElement("span");
-      state.className = "k";
-      state.textContent = p.joined_at ? "입장" : "–";
+      state.className = "att";
+      state.textContent = p.joined_at ? "참석" : "미참석";
       const select = document.createElement("select");
       select.className = "sel";
       select.setAttribute("aria-label", p.name + "의 조");
@@ -358,6 +361,12 @@
   });
 
   $("d-refresh").addEventListener("click", loadRoster);
+  $("att-reset").addEventListener("click", async (e) => {
+    if (!confirm("출석을 모두 초기화할까요?\n모든 참여자가 로그아웃되어 첫 화면(출석)으로 돌아갑니다. 명단·조·투표는 그대로 둡니다.")) return;
+    const out = await call("attendance_reset", {}, e.currentTarget);
+    if (out) ctx.toast("출석을 초기화했어요");
+  });
+
   $("d-reset").addEventListener("click", async (e) => {
     if (!confirm("석식 투표를 모두 지울까요?\n되돌릴 수 없어요.")) return;
     const out = await call("dinner_reset", {}, e.currentTarget);
@@ -435,6 +444,7 @@
       else if (action === "participant_delete") d.participants = d.participants.filter((p) => p.knox_id !== extra.knox_id);
       else if (action === "team_rename") d.teams.find((t) => t.team_no === extra.team_no).name = extra.name;
       else if (action === "dinner_reset") d.participants.forEach((p) => { p.dinner = null; });
+      else if (action === "attendance_reset") d.participants.forEach((p) => { p.joined_at = null; });
       else if (action === "teamvote_reset") d.participants.forEach((p) => { p.vote = null; });
       else if (action === "team_votable") {
         d.teams.find((t) => t.team_no === extra.team_no).votable = extra.votable;

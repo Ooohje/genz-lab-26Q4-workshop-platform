@@ -156,3 +156,12 @@ SQL Editor에 `supabase/leave.sql`을 통째로 붙여 넣고 Run 합니다. 참
 
 예전에 `schema.sql`을 실행한 프로젝트는 답변이 15자까지만 저장됩니다. SQL Editor에 `supabase/wordlen.sql`을 통째로 붙여 넣고 Run 하면 30자까지 받습니다.
 실행하기 전에는 참여 화면에서 16자 이상을 보내면 "보내지 못했어요"가 뜹니다.
+
+## 출석 초기화 켜기
+
+관리 화면 **명단 · 조** 탭의 **출석 초기화** 버튼은 두 가지를 해야 동작합니다.
+
+1. SQL Editor에 `supabase/attendance.sql`을 통째로 붙여 넣고 Run (sessions 표에 `entry_rev` 칸을 만듭니다)
+2. Edge Function `admin`을 최신 코드로 다시 배포 (`attendance_reset` 동작이 들어 있어야 합니다)
+
+누르면 모든 참가자의 입장 표시가 지워지고, 열려 있던 휴대폰은 로그아웃되어 첫 화면(출석)으로 돌아갑니다. 명단 · 조 · 투표는 그대로입니다.
