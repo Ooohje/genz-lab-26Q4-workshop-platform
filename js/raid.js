@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126d";
+  const V = "20261126h";
   // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
   const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
@@ -37,8 +37,8 @@ window.WCRaid = (function () {
   let PRACTICE = null;
   let STORY_DRAFTS = {};   // 회의 중에 미리 쓴 AI 서술 (진행자에게만 옴)   // 연습 보스 (0번 라운드)
   // 돌발 이벤트 룰렛: 칸마다 효과(kind, value), 문구는 효과대로 자동 (판정은 js/raid-sim-engine.js · supabase/raid-sim.sql)
-  const SPIN_KINDS = [["power", "공격력 ±N"], ["clear", "격파하면 +N점"], ["fail", "실패해도 +N점"], ["none", "효과 없음"]];
-  const effLabel = (e) => !e ? "" : e.kind === "power" ? "공격력 " + sign(e.value) : e.kind === "clear" ? "격파하면 " + sign(e.value) + "점" : e.kind === "fail" ? "실패해도 " + sign(e.value) + "점" : "효과 없음";
+  const SPIN_KINDS = [["power", "공격력 ±N"], ["clear", "격파하면 +N점"], ["fail", "실패 시 +N점"], ["none", "효과 없음"]];
+  const effLabel = (e) => !e ? "" : e.kind === "power" ? "공격력 " + sign(e.value) : e.kind === "clear" ? "격파하면 " + sign(e.value) + "점" : e.kind === "fail" ? "실패 시 " + sign(e.value) + "점" : "효과 없음";
   const effGood = (e) => !!e && e.kind !== "none" && e.value > 0;
   const spinRules = () => (RULES.roulette || []).map(effLabel).join(" · ");
 
@@ -404,7 +404,8 @@ window.WCRaid = (function () {
   let rollTimer = null;
   function scheduleRollEnd() {
     clearTimeout(rollTimer);
-    if (rolling()) rollTimer = setTimeout(() => { invalidate(); }, Math.max(50, ROLL_MS - (now() - game.rollAt)) + 60);
+    // 멈춘 칸은 정확히 ROLL_MS 에 (효과음 "land"와 같은 순간)
+    if (rolling()) rollTimer = setTimeout(() => { invalidate(); }, Math.max(0, ROLL_MS - (now() - game.rollAt)) + 5);
   }
   // 휴대폰 결과 카드의 AI 서술: 오기 전에는 로딩 칸, 오면 같은 자리에 문장. 45초가 지나도 안 오면 칸을 거둠
   const storyWait = {};
@@ -525,7 +526,7 @@ window.WCRaid = (function () {
     const out = game.round === 0 ? [] : [x.cleared ? "격파 +" + b.reward : "격파 0"];
     if (x.mvp) out.push(game.round === 0 ? "공격력 1위" : "MVP " + sign(RULES.mvpBonus));
     let h = out.map((t) => "<span>" + t + "</span>").join("");
-    // 룰렛: 점수 효과(격파하면·실패해도)만 점수표에. 공격력 효과는 1장(공격력 화면)에만
+    // 룰렛: 점수 효과(격파하면·실패 시)만 점수표에. 공격력 효과는 1장(공격력 화면)에만
     if (x.effect && (x.effect.kind === "clear" || x.effect.kind === "fail")) {
       const pts = x.extra ? " → " + sign(x.extra) + "점" : " → 해당 없음";
       h += '<span class="roul">' + esc(effLabel(x.effect)) + pts + "</span>";
@@ -587,7 +588,6 @@ window.WCRaid = (function () {
           rows.map((x) => '<div class="story-row"><b>' + TEAMS[x.team] + "</b> " + (x.story ? esc(x.story) : '<span class="small">' + (storyBusy ? "만드는 중…" : "아직 없어요") + "</span>") + "</div>").join("") + "</div>";
       }
     }
-    if (game.stage === "boss") html += hostScoreHtml();
     html += '<div class="who-grid">' + personList().map((p) => '<div class="who"><div class="art">' + (p.char ? sprite(p.char) : "") + '</div><div><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b>" +
       '<span class="small">' + TEAMS[p.team] + " · " + (p.char ? (p.char.isDefault ? "기본 캐릭터" : esc(title(p.char))) : "캐릭터 만드는 중") + "</span></div></div>").join("") + "</div>" +
       '<span class="small">초록 점 = 휴대폰으로 들어온 사람 · ' + personList().length + "명 중 " + personList().filter((p) => p.claimed).length + "명" + (JOIN_MODE === "roster" ? " · 명단 판 (아이디로 입장)" : "") + "</span>" +
@@ -618,7 +618,7 @@ window.WCRaid = (function () {
       return "<h3>나만의 픽셀 캐릭터</h3>" +
         '<div class="card"><div class="remain' + (remain === 0 ? " done" : "") + '">남은 점수 ' + remain + " / " + RULES.statTotal + "</div>" +
         STATS.map((s) => '<div class="stepper"><span style="color:' + s.color + '">' + s.label + '</span><button type="button" data-p="' + pid + '" data-a="dec" data-k="' + s.key + '" aria-label="' + s.label + ' 1점 빼기"' + (d[s.key] <= RULES.statMin ? " disabled" : "") + '>−</button><div class="bar"><b style="width:' + Math.min(100, d[s.key] / RULES.statMax * 100) + "%;background:" + s.color + '"></b></div><span>' + d[s.key] + '</span><button type="button" data-p="' + pid + '" data-a="inc" data-k="' + s.key + '" aria-label="' + s.label + ' 1점 더하기"' + (d[s.key] >= RULES.statMax || remain <= 0 ? " disabled" : "") + ">+</button></div>").join("") +
-        '<div class="muted">스탯 하나는 ' + RULES.statMin + "~" + RULES.statMax + "점, 합계 " + RULES.statTotal + "점. 외형은 스탯에 따라 자동으로 정해져요." + (RULES.luckPower > 0 ? " <b>운</b>이 높을수록 돌발 이벤트 룰렛에서 좋은 칸이 잘 나와요." : "") + "</div></div>" +
+        '<div class="muted">스탯 하나는 ' + RULES.statMin + "~" + RULES.statMax + "점, 합계 " + RULES.statTotal + "점. 외형은 스탯에 따라 자동으로 정해져요." + "</div></div>" +
         '<div class="card"><div class="t">미리보기</div>' + pcard({ name: p.name, char: Object.assign({ seed: p.seed }, d) }, { big: true }) + "</div>" +
         '<button type="button" class="pbtn" data-p="' + pid + '" data-a="save"' + (remain !== 0 ? " disabled" : "") + ">" + (remain !== 0 ? "점수를 " + remain + "점 더 나눠 주세요" : p.char ? "이대로 저장" : "캐릭터 생성") + "</button>" +
         '<button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="randomDraft">랜덤으로 나눠 보기</button>' +
@@ -632,7 +632,7 @@ window.WCRaid = (function () {
       h += '<div class="card"><div class="t">우리 조 캐릭터</div>' + team.filter((m) => m.id !== pid).map((m) => pcard(m)).join("") + "</div>";
       return h;
     }
-    if (game.phase === "idle") return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">먼저 연습 보스와 한 판 (점수 없음)<br>보스 ' + BOSSES.length + '판 · 라운드마다 조에서 1명 출전<br>한 사람은 최대 ' + capOf(p.team) + '번까지<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 HP 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
+    if (game.phase === "idle") return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">먼저 연습 보스와 한 판 (점수 없음)<br>보스 ' + BOSSES.length + '판 · 라운드마다 조에서 1명 출전<br>한 사람은 최대 ' + MAX_PLAYS + '번까지<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 HP 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
     const b = boss();
     let h = '<div class="card"><div class="boss-mini">' + bossSprite(game.round) + '<div><div class="muted">' + rlabel() + '</div><div class="t">' + esc(b.name) + '</div></div></div>' + fold("d" + game.round, b.desc) +
       '<div class="phone-chips"><span class="hpc">HP ' + b.hp + "</span>" + (game.round === 0 ? "<span>연습</span>" : "<span>보상 " + b.reward + "점</span>") + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + "</div>" +
@@ -996,10 +996,10 @@ window.WCRaid = (function () {
       }
     }
     sfxKey = key;
-    const st = !g ? "lobby" : g.stage;
+    const st = !g ? "lobby" : g.stage, dice = !!g && g.phase === "rolled" && rolling();
     B.setTrack(st === "lobby" ? "lobby" : st === "make" ? "make" : st === "share" ? "share" : g.phase === "idle" ? "rules"
       : g.phase === "meeting" ? (g.round === 0 ? "practice" : "meeting") : g.phase === "closed" ? "wait" : g.phase === "rolled" ? (rolling() ? "dice" : "wait")
-      : g.phase === "revealed" ? (afterTrack && Date.now() >= afterAt ? afterTrack : "none") : g.phase === "final" ? "victory" : "lobby");
+      : g.phase === "revealed" ? (afterTrack && Date.now() >= afterAt ? afterTrack : "none") : g.phase === "final" ? "victory" : "lobby", dice ? (now() - g.rollAt) / 1000 : undefined);
   }
 
   const lostNote = () => (MODE === "supabase" && !connected ? '<div class="notice">실시간 연결이 끊겼어요. 다시 연결하는 중…</div>' : "");
@@ -1013,7 +1013,8 @@ window.WCRaid = (function () {
     return '<section class="panel hostbar"><div class="hb-l"><span class="step">' + esc(stepWord()) + '</span><span class="live' + (connected ? " on" : "") + '"><i></i>' + esc(liveWord()) + "</span></div>" +
       '<div class="actions">' + (isHost ? hostButtons().map((x) => '<button type="button" class="btn ' + (x.cls || "") + '" data-host="' + x.fn + '">' + esc(x.label) + "</button>").join("") : '<span class="small">' + esc(hostError || "관리자 비밀번호로 확인하는 중…") + "</span>") + "</div></section>" +
       '<div class="top"><section class="panel"><h2>발표 화면 미리보기</h2><div class="proj-box"><div class="proj">' + projHtml() + "</div></div>" +
-      '<p class="small">프로젝터에 발표 화면(screen.html)을 띄워 두면 메인 관제가 <b>보스 레이드</b>일 때 이 화면이 그대로 나와요. BGM은 발표 화면 오른쪽 아래 버튼으로 켜요.</p></section>' +
+      '<p class="small">프로젝터에 발표 화면(screen.html)을 띄워 두면 메인 관제가 <b>보스 레이드</b>일 때 이 화면이 그대로 나와요. BGM은 발표 화면 오른쪽 아래 버튼으로 켜요.</p>' +
+        (isHost && game && game.stage === "boss" ? hostScoreHtml() : "") + "</section>" +
       '<section class="panel"><h2>진행자 전용 (참여자에게는 안 보임)</h2>' + adminHtml() + "</section></div>" +
       (preview ? '<section class="panel"><h2>휴대폰 ' + personList().length + '대 미리보기</h2><p class="small">미리보기 모드라 여기서 눌러 보며 진행해 볼 수 있어요.</p><div class="phones">' +
         TEAMS.map((tn, t) => '<div class="team-group"><div class="team-label">' + tn + '</div><div class="team-phones">' + teamOf(t).map((p) =>
