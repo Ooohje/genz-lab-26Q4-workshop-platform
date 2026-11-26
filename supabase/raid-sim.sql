@@ -12,7 +12,9 @@
 --   공격력 = 판정 스탯 합 (+돌발 이벤트 주사위). 보스 HP 이상이면 격파 → 보상 점수.
 --   돌발 이벤트 룰렛: 진행자가 정한 칸(config.roulette, 2~10칸) 중 하나. 칸 효과 kind: power(공격력 ±value) · clear(격파하면 +value점) · fail(실패 시 +value점) · none
 --   운: 운이 높을수록 아래쪽 칸이 잘 나옵니다. k번째 칸의 가중치 = r^(k-1), r = (1 + luckPower/100)^t, t = (운 − 스탯 최소) / (스탯 최대 − 스탯 최소).
---   연습 라운드: 0번 라운드(config.practiceBoss). 룰렛은 항상 터지고, 출전 기록과 점수에는 들어가지 않습니다.
+--   연습 라운드: 0번 라운드. 연습 1 = config.practiceBoss, 연습 2 = config.practiceBoss2 (game.prac 1·2). 룰렛은 항상 터지고, 출전 기록과 점수에는 들어가지 않습니다.
+--   타이머: 본게임 보스 회의(meetingSec)에만. 조 내 공유와 연습 라운드는 진행자가 눌러서 넘깁니다.
+--   config.bgm: 발표 화면 BGM 켜기/끄기 (관리 화면 버튼이 saveConfig 로 바꿈)
 --   출전: 라운드마다 조에서 1명. 한 사람 최대 2번 (조원 6명 미만인 조는 3번), 입장한 조원이 모두 다 썼으면 가장 적게 나간 사람.
 --   라운드 공격력 1위 조는 MVP 점수(mvpBonus). 순위는 총점, 같으면 격파 횟수, 그것도 같으면 같은 등수 (js/raid.js scoreboard).
 -- 보스와 규칙은 진행자 화면의 "보스·규칙 설정" 탭에서 고칩니다.
@@ -114,13 +116,14 @@ $$;
 -- 기본 규칙. bossPool = 보스 목록 (기본 9명 + 예전 기본 보스 5명). 진행자가 이 중에서 출전 보스를 고릅니다.
 create or replace function public.raid_sim_default_config() returns jsonb
 language sql immutable as $$
-  select '{"statTotal": 25, "statMin": 1, "statMax": 10, "rerolls": 2, "meetingSec": 180, "practiceMeetingSec": 60, "shareMin": 8, "mvpBonus": 1, "luckPower": 35,
+  select '{"statTotal": 25, "statMin": 1, "statMax": 10, "rerolls": 2, "meetingSec": 180, "mvpBonus": 1, "luckPower": 35, "bgm": false,
            "roulette": [{"kind": "power", "value": -2}, {"kind": "power", "value": -1}, {"kind": "power", "value": 1},
                         {"kind": "clear", "value": 1}, {"kind": "fail", "value": 1}, {"kind": "power", "value": 3}],
            "practiceBoss": {"name": "연습 보스: 월요일 아침 ''만원 지하철''",
                             "desc": "월요일 아침 8시, 지하철 문이 열리자 사람들이 밀려든다. 손잡이 하나 잡기도 힘든 이 전쟁을 버텨야 회사에 도착한다. 연습 판이니 부담 없이 붙어 보자!",
                             "hp": 10, "stats": ["hp", "luck"], "hint": "버티거나, 운 좋게 앉거나.",
                             "reveal": "만원 지하철을 이긴 건 끝까지 서서 버티는 체력, 그리고 마침 앞자리가 비는 운이었습니다. 머리를 써도 지하철은 빨리 오지 않아요."},
+           "practiceBoss2": {"name": "연습 보스: 점심 메뉴 ''아무거나요''", "desc": "점심시간 5분 전, 누군가 묻는다. \"오늘 뭐 먹을래요?\" 돌아오는 대답은 모두 \"아무거나요.\" 그런데 김치찌개는 어제 먹었고, 중식은 느끼하고, 샐러드는 배가 안 찬단다. 연습 판이니 부담 없이 붙어 보자!", "hp": 10, "stats": ["intel", "social"], "hint": "''아무거나''에도 정답은 있다.", "reveal": "''아무거나''를 이긴 건 모두의 취향을 떠올려 메뉴를 두 개로 좁히는 지력, 그리고 \"그럼 여기 어때요?\" 하고 웃으며 묻는 친화력이었습니다. 체력으로 식당 앞까지 걸어가 봐도 메뉴는 정해지지 않아요."},
            "joinShort": "", "lobbyTitle": "", "lobbySub": "", "rulesTitle": "", "rulesLines": [], "infoTitle": "", "infoSections": []}'::jsonb
     || jsonb_build_object('bossPool', public.raid_sim_default_bosses() || '[
     {"name":"무한 회의 루프 ''리:미팅''","desc":"회의가 끝나면 ''방금 회의를 정리하는 회의''가 소환된다. 벌써 세 번째 회의, 의자는 딱딱하고 결론은 또 다음 회의로 미뤄진다. 이 보스는 쓰러뜨리는 게 아니라 끝날 때까지 버텨야 사라진다.","hp":11,"reward":1,"event":false,"diceLow":-2,"diceHigh":3,"stats":["hp","mental"],"hint":"끝까지 남는 사람이 이긴다.","reveal":"끝없는 회의를 이긴 건 말솜씨가 아니라 버티는 힘이었습니다. 몇 시간째 이어지는 회의를 견딜 체력, 결론 없는 말들에 지치지 않을 멘탈이 필요했어요. 지력으로 정리해 보려 해도 회의는 또 다른 회의를 낳을 뿐이었습니다."},
@@ -156,8 +159,7 @@ begin
   end if;
   if not public.raid_sim_is_int(c->'rerolls', 0, 10) then return '외형 랜덤 뽑기는 0~10번이에요'; end if;
   if not public.raid_sim_is_int(c->'meetingSec', 30, 1800) then return '회의 시간은 30~1800초예요'; end if;
-  if not public.raid_sim_is_int(c->'practiceMeetingSec', 10, 1800) then return '연습 보스 회의 시간은 10~1800초예요'; end if;
-  if not public.raid_sim_is_int(c->'shareMin', 1, 60) then return '조 내 공유 시간은 1~60분이에요'; end if;
+  if jsonb_typeof(c->'bgm') is distinct from 'boolean' then return 'BGM 설정이 잘못됐어요'; end if;
   if not public.raid_sim_is_int(c->'mvpBonus', 0, 20) then return 'MVP 점수는 0~20점이에요'; end if;
   if not public.raid_sim_is_int(c->'luckPower', 0, 100) then return '운 효과 세기는 0~100이에요 (0이면 운과 상관없이 모든 칸이 같은 확률)'; end if;
   if jsonb_typeof(c->'joinShort') is distinct from 'string' or length(c->>'joinShort') > 100 or c->>'joinShort' ~ '\s' then
@@ -185,8 +187,9 @@ begin
   if jsonb_array_length(c->'bossPool') > 0 and public.raid_sim_check_bosses(c->'bossPool', 30) is not null then
     return '보스 목록 ' || public.raid_sim_check_bosses(c->'bossPool', 30);
   end if;
-  if jsonb_typeof(c->'practiceBoss') is distinct from 'object' then return '연습 보스 형식이 잘못됐어요'; end if;
-  return replace(public.raid_sim_check_bosses(jsonb_build_array(c->'practiceBoss' || '{"reward": 0, "event": true, "diceLow": 0, "diceHigh": 0}'::jsonb)), '1번 보스: ', '연습 보스: ');
+  if jsonb_typeof(c->'practiceBoss') is distinct from 'object' or jsonb_typeof(c->'practiceBoss2') is distinct from 'object' then return '연습 보스 형식이 잘못됐어요'; end if;
+  return coalesce(replace(public.raid_sim_check_bosses(jsonb_build_array(c->'practiceBoss' || '{"reward": 0, "event": true, "diceLow": 0, "diceHigh": 0}'::jsonb)), '1번 보스: ', '연습 보스 1: '),
+                  replace(public.raid_sim_check_bosses(jsonb_build_array(c->'practiceBoss2' || '{"reward": 0, "event": true, "diceLow": 0, "diceHigh": 0}'::jsonb)), '1번 보스: ', '연습 보스 2: '));
 end $$;
 
 -- 보스 목록 확인. 문제가 없으면 null, 있으면 이유.
@@ -366,7 +369,7 @@ declare
   v_rolled boolean := (s#>>'{game,phase}') = 'rolled';
   v_bosses jsonb;
   v_cfg jsonb := public.raid_sim_cfg();
-  v_pb jsonb := public.raid_sim_cfg()->'practiceBoss';
+  v_pb jsonb := public.raid_sim_cfg()->(case when s#>>'{game,prac}' = '2' then 'practiceBoss2' else 'practiceBoss' end);   -- 지금 연습 보스 (1 · 2)
   v_practice jsonb;
   v_results jsonb := '{}'::jsonb;
   k text; v jsonb;
@@ -382,7 +385,7 @@ begin
            order by b.round), '[]'::jsonb)
     into v_bosses from public.raid_sim_bosses b;
 
-  -- 연습 보스 (0번 라운드)
+  -- 연습 보스 (0번 라운드, game.prac 번째)
   v_practice := jsonb_build_object('name', v_pb->'name', 'desc', v_pb->'desc', 'hp', v_pb->'hp', 'reward', 0, 'event', true, 'nStats', jsonb_array_length(v_pb->'stats'))
     || case when p_host or v_round > 0 or v_open_cur then jsonb_build_object('stats', v_pb->'stats', 'hint', v_pb->'hint', 'reveal', v_pb->'reveal')
             when coalesce((g->>'hint')::boolean, false) then jsonb_build_object('hint', v_pb->'hint')
@@ -410,7 +413,7 @@ begin
                             'picks', coalesce(s->'picks', '{}'::jsonb),
                             'teams', coalesce(s->'teams', '["A조", "B조"]'::jsonb), 'mode', coalesce(s->>'mode', 'seats'),
                             'storyDrafts', case when p_host then coalesce(s->'storyDrafts', '{}'::jsonb) else '{}'::jsonb end,
-                            'bosses', v_bosses, 'practice', v_practice, 'config', case when p_host then v_cfg else v_cfg - 'practiceBoss' - 'bossPool' end, 'isHost', p_host, 'now', public.raid_sim_ms());
+                            'bosses', v_bosses, 'practice', v_practice, 'config', case when p_host then v_cfg else v_cfg - 'practiceBoss' - 'practiceBoss2' - 'bossPool' end, 'isHost', p_host, 'now', public.raid_sim_ms());
 end $$;
 
 -- 상태를 저장하고 공개 상태를 다시 씁니다 (Realtime 으로 모든 화면에 감).
@@ -485,6 +488,7 @@ language plpgsql security definer set search_path = public as $$
 declare
   r integer := (s#>>'{game,round}')::integer;
   cfg jsonb := public.raid_sim_cfg();
+  v_pk text := case when s#>>'{game,prac}' = '2' then 'practiceBoss2' else 'practiceBoss' end;
   v_mvp integer := (cfg->>'mvpBonus')::integer;
   b public.raid_sim_bosses;
   v_last integer := jsonb_array_length(coalesce(s->'teams', '["A조", "B조"]'::jsonb)) - 1;
@@ -494,8 +498,8 @@ declare
 begin
   if r = 0 then
     -- 연습 보스: 룰렛 항상, 보상 없음
-    b.round := 0; b.name := cfg#>>'{practiceBoss,name}'; b.hp := (cfg#>>'{practiceBoss,hp}')::integer; b.reward := 0; b.has_event := true;
-    b.stats := array(select jsonb_array_elements_text(cfg#>'{practiceBoss,stats}'));
+    b.round := 0; b.name := cfg->v_pk->>'name'; b.hp := (cfg->v_pk->>'hp')::integer; b.reward := 0; b.has_event := true;
+    b.stats := array(select jsonb_array_elements_text(cfg->v_pk->'stats'));
   else
     select * into b from public.raid_sim_bosses where round = r;
   end if;
@@ -601,7 +605,7 @@ begin
       end if;
     when 'share' then
       if v_stage <> 'make' then err := '캐릭터 만들기 다음에 넘길 수 있어요';
-      else s := jsonb_set(s, '{game}', g || jsonb_build_object('stage', 'share', 'shareDeadline', v_now + (v_cfg->>'shareMin')::integer * 60000)); end if;
+      else s := jsonb_set(s, '{game}', g || jsonb_build_object('stage', 'share', 'shareDeadline', null)); end if;
     when 'raid' then
       if v_stage not in ('make', 'share') then err := '조 내 공유 다음에 넘길 수 있어요';
       else
@@ -621,8 +625,10 @@ begin
         s := jsonb_set(s, '{game,results}', coalesce((select jsonb_object_agg(key, value) from jsonb_each(s#>'{game,results}')
                                                       where key::integer < p_arg), '{}'::jsonb));
         s := jsonb_set(s, '{storyDrafts}', coalesce(s->'storyDrafts', '{}'::jsonb) - ('r' || p_arg));
+        -- 연습(0)은 타이머 없음. p_data {"prac": 2} 이면 연습 보스 2
         s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('round', p_arg, 'phase', 'meeting', 'hint', false, 'view', 0, 'locked', true,
-                                                                    'deadline', v_now + (v_cfg->>(case when p_arg = 0 then 'practiceMeetingSec' else 'meetingSec' end))::integer * 1000));
+                                                                    'deadline', case when p_arg = 0 then null else v_now + (v_cfg->>'meetingSec')::integer * 1000 end)
+                                              || case when p_arg = 0 then jsonb_build_object('prac', case when p_data->>'prac' = '2' then 2 else 1 end) else '{}'::jsonb end);
       end if;
     when 'hint' then
       if v_phase <> 'meeting' then err := '회의 중에만 힌트를 열 수 있어요';
@@ -680,7 +686,7 @@ begin
       elsif v_stage = 'make' then s := jsonb_set(s, '{game,stage}', '"lobby"');
       elsif v_stage = 'share' then s := jsonb_set(s, '{game}', g || jsonb_build_object('stage', 'make', 'shareDeadline', null));
       elsif v_phase = 'idle' then
-        s := jsonb_set(s, '{game}', g || jsonb_build_object('stage', 'share', 'locked', false, 'shareDeadline', v_now + (v_cfg->>'shareMin')::integer * 60000));
+        s := jsonb_set(s, '{game}', g || jsonb_build_object('stage', 'share', 'locked', false, 'shareDeadline', null));
       elsif v_phase = 'meeting' then
         s := jsonb_set(s, '{picks}', coalesce((select jsonb_object_agg(key, value) from jsonb_each(s->'picks')
                                                where (substring(key from '^r(\d+)t\d+$'))::integer < v_round), '{}'::jsonb));
@@ -696,7 +702,7 @@ begin
         s := jsonb_set(s, '{picks}', coalesce((select jsonb_object_agg(key, value) from jsonb_each(s->'picks')
                                                where not ((substring(key from '^r(\d+)t\d+$'))::integer = v_round and coalesce((value->>'auto')::boolean, false))), '{}'::jsonb));
         s := jsonb_set(s, '{game,results}', coalesce(s#>'{game,results}', '{}'::jsonb) - v_round::text);
-        s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'meeting', 'deadline', v_now + (v_cfg->>(case when v_round = 0 then 'practiceMeetingSec' else 'meetingSec' end))::integer * 1000));
+        s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'meeting', 'deadline', case when v_round = 0 then null else v_now + (v_cfg->>'meetingSec')::integer * 1000 end));
       elsif v_phase = 'rolled' then s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'closed', 'rollAt', null));
       elsif v_phase = 'revealed' and coalesce((g->>'view')::integer, 0) > 0 then s := jsonb_set(s, '{game,view}', '0');
       elsif v_phase = 'revealed' then
@@ -741,7 +747,7 @@ begin
            and (v_new->'statTotal', v_new->'statMin', v_new->'statMax') is distinct from (v_cfg->'statTotal', v_cfg->'statMin', v_cfg->'statMax') then
           err := '스탯 규칙(합계·최소·최대)은 대기 단계에서만 바꿀 수 있어요. "처음부터"를 누르면 대기 단계로 돌아가요';
         end if;
-        if err is null and v_round = 0 and v_phase in ('meeting', 'closed', 'rolled') and v_new->'practiceBoss' is distinct from v_cfg->'practiceBoss' then
+        if err is null and v_round = 0 and v_phase in ('meeting', 'closed', 'rolled') and (v_new->'practiceBoss', v_new->'practiceBoss2') is distinct from (v_cfg->'practiceBoss', v_cfg->'practiceBoss2') then
           err := '연습 라운드 진행 중에는 연습 보스를 바꿀 수 없어요';
         end if;
         if err is null then

@@ -326,6 +326,7 @@ a { color: var(--blue); }
 .bgm-btn.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
 .bgm-float { position: fixed; right: 1.5vmin; bottom: 1.5vmin; z-index: 31; border: 0; border-radius: 2vmin; padding: 0.8vmin 1.6vmin; font-size: 1.8vmin; font-weight: 700; background: rgba(255, 255, 255, 0.14); color: #fff; opacity: 0.55; }
 .bgm-float:hover, .bgm-float:focus-visible { opacity: 1; }
+div.bgm-float { opacity: 0.85; pointer-events: none; }
 
 /* ── 휴대폰 (진행자 화면의 미리보기와 실제 휴대폰이 같은 모양. 크기는 휴대폰 너비의 %: cqw) ── */
 .phones { display: flex; flex-direction: column; gap: 1.25rem; }

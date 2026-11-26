@@ -1,6 +1,6 @@
 // 보스 레이드 시뮬레이터 BGM · 효과음 (발표 화면 전용)
 // 음원 파일 없이 Web Audio 로 직접 연주하는 8비트(칩튠) 곡입니다. 곡은 모두 이 파일에서 새로 쓴 것이라 저작권 걱정이 없습니다.
-// 브라우저 정책상 처음 한 번은 사람이 버튼을 눌러 toggle() 해야 소리가 납니다.
+// 브라우저 정책상 페이지를 한 번은 사람이 클릭(또는 키 입력)해야 소리가 납니다. 그 전에 켜면 blocked 이고, 첫 클릭 때 저절로 소리가 나요.
 //
 // 악보 표기: 한 칸 = 8분음표. "C5" 음 · "-" 앞 음을 이어서 · "." 쉼. 드럼: k 킥 · s 스네어 · h 하이햇 · "." 쉼
 (function (root) {
@@ -90,6 +90,7 @@
     if (!AC) return;
     ctx = new AC();
     master = ctx.createGain(); master.gain.value = 0.14; master.connect(ctx.destination);
+    ctx.onstatechange = () => { if (api.onState) api.onState(); };
     noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -144,12 +145,17 @@
   const api = {
     get enabled() { return enabled; },
     get track() { return enabled ? cur : null; },   // 지금 연주 중인 곡 (확인용)
+    // 켰지만 브라우저가 소리를 막고 있음 (페이지를 아직 클릭하지 않음)
+    get blocked() { return enabled && !!ctx && ctx.state !== "running"; },
+    onState: null,   // 막힘이 풀리는 등 상태가 바뀌면 부름
+    // 관리 화면 버튼(config.bgm)대로 켜기/끄기
+    setEnabled(on) { if (!!on !== enabled) api.toggle(); },
     // 버튼을 눌렀을 때 (사용자 동작 안에서 불러야 소리가 남)
     toggle() {
       setup();
       if (!ctx) return false;
       enabled = !enabled;
-      if (enabled) { ctx.resume(); if (want) start(want); if (!timer) timer = setInterval(tick, 25); }
+      if (enabled) { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); if (want) start(want); if (!timer) timer = setInterval(tick, 25); }
       else { cur = null; master.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.05); setTimeout(() => { if (!enabled && master) master.gain.value = 0.14; }, 300); }
       return enabled;
     },
@@ -180,5 +186,6 @@
       else if (name === "fail") { [392, 330, 262].forEach((f, i) => tone("square", f, t + i * 0.14, 0.2, 0.18)); }
     },
   };
+  if (root.addEventListener) ["pointerdown", "keydown", "touchstart"].forEach((ev) => root.addEventListener(ev, () => { if (ctx && enabled && ctx.state !== "running") ctx.resume(); }, true));
   root.RaidSimBgm = api;
 })(typeof window !== "undefined" ? window : globalThis);
