@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126d";
+  const V = "20261126e";
   // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
   const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
@@ -587,7 +587,6 @@ window.WCRaid = (function () {
           rows.map((x) => '<div class="story-row"><b>' + TEAMS[x.team] + "</b> " + (x.story ? esc(x.story) : '<span class="small">' + (storyBusy ? "만드는 중…" : "아직 없어요") + "</span>") + "</div>").join("") + "</div>";
       }
     }
-    if (game.stage === "boss") html += hostScoreHtml();
     html += '<div class="who-grid">' + personList().map((p) => '<div class="who"><div class="art">' + (p.char ? sprite(p.char) : "") + '</div><div><b><span class="dot' + (p.claimed ? " on" : "") + '"></span>' + esc(p.name) + "</b>" +
       '<span class="small">' + TEAMS[p.team] + " · " + (p.char ? (p.char.isDefault ? "기본 캐릭터" : esc(title(p.char))) : "캐릭터 만드는 중") + "</span></div></div>").join("") + "</div>" +
       '<span class="small">초록 점 = 휴대폰으로 들어온 사람 · ' + personList().length + "명 중 " + personList().filter((p) => p.claimed).length + "명" + (JOIN_MODE === "roster" ? " · 명단 판 (아이디로 입장)" : "") + "</span>" +
@@ -1013,7 +1012,8 @@ window.WCRaid = (function () {
     return '<section class="panel hostbar"><div class="hb-l"><span class="step">' + esc(stepWord()) + '</span><span class="live' + (connected ? " on" : "") + '"><i></i>' + esc(liveWord()) + "</span></div>" +
       '<div class="actions">' + (isHost ? hostButtons().map((x) => '<button type="button" class="btn ' + (x.cls || "") + '" data-host="' + x.fn + '">' + esc(x.label) + "</button>").join("") : '<span class="small">' + esc(hostError || "관리자 비밀번호로 확인하는 중…") + "</span>") + "</div></section>" +
       '<div class="top"><section class="panel"><h2>발표 화면 미리보기</h2><div class="proj-box"><div class="proj">' + projHtml() + "</div></div>" +
-      '<p class="small">프로젝터에 발표 화면(screen.html)을 띄워 두면 메인 관제가 <b>보스 레이드</b>일 때 이 화면이 그대로 나와요. BGM은 발표 화면 오른쪽 아래 버튼으로 켜요.</p></section>' +
+      '<p class="small">프로젝터에 발표 화면(screen.html)을 띄워 두면 메인 관제가 <b>보스 레이드</b>일 때 이 화면이 그대로 나와요. BGM은 발표 화면 오른쪽 아래 버튼으로 켜요.</p>' +
+        (isHost && game && game.stage === "boss" ? hostScoreHtml() : "") + "</section>" +
       '<section class="panel"><h2>진행자 전용 (참여자에게는 안 보임)</h2>' + adminHtml() + "</section></div>" +
       (preview ? '<section class="panel"><h2>휴대폰 ' + personList().length + '대 미리보기</h2><p class="small">미리보기 모드라 여기서 눌러 보며 진행해 볼 수 있어요.</p><div class="phones">' +
         TEAMS.map((tn, t) => '<div class="team-group"><div class="team-label">' + tn + '</div><div class="team-phones">' + teamOf(t).map((p) =>
