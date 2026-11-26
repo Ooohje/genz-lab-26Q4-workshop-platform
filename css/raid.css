@@ -609,3 +609,6 @@ a { color: var(--blue); }
 /* 결과 1장 범례: 보라색 = 룰렛 결과 */
 .hp-note .roul-key { display: inline-flex; align-items: center; gap: 0.6cqw; margin-left: 2cqw; color: #8A3FD1; font-weight: 800; }
 .hp-note .roul-key b { display: inline-block; width: 1.1cqw; height: 1.1cqw; border-radius: 0.3cqw; background: #8A3FD1; }
+/* 점수표 범례: 보라색 = 룰렛 결과 (공격력 화면과 같은 모양) */
+.tally .roul-key { display: inline-flex; align-items: center; gap: 0.6cqw; padding: 0.4cqw 1.4cqw; color: #8A3FD1; font-weight: 800; }
+.tally .roul-key b { display: inline-block; width: 1.3cqw; height: 1.3cqw; border-radius: 0.3cqw; background: #8A3FD1; }

@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126a";
+  const V = "20261126b";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
   // 발표 화면에 크게 보여 줄 주소: 설정의 "짧은 참여 주소"가 있으면 그것, 없으면 실제 주소에서 https:// 를 뗀 것
@@ -492,7 +492,8 @@ window.WCRaid = (function () {
       if (view === 1) {
         const win = rows.filter((x) => x.cleared).length;
         return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + " · " + rlabel() + '</div><div class="h score-h">이번 라운드 점수</div>' +
-          '<div class="tally"><span class="tw">격파 성공 <b>' + win + '</b>조</span><span class="tl">실패 <b>' + (rows.length - win) + "</b>조</span><span>" + (game.round === 0 ? "연습 라운드" : "보상 " + b.reward + "점 · MVP " + sign(RULES.mvpBonus) + "점") + "</span></div></div>" +
+          '<div class="tally"><span class="tw">격파 성공 <b>' + win + '</b>조</span><span class="tl">실패 <b>' + (rows.length - win) + "</b>조</span><span>" + (game.round === 0 ? "연습 라운드" : "보상 " + b.reward + "점 · MVP " + sign(RULES.mvpBonus) + "점") + "</span>" +
+          (rows.some((x) => x.effect && (x.effect.kind === "clear" || x.effect.kind === "fail")) ? '<span class="roul-key"><b></b>룰렛 결과</span>' : "") + "</div></div>" +
           '<div class="score-grid glass' + (rows.length > 6 ? " cols" : "") + '" style="--rows:' + (rows.length > 6 ? Math.ceil(rows.length / 2) : rows.length) + '">' +
           sorted.map((x) => '<div class="sc-row' + (x.cleared ? " win" : "") + '"><b class="sc-team">' + TEAMS[x.team] + '</b><span class="sc-name">' + esc(x.name) + "</span>" +
             '<span class="sc-out">' + (x.cleared ? "격파" : "실패") + '</span><span class="sc-parts">' + scoreParts(x, b) + '</span><b class="sc-pt">' + (game.round === 0 ? "—" : "+" + x.points + "점") + "</b></div>").join("") + "</div></div>";
@@ -525,7 +526,7 @@ window.WCRaid = (function () {
     // 룰렛: 점수 효과(격파하면·실패해도)만 점수표에. 공격력 효과는 1장(공격력 화면)에만
     if (x.effect && (x.effect.kind === "clear" || x.effect.kind === "fail")) {
       const pts = x.extra ? " → " + sign(x.extra) + "점" : " → 해당 없음";
-      h += '<span class="roul">룰렛 ' + esc(effLabel(x.effect)) + pts + "</span>";
+      h += '<span class="roul">' + esc(effLabel(x.effect)) + pts + "</span>";
     }
     return h;
   }
