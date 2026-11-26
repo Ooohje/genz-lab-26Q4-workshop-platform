@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126o";
+  const V = "20261126p";
   // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
   const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
@@ -454,7 +454,7 @@ window.WCRaid = (function () {
   const rewardRange = () => { const r = BOSSES.map((b) => b.reward); return !r.length ? "" : Math.min(...r) === Math.max(...r) ? r[0] + "점" : Math.min(...r) + "~" + Math.max(...r) + "점"; };
   function projHtml() {
     if (!game) return '<div class="pv pv-center"><div class="h">보스 레이드 시뮬레이터</div><div class="sub">진행자 화면에서 "게임 준비하기"를 눌러 주세요</div></div>';
-    const qr = '<div class="pv-qr glass"><div class="q">' + qrSvg(JOIN_URL) + '</div><span>휴대폰으로 QR을 찍거나<br>주소를 입력해 참여<b class="addr">' + esc(joinText()) + "</b></span></div>";
+    const qr = '<div class="pv-qr glass"><div class="q">' + qrSvg(JOIN_URL) + '</div><span>휴대폰으로 QR을 찍거나<br>NFC를 태그하거나<br>주소를 입력해 참여<b class="addr">' + esc(joinText()) + "</b></span></div>";
     if (game.stage === "lobby") {
       const joined = personList().filter((p) => p.claimed).length;
       return '<div class="pv pv-center"><div class="eyebrow">오프닝 아이스브레이킹</div><div class="h">' + (RULES.lobbyTitle ? richText(RULES.lobbyTitle) : '나만의 <span class="title-glow">픽셀 캐릭터</span><br>&amp; 보스 레이드') + '</div><div class="sub">' + (RULES.lobbySub ? richText(RULES.lobbySub) : "휴대폰으로 QR을 찍거나 아래 주소를 입력하고, Knox ID로 입장해 주세요") + "</div>" +
