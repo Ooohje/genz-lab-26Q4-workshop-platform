@@ -426,6 +426,7 @@ body.screen { overflow: hidden; }
 .admin .tr .att { justify-self: start; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; color: #fff; }
 .admin .tr.roster.in .att { background: #2E9E6B; }
 .admin .tr.roster.out .att { background: #D64545; }
+.admin .tr.roster.staff .att { background: rgba(31, 37, 64, 0.45); }
 .admin .tr .k { font-size: 14px; overflow-wrap: anywhere; }
 .admin .sel {
   height: 44px; width: 100%; padding: 0 10px; border-radius: 12px; border: 1px solid rgba(31, 37, 64, 0.14);

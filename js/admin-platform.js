@@ -143,7 +143,7 @@
         none.textContent = "아직 아무도 없어요.";
         el.appendChild(none);
       }
-      members.forEach((p) => el.appendChild(personRow(p)));
+      members.forEach((p) => el.appendChild(personRow(p, staffTeams.has(box.no))));
       el.appendChild(addRow(box));
       list.appendChild(el);
     });
@@ -192,10 +192,11 @@
     return form;
   }
 
-  function personRow(p) {
+  // staff: 운영진 조(Chief Crew)는 출석을 세지 않으므로 색을 칠하지 않습니다.
+  function personRow(p, staff) {
     {
       const tr = document.createElement("div");
-      tr.className = "tr roster " + (p.joined_at ? "in" : "out");
+      tr.className = "tr roster " + (staff ? "staff" : p.joined_at ? "in" : "out");
       const name = document.createElement("span");
       name.className = "w";
       name.textContent = p.name;
@@ -204,7 +205,7 @@
       knox.textContent = p.knox_id;
       const state = document.createElement("span");
       state.className = "att";
-      state.textContent = p.joined_at ? "참석" : "미참석";
+      state.textContent = staff ? "관리자" : p.joined_at ? "참석" : "미참석";
       const select = document.createElement("select");
       select.className = "sel";
       select.setAttribute("aria-label", p.name + "의 조");
