@@ -10,9 +10,9 @@
 -- 판정은 스탯만으로 합니다.
 --   캐릭터 스탯 5개: 체력(hp) · 지력(intel) · 친화력(social) · 멘탈(mental) · 운(luck)
 --   공격력 = 판정 스탯 합 (+돌발 이벤트 주사위). 보스 HP 이상이면 격파 → 보상 점수.
---   돌발 이벤트 룰렛: 진행자가 정한 칸(config.roulette, 2~10칸) 중 하나. 칸 효과 kind: power(공격력 ±value) · clear(격파하면 +value점) · fail(실패 시 +value점) · none
+--   돌발 이벤트: 진행자가 정한 칸(config.roulette, 2~10칸) 중 하나. 칸 효과 kind: power(공격력 ±value) · clear(격파하면 +value점) · fail(실패 시 +value점) · none
 --   운: 운이 높을수록 아래쪽 칸이 잘 나옵니다. k번째 칸의 가중치 = r^(k-1), r = (1 + luckPower/100)^t, t = (운 − 스탯 최소) / (스탯 최대 − 스탯 최소).
---   연습 라운드: 0번 라운드. 연습 1 = config.practiceBoss, 연습 2 = config.practiceBoss2 (game.prac 1·2). 룰렛은 연습 보스의 event 대로(기본: 연습 1 없음 · 연습 2 있음). 출전 기록과 총점에는 들어가지 않습니다.
+--   연습 라운드: 0번 라운드. 연습 1 = config.practiceBoss, 연습 2 = config.practiceBoss2 (game.prac 1·2). 돌발 이벤트는 연습 보스의 event 대로(기본: 연습 1 없음 · 연습 2 있음). 출전 기록과 총점에는 들어가지 않습니다.
 --     점수는 본게임처럼 계산해서 보여 줍니다(연습 보스의 reward, 없으면 3점). 연습 2를 시작할 때 연습 1 점수를 game.prac1 에 남겨 연습 합계를 보여 줍니다.
 --   타이머: 보스 회의에만 (본게임 meetingSec · 연습 practiceMeetingSec). 조 내 공유는 타이머 없이 진행자가 넘깁니다.
 --   config.bgm: 발표 화면 BGM 켜기/끄기 (관리 화면 버튼이 saveConfig 로 바꿈)
@@ -180,10 +180,10 @@ begin
                    or length(btrim(x->>'title')) not between 1 and 40 or length(x->>'body') > 800) then
     return 'i 창은 12칸까지, 칸 제목 40자 · 내용 800자까지예요';
   end if;
-  if jsonb_typeof(c->'roulette') is distinct from 'array' or jsonb_array_length(c->'roulette') not between 2 and 10 then return '룰렛 칸은 2~10개예요'; end if;
+  if jsonb_typeof(c->'roulette') is distinct from 'array' or jsonb_array_length(c->'roulette') not between 2 and 10 then return '돌발 이벤트 칸은 2~10개예요'; end if;
   if exists (select 1 from jsonb_array_elements(c->'roulette') x
              where jsonb_typeof(x) <> 'object' or coalesce(x->>'kind', '') not in ('power', 'clear', 'fail', 'none') or not public.raid_sim_is_int(x->'value', -50, 50)) then
-    return '룰렛 칸의 효과 값은 -50~50이에요';
+    return '돌발 이벤트 칸의 효과 값은 -50~50이에요';
   end if;
   if jsonb_typeof(c->'bossPool') is distinct from 'array' or jsonb_array_length(c->'bossPool') > 30 then return '보스 목록은 30명까지예요'; end if;
   if jsonb_array_length(c->'bossPool') > 0 and public.raid_sim_check_bosses(c->'bossPool', 30) is not null then
@@ -194,7 +194,7 @@ begin
                   replace(public.raid_sim_check_bosses(jsonb_build_array('{"reward": 3, "event": true}'::jsonb || (c->'practiceBoss2') || '{"diceLow": 0, "diceHigh": 0}'::jsonb)), '1번 보스: ', '연습 보스 2: '));
 end $$;
 
--- 연습 보스에 룰렛이 있는지 (event 가 없으면 연습 1 없음 · 연습 2 있음)
+-- 연습 보스에 돌발 이벤트가 있는지 (event 가 없으면 연습 1 없음 · 연습 2 있음)
 create or replace function public.raid_sim_prac_event(cfg jsonb, p_prac text) returns boolean
 language sql immutable as $$
   select coalesce((cfg->(case when p_prac = '2' then 'practiceBoss2' else 'practiceBoss' end)->>'event')::boolean, coalesce(p_prac, '1') = '2')
@@ -470,7 +470,7 @@ begin
                             'teams', v_teams, 'mode', 'roster');
 end $$;
 
--- 돌발 이벤트 룰렛: 운이 높을수록 아래쪽 칸 쪽으로 기울어짐. 1부터 시작하는 칸 번호 (js/raid-sim-engine.js 의 rollSpin 과 같음)
+-- 돌발 이벤트: 운이 높을수록 아래쪽 칸 쪽으로 기울어짐. 1부터 시작하는 칸 번호 (js/raid-sim-engine.js 의 rollSpin 과 같음)
 create or replace function public.raid_sim_roll(cfg jsonb, luck integer) returns integer
 language plpgsql volatile as $$
 declare
@@ -505,7 +505,7 @@ declare
   v_rows jsonb := '[]'::jsonb; v_max integer; v_dr jsonb;
 begin
   if r = 0 then
-    -- 연습 보스: 룰렛은 event 대로, 점수는 보여 주기만
+    -- 연습 보스: 돌발 이벤트는 event 대로, 점수는 보여 주기만
     b.round := 0; b.name := cfg->v_pk->>'name'; b.hp := (cfg->v_pk->>'hp')::integer; b.reward := coalesce((cfg->v_pk->>'reward')::integer, 3); b.has_event := public.raid_sim_prac_event(cfg, s#>>'{game,prac}');
     b.stats := array(select jsonb_array_elements_text(cfg->v_pk->'stats'));
   else
@@ -531,7 +531,7 @@ begin
     p := s->'people'->(v_pid::text);
     c := public.raid_sim_char(p);
     select coalesce(sum(coalesce((c->>st)::integer, 0)), 0) into v_base from unnest(b.stats) st;
-    -- 돌발 이벤트: 운으로 기울어진 룰렛 (dice = 나온 칸 번호, effect = 그 칸의 효과)
+    -- 돌발 이벤트: 운으로 기울어진 돌발 이벤트 (dice = 나온 칸 번호, effect = 그 칸의 효과)
     v_dice := null; v_bonus := 0; v_rolls := null; v_eff := null;
     if b.has_event then
       v_dice := public.raid_sim_roll(cfg, (c->>'luck')::integer);
@@ -553,7 +553,7 @@ begin
                      + (x->>'extra')::integer))
     into v_rows from jsonb_array_elements(v_rows) x;
 
-  -- 회의 중에 미리 쓴 AI 서술: 출전자·격파 여부가 같고 룰렛이 공격력을 바꾸지 않았으면 그대로 씀 (나머지는 Edge Function 이 마감 뒤 씀)
+  -- 회의 중에 미리 쓴 AI 서술: 출전자·격파 여부가 같고 돌발 이벤트가 공격력을 바꾸지 않았으면 그대로 씀 (나머지는 Edge Function 이 마감 뒤 씀)
   v_dr := s->'storyDrafts'->('r' || r);
   if v_dr is not null and jsonb_typeof(v_dr) = 'object' then
     select jsonb_agg(case when jsonb_typeof(v_dr->(x->>'team')) = 'object'
@@ -570,7 +570,7 @@ begin
 end $$;
 
 -- 4) 진행자 동작 (raid-sim Edge Function 이 비밀번호를 확인한 뒤 부릅니다) -----------
--- op: state | setup | make | fillChars | share | raid | start(arg=라운드, 0 = 연습) | hint | close | roll(돌발 이벤트 룰렛) | reveal | final | back(이전 단계) | reset | resetSeats
+-- op: state | setup | make | fillChars | share | raid | start(arg=라운드, 0 = 연습) | hint | close | roll(돌발 이벤트) | reveal | final | back(이전 단계) | reset | resetSeats
 --     saveConfig(data=규칙) | saveBosses(data=보스 배열) | resetBosses | saveRoster(data=[{uid,name,team}], 빈 배열이면 6자리)
 create or replace function public.raid_sim_admin(p_op text, p_arg integer default null, p_data jsonb default null) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -589,7 +589,7 @@ begin
   v_cfg := public.raid_sim_cfg();
   g := s->'game';
   v_stage := g->>'stage'; v_phase := g->>'phase'; v_round := coalesce((g->>'round')::integer, 0);
-  -- 이번 라운드에 돌발 이벤트(룰렛)가 있는지
+  -- 이번 라운드에 돌발 이벤트(돌발 이벤트)가 있는지
   v_event := case when v_round = 0 then public.raid_sim_prac_event(v_cfg, g->>'prac')
                   else coalesce((select has_event from public.raid_sim_bosses where round = v_round), false) end;
 
@@ -654,7 +654,7 @@ begin
       if v_phase <> 'meeting' then err := '회의 중에만 마감할 수 있어요';
       else s := public.raid_sim_close(s); end if;
     when 'roll' then
-      if v_phase <> 'closed' then err := '마감한 뒤에 룰렛을 돌릴 수 있어요';
+      if v_phase <> 'closed' then err := '마감한 뒤에 돌발 이벤트를 돌릴 수 있어요';
       elsif not v_event then err := '이번 보스는 돌발 이벤트가 없어요';
       else s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'rolled', 'rollAt', v_now)); end if;
     when 'reveal' then
@@ -664,7 +664,7 @@ begin
         elsif p_arg not between 0 and 2 or (p_arg = 2 and v_round = 0) then err := '그 화면은 없어요';
         else s := jsonb_set(s, '{game,view}', to_jsonb(p_arg)); end if;
       elsif v_phase = 'closed' and v_event then
-        err := '돌발 이벤트 라운드예요. 먼저 "룰렛 돌리기"를 눌러 주세요';
+        err := '돌발 이벤트 라운드예요. 먼저 "돌발 이벤트 돌리기"를 눌러 주세요';
       elsif v_phase not in ('closed', 'rolled') then err := '마감한 뒤에 공개할 수 있어요';
       else s := jsonb_set(s, '{game}', s->'game' || '{"phase": "revealed", "view": 0}'::jsonb); end if;
     when 'final' then
@@ -916,6 +916,27 @@ do $$ begin
     update public.raid_sim_config set data = (data - 'bossPool') || '{"bossVersion": "3"}'::jsonb, updated_at = now() where id = 1;
   end if;
 end $$;
+-- 화면 문구 '룰렛' → '돌발 이벤트' (2026-11-26). 진행자가 설정 탭에서 저장한 문구 · 보스 글에도 적용. 바꿀 게 없으면 아무 일도 안 함
+create or replace function public.raid_sim_unroulette(t text) returns text
+language sql immutable as $fn$
+  select regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(
+         replace(replace(replace(replace(t,
+           '돌발 이벤트가 터지면 여기에 룰렛 결과가', '돌발 이벤트가 터지면 여기에 그 결과가'),
+           '룰렛에 걸린 칸', '돌발 이벤트에서 나온 칸'),
+           '돌발 이벤트 (룰렛)', '돌발 이벤트'),
+           '돌발 이벤트 룰렛', '돌발 이벤트'),
+         '룰렛(\*\*)?으로', '돌발 이벤트\1로', 'g'),
+         '룰렛(\*\*)?이', '돌발 이벤트\1가', 'g'),
+         '룰렛(\*\*)?을', '돌발 이벤트\1를', 'g'),
+         '룰렛(\*\*)?은', '돌발 이벤트\1는', 'g'),
+         '룰렛(\*\*)?과', '돌발 이벤트\1와', 'g'),
+         '룰렛', '돌발 이벤트', 'g')
+$fn$;
+update public.raid_sim_config set data = public.raid_sim_unroulette(data::text)::jsonb, updated_at = now() where data::text like '%룰렛%';
+update public.raid_sim_bosses set name = public.raid_sim_unroulette(name), description = public.raid_sim_unroulette(description),
+       hint = public.raid_sim_unroulette(hint), reveal = public.raid_sim_unroulette(reveal)
+ where name || description || coalesce(hint, '') || coalesce(reveal, '') like '%룰렛%';
+revoke all on function public.raid_sim_unroulette(text) from public, anon, authenticated;
 insert into public.raid_sim_roster (id) values (1) on conflict (id) do nothing;
 insert into public.raid_sim_state (id, state) values (1, public.raid_sim_fresh()) on conflict (id) do nothing;
 insert into public.raid_sim_public (id) values (1) on conflict (id) do nothing;

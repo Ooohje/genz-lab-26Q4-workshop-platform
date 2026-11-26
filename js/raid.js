@@ -1,6 +1,6 @@
 // raid: 오프닝 보스 레이드 (픽셀 캐릭터 → 조 내 공유 → 연습 → 보스 레이드 → 최종 순위).
 // 워크샵 플랫폼의 세 화면이 이 모듈을 함께 씁니다. 각 화면은 Shadow DOM 안에 그려서 플랫폼 CSS(css/style.css)와 섞이지 않습니다(css/raid.css).
-//   관리 화면(admin.html)  '보스 레이드' 탭 = 진행 · '레이드 설정' 탭 = 보스·규칙·문구·연습 보스·룰렛. 관리자 비밀번호를 그대로 씁니다.
+//   관리 화면(admin.html)  '보스 레이드' 탭 = 진행 · '레이드 설정' 탭 = 보스·규칙·문구·연습 보스·돌발 이벤트. 관리자 비밀번호를 그대로 씁니다.
 //   참여 화면(index.html)  메인 관제가 '보스 레이드'일 때 내 휴대폰 화면. 워크샵에 입장한 Knox ID로 자동 입장.
 //   발표 화면(screen.html) 메인 관제가 '보스 레이드'일 때 프로젝터 화면 + BGM(js/raid-sim-bgm.js).
 // 진행·판정은 Supabase 데이터베이스 함수(supabase/raid-sim.sql)가 하고 Realtime 으로 모든 화면에 옵니다. 진행 버튼은 Edge Function raid-sim.
@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126p";
+  const V = "20261126q";
   // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
   const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
@@ -36,7 +36,7 @@ window.WCRaid = (function () {
   let BOSSES = [];
   let PRACTICE = null;
   let STORY_DRAFTS = {};   // 회의 중에 미리 쓴 AI 서술 (진행자에게만 옴)   // 연습 보스 (0번 라운드)
-  // 돌발 이벤트 룰렛: 칸마다 효과(kind, value), 문구는 효과대로 자동 (판정은 js/raid-sim-engine.js · supabase/raid-sim.sql)
+  // 돌발 이벤트: 칸마다 효과(kind, value), 문구는 효과대로 자동 (판정은 js/raid-sim-engine.js · supabase/raid-sim.sql)
   const SPIN_KINDS = [["power", "공격력 ±N"], ["clear", "격파하면 +N점"], ["fail", "실패 시 +N점"], ["none", "효과 없음"]];
   const effLabel = (e) => !e ? "" : e.kind === "power" ? "공격력 " + sign(e.value) : e.kind === "clear" ? "격파하면 " + sign(e.value) + "점" : e.kind === "fail" ? "실패 시 " + sign(e.value) + "점" : "효과 없음";
   const effGood = (e) => !!e && e.kind !== "none" && e.value > 0;
@@ -153,7 +153,7 @@ window.WCRaid = (function () {
   const defaultStats = () => Object.fromEntries(KEYS.map((k, i) => [k, Math.floor(RULES.statTotal / KEYS.length) + (i < RULES.statTotal % KEYS.length ? 1 : 0)]));
   const blankDraft = () => Object.fromEntries(KEYS.map((k) => [k, RULES.statMin]));
   const sign = (n) => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n);
-  const diceText = (x) => x.effect ? "룰렛 " + effLabel(x.effect) : "";
+  const diceText = (x) => x.effect ? "돌발 이벤트 " + effLabel(x.effect) : "";
   const qrCache = {};
   function qrSvg(text) {
     if (qrCache[text]) return qrCache[text];
@@ -324,7 +324,7 @@ window.WCRaid = (function () {
     else if (game.stage === "share") { add("보스 레이드로 넘기기", "raid", "go"); add("안 만든 사람 랜덤 생성", "fillChars"); }
     else if (game.phase === "idle") { add("연습 보스 1 시작", "start:0", "go"); add("연습 없이 1번 보스 시작", "start:1"); }
     else if (game.phase === "meeting") { add("마감하기", "close", "go"); if (!game.hint) add("힌트 공개", "hint"); }
-    else if (game.phase === "closed") { if (boss().event) add("룰렛 돌리기", "roll", "go"); else add("결과 공개", "reveal", "go"); add(again(), "start:" + game.round + (game.round ? "" : ":" + pracNo())); }
+    else if (game.phase === "closed") { if (boss().event) add("돌발 이벤트 돌리기", "roll", "go"); else add("결과 공개", "reveal", "go"); add(again(), "start:" + game.round + (game.round ? "" : ":" + pracNo())); }
     else if (game.phase === "rolled") { add("결과 공개", "reveal", "go"); add(again(), "start:" + game.round + (game.round ? "" : ":" + pracNo())); }
     else if (game.phase === "revealed" && game.round === 0) {
       const next = pracNo() === 1 ? ["연습 보스 2 시작", "start:0:2"] : ["1번 보스 시작 (본게임)", "start:1"];
@@ -348,7 +348,7 @@ window.WCRaid = (function () {
     return b;
   }
   const stepWord = () => !game ? "준비 전" : game.stage === "lobby" ? "대기" : game.stage === "make" ? "1. 캐릭터 만들기" : game.stage === "share" ? "2. 조 내 공유"
-    : game.phase === "idle" ? "3. 보스 레이드 규칙" : game.phase === "meeting" ? rname() + " · 회의" : game.phase === "closed" ? rname() + " · 마감" : game.phase === "rolled" ? rname() + " · 룰렛"
+    : game.phase === "idle" ? "3. 보스 레이드 규칙" : game.phase === "meeting" ? rname() + " · 회의" : game.phase === "closed" ? rname() + " · 마감" : game.phase === "rolled" ? rname() + " · 돌발 이벤트"
     : game.phase === "revealed" ? rname() + " · " + (game.view === 1 ? "점수표" : game.round && game.view === 2 ? "중간 집계" : "결과") : "최종 순위";
 
   // ── 참여자 동작 (스탯 고르기는 이 기기에서, 저장·외형 랜덤 뽑기·출전자 선택은 Supabase 로) ──
@@ -386,8 +386,8 @@ window.WCRaid = (function () {
     invalidate();
   }
 
-  // ── 돌발 이벤트 룰렛 ──────────────────────────────────────────
-  // 진행자가 "룰렛 돌리기"를 누른 시각(rollAt)부터 ROLL_MS 동안 모든 화면에서 같이 돌고(점점 느려짐), 그 뒤 각 조의 칸이 나옵니다.
+  // ── 돌발 이벤트 ──────────────────────────────────────────
+  // 진행자가 "돌발 이벤트 돌리기"를 누른 시각(rollAt)부터 ROLL_MS 동안 모든 화면에서 같이 돌고(점점 느려짐), 그 뒤 각 조의 칸이 나옵니다.
   const ROLL_MS = 3000;
   const rolling = () => !!game && game.phase === "rolled" && now() - (game.rollAt || 0) < ROLL_MS;
   function reel(x) {
@@ -425,7 +425,7 @@ window.WCRaid = (function () {
   function myResultLine(x, b) {
     if (game.round === 0) return (x.cleared ? "보스 HP " + b.hp + " 돌파 → 격파!" : "보스 HP " + b.hp + "까지 " + (b.hp - x.power) + "점 부족") + " · 연습이라 실제 점수에는 안 들어가요";
     const out = [x.cleared ? "보스 HP " + b.hp + " 돌파 → 격파 +" + b.reward + "점" : "보스 HP " + b.hp + "까지 " + (b.hp - x.power) + "점 부족 → 0점"];
-    if (x.extra) out.push("룰렛 " + sign(x.extra) + "점");
+    if (x.extra) out.push("돌발 이벤트 " + sign(x.extra) + "점");
     if (x.mvp) out.push("MVP +" + RULES.mvpBonus + "점");
     return out.join(" · ");
   }
@@ -448,7 +448,7 @@ window.WCRaid = (function () {
     "판정 스탯은 **비공개**. 보스 설명을 보고 조원과 추리해서 출전자를 고르세요.",
     "공격력(판정 스탯 합)이 **보스 HP 이상이면 격파** → 그 보스의 보상 점수(" + rewardRange() + "), **실패하면 0점**.",
     "라운드 공격력 1위 조는 **MVP " + sign(RULES.mvpBonus) + "점** (격파 못 해도, 동점이면 모두).",
-    "결과 공개 전에 **돌발 이벤트**가 터질 수도 있어요. 그때는 **룰렛**에 걸린 칸에 따라 공격력이나 점수가 바뀌어요.",
+    "결과 공개 전에 **돌발 이벤트**가 터질 수도 있어요. 그때는 나온 칸에 따라 공격력이나 점수가 바뀌어요.",
     "몇 라운드마다 **중간 집계**로 조별 점수를 함께 보고, **최종 순위는 마지막에 공개**돼요.",
   ];
   const rewardRange = () => { const r = BOSSES.map((b) => b.reward); return !r.length ? "" : Math.min(...r) === Math.max(...r) ? r[0] + "점" : Math.min(...r) + "~" + Math.max(...r) + "점"; };
@@ -488,7 +488,7 @@ window.WCRaid = (function () {
     }
     if (game.phase === "rolled") {
       return '<div class="pv"><div><div class="eyebrow">' + esc(b.name) + '</div><div class="h ev-alert">!! 돌발 이벤트 발생 !!</div>' +
-        '<div class="sub">룰렛 칸: ' + esc(spinRules()) + "</div></div>" +
+        '<div class="sub">돌발 이벤트 칸: ' + esc(spinRules()) + "</div></div>" +
         '<div class="dice-grid' + (rows.length > 12 ? " many dense" : rows.length > 4 ? " many" : "") + '" style="--n:' + (rows.length > 12 ? 7 : Math.min(rows.length, 6)) + '">' + rows.map((x) =>
           '<div class="dice-team glass"><div class="dwho">' + TEAMS[x.team] + "<b>" + esc(x.name) + "</b></div>" + reel(x) + "</div>").join("") + "</div></div>";
     }
@@ -500,7 +500,7 @@ window.WCRaid = (function () {
         const win = rows.filter((x) => x.cleared).length;
         return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + " · " + (game.round === 0 ? "연습 " + pracNo() + " / 2" : rlabel()) + '</div><div class="h score-h">이번 라운드 점수</div>' +
           '<div class="tally"><span class="tw">격파 성공 <b>' + win + '</b>조</span><span class="tl">실패 <b>' + (rows.length - win) + "</b>조</span><span>" + "보상 " + b.reward + "점 · MVP " + sign(RULES.mvpBonus) + "점" + "</span>" +
-          (rows.some((x) => x.effect && (x.effect.kind === "clear" || x.effect.kind === "fail")) ? '<span class="roul-key"><b></b>룰렛 결과</span>' : "") + "</div></div>" +
+          (rows.some((x) => x.effect && (x.effect.kind === "clear" || x.effect.kind === "fail")) ? '<span class="roul-key"><b></b>돌발 이벤트 결과</span>' : "") + "</div></div>" +
           '<div class="score-grid glass' + (rows.length > 6 ? " cols" : "") + '" style="--rows:' + (rows.length > 6 ? Math.ceil(rows.length / 2) : rows.length) + '">' +
           sorted.map((x) => '<div class="sc-row' + (x.cleared ? " win" : "") + '"><b class="sc-team">' + TEAMS[x.team] + '</b><span class="sc-name">' + esc(x.name) + "</span>" +
             '<span class="sc-out">' + (x.cleared ? "격파" : "실패") + '</span><span class="sc-parts">' + scoreParts(x, b) + '</span><b class="sc-pt">+' + x.points + "점" + "</b></div>").join("") + "</div></div>";
@@ -511,7 +511,7 @@ window.WCRaid = (function () {
       const max = Math.max(b.hp + 4, ...rows.map((x) => x.power));
       return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯' + (game.round === 0 ? ' <span class="practice-tag">연습</span>' : "") + '</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + "</div></div>" +
         '<div class="bars glass' + (rows.length > 6 ? " cols" + (rows.length > 14 ? " dense" : "") : rows.length > 4 ? " many" : "") + '" style="--hp:' + (b.hp / max * 100) + "%;--rows:" + Math.ceil(rows.length / 2) + '"><div class="hp-note"><i></i>보스 HP ' + b.hp + " · 점선을 넘으면 격파" +
-        (rows.some((x) => x.effect && x.effect.kind === "power") ? '<span class="roul-key"><b></b>룰렛 결과</span>' : "") + "</div>" +
+        (rows.some((x) => x.effect && x.effect.kind === "power") ? '<span class="roul-key"><b></b>돌발 이벤트 결과</span>' : "") + "</div>" +
         sorted.map((x) => '<div class="bar-row' + (x.cleared ? " win" : " lose") + '"><div class="art">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + "</span></div>" +
           '<div class="mid"><div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i><em class="spark" style="left:' + (Math.max(0, x.power) / max * 100) + '%"></em></div>' +
           '<em class="stv">' + esc(statLine(x, b)) + (x.effect && x.effect.kind === "power" ? ' <span class="roul">' + esc(effLabel(x.effect)) + "</span>" : "") + "</em></div>" +
@@ -525,12 +525,12 @@ window.WCRaid = (function () {
       scoreboard().slice().sort((a, c) => (a.rank === 1 ? 1 : 0) - (c.rank === 1 ? 1 : 0) || c.rank - a.rank).map((x) => '<div class="r' + x.rank + '"><b>' + TEAMS[x.team] + "</b><span>" + x.total + "점 · 격파 " + x.cleared + '회</span><div class="block glass">' + x.rank + "위</div></div>").join("") + "</div></div>";
   }
 
-  // 점수표 한 줄의 내역: 격파 보상 · MVP · 룰렛(다른 색)
+  // 점수표 한 줄의 내역: 격파 보상 · MVP · 돌발 이벤트(다른 색)
   function scoreParts(x, b) {
     const out = [x.cleared ? "격파 +" + b.reward : "격파 0"];
     if (x.mvp) out.push("MVP " + sign(RULES.mvpBonus));
     let h = out.map((t) => "<span>" + t + "</span>").join("");
-    // 룰렛: 점수 효과(격파하면·실패 시)만 점수표에. 공격력 효과는 1장(공격력 화면)에만
+    // 돌발 이벤트: 점수 효과(격파하면·실패 시)만 점수표에. 공격력 효과는 1장(공격력 화면)에만
     if (x.effect && (x.effect.kind === "clear" || x.effect.kind === "fail")) {
       const pts = x.extra ? " → " + sign(x.extra) + "점" : " → 해당 없음";
       h += '<span class="roul">' + esc(effLabel(x.effect)) + pts + "</span>";
@@ -573,7 +573,7 @@ window.WCRaid = (function () {
     } else {
       const b = boss(), rows = game.results[game.round] || [];
       html += '<div class="secret">' + (game.round === 0 ? "연습 보스 " + pracNo() : game.round + "번 보스") + " 판정 스탯 <b>" + statsText(b.stats) + "</b> · 보스 HP " + b.hp + " · 보상 " + b.reward + "점<br>힌트: " + esc(b.hint) + "</div>";
-      html += '<table class="res-table"><thead><tr><th>조</th><th>출전자</th><th class="n">판정 합</th><th class="n">룰렛</th><th class="n">공격력</th><th>결과</th></tr></thead><tbody>';
+      html += '<table class="res-table"><thead><tr><th>조</th><th>출전자</th><th class="n">판정 합</th><th class="n">돌발 이벤트</th><th class="n">공격력</th><th>결과</th></tr></thead><tbody>';
       TEAMS.forEach((name, t) => {
         const k = pickOf(game.round, t), p = k ? people[k.pid] : null, x = rows.find((y) => y.team === t);
         const base = p ? (b.stats || []).reduce((n, s) => n + (charOf(p)[s] || 0), 0) : null;
@@ -654,10 +654,10 @@ window.WCRaid = (function () {
     }
     const x = (game.results[game.round] || []).find((y) => y.team === p.team);
     if (game.phase === "closed") return h + '<div class="card"><div class="t">' + (x ? esc(x.name) + " 님 출전!" : "마감") + '</div><div class="muted">' + (x && x.auto ? "아무도 안 골라서 랜덤으로 정해졌어요. " : "") + "앞쪽 화면에서 결과 공개를 기다려 주세요." + "</div></div>";
-    // 우리 조 룰렛만
+    // 우리 조 돌발 이벤트만
     if (game.phase === "rolled" && x) {
-      return h + '<div class="card pdice"><div class="t ev-alert">!! 돌발 이벤트 발생 !!</div><div class="t">' + TEAMS[p.team] + " 룰렛</div><div class=\"muted\">" + esc(x.name) + " 님 차례예요</div>" + reel(x) +
-        '<div class="muted">룰렛 칸: ' + esc(spinRules()) + "</div></div>";
+      return h + '<div class="card pdice"><div class="t ev-alert">!! 돌발 이벤트 발생 !!</div><div class="t">' + TEAMS[p.team] + " 돌발 이벤트</div><div class=\"muted\">" + esc(x.name) + " 님 차례예요</div>" + reel(x) +
+        '<div class="muted">돌발 이벤트 칸: ' + esc(spinRules()) + "</div></div>";
     }
     if (game.phase === "revealed" && x) {
       const f = people[x.pid];
@@ -683,19 +683,19 @@ window.WCRaid = (function () {
   }
 
   let infoOpen = false;
-  // i 창(점수 규칙): 설정 탭에서 고친 문구가 있으면 그것, 없으면 기본 문구. {보상} {룰렛} {MVP} 는 지금 설정 값으로 바뀝니다.
+  // i 창(점수 규칙): 설정 탭에서 고친 문구가 있으면 그것, 없으면 기본 문구. {보상} {돌발 이벤트} {MVP} 는 지금 설정 값으로 바뀝니다.
   const DEFAULT_INFO_TITLE = "점수는 이렇게 매겨요";
   const defaultInfoSections = () => [
-    { title: "공격력", body: "출전자의 **판정 스탯 합**이 공격력이에요. 어떤 스탯이 판정되는지는 비공개이고, 결과 공개 때 알려 줘요. 돌발 이벤트가 터지면 여기에 룰렛 결과가 더해져요." },
+    { title: "공격력", body: "출전자의 **판정 스탯 합**이 공격력이에요. 어떤 스탯이 판정되는지는 비공개이고, 결과 공개 때 알려 줘요. 돌발 이벤트가 터지면 여기에 그 결과가 더해져요." },
     { title: "격파 / 실패", body: "공격력이 **보스 HP 이상이면 격파** → 그 보스의 보상 점수를 받아요. 모자라면 **실패 → 0점**.\n{보상}" },
     { title: "MVP", body: "라운드마다 공격력이 가장 높은 조가 **{MVP}점**을 더 받아요. 격파하지 못해도 받을 수 있고, 동점이면 모두 받아요." },
-    { title: "돌발 이벤트 룰렛", body: "룰렛에 걸린 칸의 효과를 받아요.\n{룰렛}" },
-    { title: "순위", body: "라운드 점수(격파 보상 + MVP + 룰렛 점수)를 모두 더한 **총점** 순이에요. 총점이 같으면 **격파 횟수**가 많은 조가 위이고, 격파 횟수까지 같으면 같은 등수예요. 몇 라운드마다 **중간 집계**를 보여 주고, 최종 순위는 **마지막에 공개**돼요." },
+    { title: "돌발 이벤트", body: "돌발 이벤트에서 나온 칸의 효과를 받아요.\n{돌발 이벤트}" },
+    { title: "순위", body: "라운드 점수(격파 보상 + MVP + 돌발 이벤트 점수)를 모두 더한 **총점** 순이에요. 총점이 같으면 **격파 횟수**가 많은 조가 위이고, 격파 횟수까지 같으면 같은 등수예요. 몇 라운드마다 **중간 집계**를 보여 주고, 최종 순위는 **마지막에 공개**돼요." },
     { title: "출전", body: "연습 라운드는 점수와 출전 기록에 들어가지 않아요. 라운드마다 조에서 **1명**이 나가요. 한 사람은 **최대 2번**까지 나갈 수 있고(조원이 6명 미만인 조는 **3번**), 입장한 사람만 고를 수 있어요. 회의 시간이 끝날 때까지 아무도 안 고르면 덜 나간 사람 중에서 랜덤으로 정해져요." },
   ];
   const fillInfo = (t) => String(t || "")
     .replace(/\{보상\}/g, BOSSES.map((b, i) => i + 1 + "번 " + b.reward + "점").join(" · "))
-    .replace(/\{룰렛\}/g, (RULES.roulette || []).map(effLabel).join("\n"))
+    .replace(/\{(룰렛|돌발 이벤트)\}/g, (RULES.roulette || []).map(effLabel).join("\n"))
     .replace(/\{MVP\}/g, sign(RULES.mvpBonus));
   function infoHtml() {
     const secs = RULES.infoSections && RULES.infoSections.length ? RULES.infoSections : defaultInfoSections();
@@ -726,7 +726,7 @@ window.WCRaid = (function () {
     { k: "meetingSec", label: "보스 회의 시간", unit: "초" },
     { k: "practiceMeetingSec", label: "연습 보스 회의 시간", unit: "초", note: "연습 라운드에만 쓰는 회의 시간 (조 내 공유는 타이머 없이 진행자가 넘겨요)" },
     { k: "mvpBonus", label: "MVP 점수", unit: "점", note: "라운드 공격력 1위 조가 받는 점수" },
-    { k: "luckPower", label: "운 효과 세기", unit: "", note: "운이 높을수록 룰렛의 아래쪽 칸이 잘 나오는 정도 (0~100). 0이면 운과 상관없이 모든 칸이 같은 확률" },
+    { k: "luckPower", label: "운 효과 세기", unit: "", note: "운이 높을수록 돌발 이벤트의 아래쪽 칸이 잘 나오는 정도 (0~100). 0이면 운과 상관없이 모든 칸이 같은 확률" },
   ];
   const BOSS_KEYS = ["name", "desc", "hp", "reward", "event", "diceLow", "diceHigh", "stats", "hint", "reveal"];
   const bossOut = (b) => Object.fromEntries(BOSS_KEYS.map((k) => [k, k === "stats" ? (b.stats || []).slice() : k === "event" ? !!b.event : b[k] == null ? (k === "diceLow" ? -2 : k === "diceHigh" ? 3 : "") : b[k]]));
@@ -777,24 +777,24 @@ window.WCRaid = (function () {
       '<div class="row left"><button type="button" class="btn sm" data-set="rulesFill">기본 규칙 문구를 불러와서 고치기</button></div></section>';
     h += '<section class="panel"><h2>i 창 (점수 규칙) 문구</h2><p class="small">휴대폰 위쪽 <b>i</b> 버튼을 누르면 나오는 창이에요. <b>비워 두면 기본 문구</b>가 나와요. ' +
       "<b>## 제목</b> 줄로 칸을 나누고 그 아래에 내용을 써요(12칸까지). **굵게**, 줄바꿈 그대로. " +
-      "<b>{보상}</b>은 보스별 보상 점수, <b>{룰렛}</b>은 룰렛 칸 목록, <b>{MVP}</b>는 MVP 점수로 바뀌어요.</p>" +
+      "<b>{보상}</b>은 보스별 보상 점수, <b>{돌발 이벤트}</b>는 돌발 이벤트 칸 목록, <b>{MVP}</b>는 MVP 점수로 바뀌어요.</p>" +
       '<label class="f"><span>창 제목</span><input type="text" maxlength="60" ' + tf("infoTitle") + ' placeholder="' + esc(DEFAULT_INFO_TITLE) + '" value="' + esc(T.infoTitle) + '"></label>' +
       '<label class="f"><span>내용</span><textarea rows="12" ' + tf("infoText") + ' placeholder="' + esc(infoToText(defaultInfoSections())) + '">' + esc(T.infoText) + "</textarea></label>" +
       '<div class="row left"><button type="button" class="btn sm" data-set="infoFill">기본 i 창 문구를 불러와서 고치기</button></div></section>';
-    h += '<section class="panel"><h2>연습 보스</h2><p class="small">규칙 설명 다음에 진행자가 "연습 보스 1 시작" → "연습 보스 2 시작" 순서로 두 판 연습해요(건너뛰고 본게임으로 가도 돼요). 회의 타이머는 위의 "연습 보스 회의 시간"이에요. 룰렛은 아래 체크대로예요(기본: 연습 1 없음, 연습 2 있음). 점수표는 본게임과 똑같이 보여 주지만 실제 총점과 출전 기록에는 들어가지 않아요.</p>';
+    h += '<section class="panel"><h2>연습 보스</h2><p class="small">규칙 설명 다음에 진행자가 "연습 보스 1 시작" → "연습 보스 2 시작" 순서로 두 판 연습해요(건너뛰고 본게임으로 가도 돼요). 회의 타이머는 위의 "연습 보스 회의 시간"이에요. 돌발 이벤트는 아래 체크대로예요(기본: 연습 1 없음, 연습 2 있음). 점수표는 본게임과 똑같이 보여 주지만 실제 총점과 출전 기록에는 들어가지 않아요.</p>';
     d.practice.forEach((P, pi) => { const pf = (k) => 'data-f="p.' + pi + "." + k + '"';
     h += '<div class="bcard"><div class="small"><b>연습 보스 ' + (pi + 1) + "</b></div>" +
       '<label class="f"><span>이름</span><input type="text" maxlength="60" ' + pf("name") + ' value="' + esc(P.name) + '"></label>' +
       '<label class="f"><span>설명 (모두에게 보임)</span><textarea rows="2" maxlength="300" ' + pf("desc") + ">" + esc(P.desc) + "</textarea></label>" +
       '<div class="f-row"><label class="f"><span>보스 HP</span><input type="number" inputmode="numeric" step="1" ' + pf("hp") + ' value="' + esc(P.hp) + '"></label>' +
         '<label class="f"><span>보상 점수 (보여 주기만)</span><input type="number" inputmode="numeric" step="1" ' + pf("reward") + ' value="' + esc(P.reward) + '"></label></div>' +
-        '<div class="f"><label class="chk"><input type="checkbox" ' + pf("event") + (P.event ? " checked" : "") + "><span>돌발 이벤트 (룰렛)</span></label></div>" +
+        '<div class="f"><label class="chk"><input type="checkbox" ' + pf("event") + (P.event ? " checked" : "") + "><span>돌발 이벤트</span></label></div>" +
       '<div class="f"><span>판정 스탯 (공격력 = 고른 스탯의 합)</span><div class="checks">' + STATS.map((st) =>
         '<label class="chk"><input type="checkbox" ' + pf("stat." + st.key) + (P.stats.includes(st.key) ? " checked" : "") + '><span style="color:' + st.color + '">' + st.label + "</span></label>").join("") + "</div></div>" +
       '<label class="f"><span>힌트 (진행자가 "힌트 공개"를 누르면 보임)</span><input type="text" maxlength="200" ' + pf("hint") + ' value="' + esc(P.hint) + '"></label>' +
       '<label class="f"><span>결과 공개 때 설명</span><textarea rows="2" maxlength="300" ' + pf("reveal") + ">" + esc(P.reveal) + "</textarea></label></div>"; });
     h += "</section>";
-    h += '<section class="panel"><h2>돌발 이벤트 룰렛</h2><p class="small">돌발 이벤트가 켜진 보스와 연습 보스는 마감 뒤 이 룰렛을 돌려요(모든 보스 공통). 칸 문구는 효과대로 자동으로 만들어져요. ' +
+    h += '<section class="panel"><h2>돌발 이벤트</h2><p class="small">돌발 이벤트가 켜진 보스와 연습 보스는 마감 뒤 이 칸 중 하나가 나와요(모든 보스 공통). 칸 문구는 효과대로 자동으로 만들어져요. ' +
       "운이 높을수록 <b>아래쪽 칸</b>이 잘 나오니 좋은 효과를 아래에 두세요. 칸은 2~10개예요.</p>" +
       d.roulette.map((x, i) => '<div class="spin-row"><b>' + (i + 1) + '</b><select data-f="s.' + i + '.kind" aria-label="' + (i + 1) + '번 칸 효과">' +
         SPIN_KINDS.map(([k, l]) => '<option value="' + k + '"' + (x.kind === k ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
@@ -825,15 +825,15 @@ window.WCRaid = (function () {
         '<button type="button" class="btn sm" data-set="down:' + i + '"' + (i === d.bosses.length - 1 ? " disabled" : "") + ' aria-label="' + esc(b.name) + ' 아래로">↓</button>' +
         '<button type="button" class="btn sm" data-set="open:' + i + '" aria-expanded="' + !!b.open + '">' + (b.open ? "접기" : "편집") + "</button>" +
         '<button type="button" class="btn sm" data-set="del:' + i + '"' + (d.bosses.length <= 1 ? " disabled" : "") + ">삭제</button></span>" +
-        '<span class="bexp">' + statTxt + " · 평균 공격력 " + (isFinite(exp) ? exp : "?") + " / HP " + (isFinite(hp) ? hp : "?") + level + " · 보상 " + esc(b.reward) + "점" + (b.event ? " · 룰렛" : "") + "</span></div>";
+        '<span class="bexp">' + statTxt + " · 평균 공격력 " + (isFinite(exp) ? exp : "?") + " / HP " + (isFinite(hp) ? hp : "?") + level + " · 보상 " + esc(b.reward) + "점" + (b.event ? " · 돌발 이벤트" : "") + "</span></div>";
       if (b.open) h +=
         '<label class="f"><span>이름</span><input type="text" maxlength="60" ' + f("name") + ' value="' + esc(b.name) + '"></label>' +
         '<label class="f"><span>설명 (모두에게 보임)</span><textarea rows="3" maxlength="300" ' + f("desc") + ">" + esc(b.desc) + "</textarea></label>" +
         '<div class="f-row">' + num("hp", "보스 HP") + num("reward", "격파 보상 점수") + "</div>" +
         '<div class="f"><span>판정 스탯 (공격력 = 고른 스탯의 합)</span><div class="checks">' + STATS.map((s) =>
           '<label class="chk"><input type="checkbox" ' + f("stat." + s.key) + (b.stats.includes(s.key) ? " checked" : "") + '><span style="color:' + s.color + '">' + s.label + "</span></label>").join("") + "</div></div>" +
-        '<div class="f"><label class="chk"><input type="checkbox" ' + f("event") + (b.event ? " checked" : "") + "><span>돌발 이벤트 (룰렛)</span></label>" +
-        (b.event ? "<small>마감 뒤 결과 공개 전에 룰렛이 터져요. 룰렛 칸은 위의 '돌발 이벤트 룰렛'에서 정해요.</small>" : "") + "</div>" +
+        '<div class="f"><label class="chk"><input type="checkbox" ' + f("event") + (b.event ? " checked" : "") + "><span>돌발 이벤트</span></label>" +
+        (b.event ? "<small>마감 뒤 결과 공개 전에 돌발 이벤트가 터져요. 칸은 위의 '돌발 이벤트'에서 정해요.</small>" : "") + "</div>" +
         '<label class="f"><span>힌트 (진행자가 "힌트 공개"를 누르면 보임)</span><input type="text" maxlength="200" ' + f("hint") + ' value="' + esc(b.hint) + '"></label>' +
         '<label class="f"><span>결과 공개 때 설명</span><textarea rows="3" maxlength="300" ' + f("reveal") + ">" + esc(b.reveal) + "</textarea></label>";
       h += "</div>";
@@ -914,7 +914,7 @@ window.WCRaid = (function () {
     cfg.roulette = [];
     for (let i = 0; i < d.roulette.length; i++) {
       const x = d.roulette[i], v = x.kind === "none" ? 0 : toInt(x.value);
-      if (!Number.isInteger(v)) { toast("룰렛 " + (i + 1) + "번 칸: 정수를 적어 주세요"); return; }
+      if (!Number.isInteger(v)) { toast("돌발 이벤트 " + (i + 1) + "번 칸: 정수를 적어 주세요"); return; }
       cfg.roulette.push({ kind: x.kind, value: v });
     }
     for (let pi = 0; pi < 2; pi++) {
@@ -1031,7 +1031,7 @@ window.WCRaid = (function () {
     if (B.enabled !== on) { B.setEnabled(on); sfxKey = curSfxKey(); }   // 켠 순간 지난 효과음은 다시 안 냄
     const key = curSfxKey();
     if (key && key !== sfxKey) {
-      if (key[0] === "d") { if (rolling()) B.sfx("land", (g.rollAt + ROLL_MS - now()) / 1000); }   // 룰렛이 멈추는 순간에 맞춰
+      if (key[0] === "d") { if (rolling()) B.sfx("land", (g.rollAt + ROLL_MS - now()) / 1000); }   // 돌발 이벤트가 멈추는 순간에 맞춰
       else {
         // 게이지가 차는 동안 점점 빨라지는 타격 + 올라가는 소리, 끝에 격파/실패 효과음, 그 뒤 격파·전멸 곡
         const win = (g.results[g.round] || []).some((x) => x.cleared);

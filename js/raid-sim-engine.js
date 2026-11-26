@@ -2,9 +2,9 @@
 // 관리 화면 미리보기(admin.html?demo=1)의 보스 레이드 탭에서 브라우저가 직접 씁니다. Supabase 판정은 supabase/raid-sim.sql (규칙이 같아야 합니다).
 //   캐릭터 스탯 5개: 체력 · 지력 · 친화력 · 멘탈 · 운
 //   공격력 = 판정 스탯 합 (+돌발 이벤트 주사위). 보스 HP 이상이면 격파 → 보상 점수.
-//   돌발 이벤트 룰렛: 진행자가 정한 칸(config.roulette, 2~10칸) 중 하나. 칸 효과 kind: power(공격력 ±value) · clear(격파하면 +value점) · fail(실패 시 +value점) · none
+//   돌발 이벤트: 진행자가 정한 칸(config.roulette, 2~10칸) 중 하나. 칸 효과 kind: power(공격력 ±value) · clear(격파하면 +value점) · fail(실패 시 +value점) · none
 //   운: 운이 높을수록 아래쪽 칸이 잘 나옵니다. k번째 칸의 가중치 = r^(k-1), r = (1 + luckPower/100)^t, t = (운 − 스탯 최소) / (스탯 최대 − 스탯 최소).
-//   연습 라운드: 0번 라운드(연습 1 config.practiceBoss · 연습 2 config.practiceBoss2). 룰렛은 event 대로(기본: 연습 1 없음 · 연습 2 있음), 출전 기록과 총점에는 들어가지 않습니다.
+//   연습 라운드: 0번 라운드(연습 1 config.practiceBoss · 연습 2 config.practiceBoss2). 돌발 이벤트는 event 대로(기본: 연습 1 없음 · 연습 2 있음), 출전 기록과 총점에는 들어가지 않습니다.
 //   출전: 라운드마다 조에서 1명. 한 사람 최대 2번 (조원 6명 미만인 조는 3번), 입장한 조원이 모두 다 썼으면 가장 적게 나간 사람.
 //   라운드 공격력 1위 조는 MVP 점수. 순위는 총점, 같으면 격파 횟수, 그것도 같으면 같은 등수 (js/raid.js scoreboard).
 (function (root) {
@@ -67,7 +67,7 @@
     const t = (cfg || DEFAULT_CONFIG).statTotal, n = KEYS.length;
     return Object.fromEntries(KEYS.map((k, i) => [k, Math.floor(t / n) + (i < t % n ? 1 : 0)]));
   }
-  // 돌발 이벤트 룰렛: 운이 높을수록 아래쪽 칸 쪽으로 기울어짐. 1부터 시작하는 칸 번호를 돌려줌
+  // 돌발 이벤트: 운이 높을수록 아래쪽 칸 쪽으로 기울어짐. 1부터 시작하는 칸 번호를 돌려줌
   function luckWeights(cfg, luck) {
     const span = cfg.statMax - cfg.statMin, n = (cfg.roulette || []).length;
     const t = span > 0 ? Math.min(1, Math.max(0, ((Number(luck) || 0) - cfg.statMin) / span)) : 0;
@@ -100,8 +100,8 @@
     if (typeof c.infoTitle !== "string" || c.infoTitle.length > 60) return "i 창 제목은 60자까지예요";
     if (!Array.isArray(c.infoSections) || c.infoSections.length > 12 ||
       c.infoSections.some((x) => !x || typeof x.title !== "string" || !x.title.trim() || x.title.length > 40 || typeof x.body !== "string" || x.body.length > 800)) return "i 창은 12칸까지, 칸 제목 40자 · 내용 800자까지예요";
-    if (!Array.isArray(c.roulette) || c.roulette.length < 2 || c.roulette.length > 10) return "룰렛 칸은 2~10개예요";
-    if (c.roulette.some((x) => !x || typeof x !== "object" || !SPIN_KINDS.includes(x.kind) || !isInt(x.value, -50, 50))) return "룰렛 칸의 효과 값은 -50~50이에요";
+    if (!Array.isArray(c.roulette) || c.roulette.length < 2 || c.roulette.length > 10) return "돌발 이벤트 칸은 2~10개예요";
+    if (c.roulette.some((x) => !x || typeof x !== "object" || !SPIN_KINDS.includes(x.kind) || !isInt(x.value, -50, 50))) return "돌발 이벤트 칸의 효과 값은 -50~50이에요";
     if (!Array.isArray(c.bossPool) || c.bossPool.length > POOL_MAX) return "보스 목록은 " + POOL_MAX + "명까지예요";
     if (c.bossPool.length) { const e = checkBosses(c.bossPool, POOL_MAX); if (e) return "보스 목록 " + e; }
     return checkBoss(Object.assign({ reward: 3, event: false }, c.practiceBoss, { diceLow: 0, diceHigh: 0 }), "연습 보스 1: ") ||
@@ -174,7 +174,7 @@
     return !mates.some((x) => x < cap) && n === Math.min(...mates);
   }
   const charOf = (S, p) => p.char || Object.assign(defaultStats(S.config), { seed: p.seed || 1, isDefault: true });
-  // 0번 라운드 = 연습 보스 (점수는 보여 주기만). game.prac 2 이면 연습 보스 2. 룰렛은 event 대로 (없으면 연습 1 없음 · 연습 2 있음)
+  // 0번 라운드 = 연습 보스 (점수는 보여 주기만). game.prac 2 이면 연습 보스 2. 돌발 이벤트는 event 대로 (없으면 연습 1 없음 · 연습 2 있음)
   const bossAt = (S, r) => { if (r) return S.bosses[r - 1]; const two = !!S.game && S.game.prac === 2;
     return Object.assign({ reward: 3, event: two }, two ? S.config.practiceBoss2 : S.config.practiceBoss, { diceLow: 0, diceHigh: 0 }); };
   // 회의 타이머: 연습 라운드(0)는 따로
@@ -199,7 +199,7 @@
     const rows = S.teams.map((_, t) => {
       const k = pickOf(S, r, t), p = S.people[k.pid], c = charOf(S, p);
       const base = b.stats.reduce((n, s) => n + (c[s] || 0), 0);
-      // 돌발 이벤트: 운으로 기울어진 룰렛 (dice = 나온 칸 번호, effect = 그 칸의 효과)
+      // 돌발 이벤트: 운으로 기울어진 돌발 이벤트 (dice = 나온 칸 번호, effect = 그 칸의 효과)
       let dice = null, bonus = 0, rolls = null, effect = null;
       if (b.event) { dice = rollSpin(cfg, c.luck); rolls = [dice]; effect = clone(cfg.roulette[dice - 1]); bonus = effect.kind === "power" ? effect.value : 0; }
       const power = base + bonus, cleared = power >= b.hp;
@@ -270,7 +270,7 @@
     close(S) { if (S.game.phase !== "meeting") return "회의 중에만 마감할 수 있어요"; closeRound(S); },
     roll(S) {
       const g = S.game, b = bossAt(S, g.round);
-      if (g.phase !== "closed") return "마감한 뒤에 룰렛을 돌릴 수 있어요";
+      if (g.phase !== "closed") return "마감한 뒤에 돌발 이벤트를 돌릴 수 있어요";
       if (!b || !b.event) return "이번 보스는 돌발 이벤트가 없어요";
       Object.assign(g, { phase: "rolled", rollAt: Date.now() });
     },
@@ -282,7 +282,7 @@
         if (!Number.isInteger(v) || v < 0 || v > 2 || (v === 2 && g.round === 0)) return "그 화면은 없어요";
         g.view = v; return;
       }
-      if (g.phase === "closed" && b && b.event) return "돌발 이벤트 라운드예요. 먼저 \"룰렛 돌리기\"를 눌러 주세요";
+      if (g.phase === "closed" && b && b.event) return "돌발 이벤트 라운드예요. 먼저 \"돌발 이벤트 돌리기\"를 눌러 주세요";
       if (g.phase !== "closed" && g.phase !== "rolled") return "마감한 뒤에 공개할 수 있어요";
       g.phase = "revealed"; g.view = 0;
     },
