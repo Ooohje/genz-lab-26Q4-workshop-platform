@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126j";
+  const V = "20261126k";
   // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
   const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
@@ -743,7 +743,7 @@ window.WCRaid = (function () {
       roulette: (RULES.roulette || []).map((x) => ({ kind: x.kind, value: String(x.value) })),
       texts: { joinShort: RULES.joinShort || "", lobbyTitle: RULES.lobbyTitle || "", lobbySub: RULES.lobbySub || "", rulesTitle: RULES.rulesTitle || "", rulesLines: (RULES.rulesLines || []).join("\n"),
         infoTitle: RULES.infoTitle || "", infoText: infoToText(RULES.infoSections || []) },
-      practice: [RULES.practiceBoss, RULES.practiceBoss2].map((p) => { p = p || {}; return { name: p.name || "", desc: p.desc || "", hp: String(p.hp == null ? 10 : p.hp), reward: String(p.reward == null ? 3 : p.reward), stats: (p.stats || []).slice(), hint: p.hint || "", reveal: p.reveal || "" }; }) };
+      practice: [RULES.practiceBoss, RULES.practiceBoss2].map((p, i) => { p = p || {}; return { name: p.name || "", desc: p.desc || "", hp: String(p.hp == null ? 10 : p.hp), reward: String(p.reward == null ? 3 : p.reward), event: p.event == null ? i === 1 : !!p.event, stats: (p.stats || []).slice(), hint: p.hint || "", reveal: p.reveal || "" }; }) };
   }
   // 보스 목록 초안: 지금 출전 보스가 순서대로 위에(on), 그 아래 보스 목록의 나머지(off). 같은 이름이면 출전 보스 쪽 내용
   const POOL_MAX = 30, LINEUP_MAX = 20;
@@ -787,13 +787,14 @@ window.WCRaid = (function () {
       '<label class="f"><span>창 제목</span><input type="text" maxlength="60" ' + tf("infoTitle") + ' placeholder="' + esc(DEFAULT_INFO_TITLE) + '" value="' + esc(T.infoTitle) + '"></label>' +
       '<label class="f"><span>내용</span><textarea rows="12" ' + tf("infoText") + ' placeholder="' + esc(infoToText(defaultInfoSections())) + '">' + esc(T.infoText) + "</textarea></label>" +
       '<div class="row left"><button type="button" class="btn sm" data-set="infoFill">기본 i 창 문구를 불러와서 고치기</button></div></section>';
-    h += '<section class="panel"><h2>연습 보스</h2><p class="small">규칙 설명 다음에 진행자가 "연습 보스 1 시작" → "연습 보스 2 시작" 순서로 두 판 연습해요(건너뛰고 본게임으로 가도 돼요). 타이머 없이 진행자가 "마감하기"를 눌러 넘기고, 룰렛은 항상 터져요. 점수는 본게임처럼 계산해서 보여 주지만(연습 2 뒤에는 연습 합계도), 실제 총점과 출전 기록에는 들어가지 않아요.</p>';
+    h += '<section class="panel"><h2>연습 보스</h2><p class="small">규칙 설명 다음에 진행자가 "연습 보스 1 시작" → "연습 보스 2 시작" 순서로 두 판 연습해요(건너뛰고 본게임으로 가도 돼요). 타이머 없이 진행자가 "마감하기"를 눌러 넘겨요. 룰렛은 아래 체크대로예요(기본: 연습 1 없음, 연습 2 있음). 점수는 본게임처럼 계산해서 보여 주지만(연습 2 뒤에는 연습 합계도), 실제 총점과 출전 기록에는 들어가지 않아요.</p>';
     d.practice.forEach((P, pi) => { const pf = (k) => 'data-f="p.' + pi + "." + k + '"';
     h += '<div class="bcard"><div class="small"><b>연습 보스 ' + (pi + 1) + "</b></div>" +
       '<label class="f"><span>이름</span><input type="text" maxlength="60" ' + pf("name") + ' value="' + esc(P.name) + '"></label>' +
       '<label class="f"><span>설명 (모두에게 보임)</span><textarea rows="2" maxlength="300" ' + pf("desc") + ">" + esc(P.desc) + "</textarea></label>" +
       '<div class="f-row"><label class="f"><span>보스 HP</span><input type="number" inputmode="numeric" step="1" ' + pf("hp") + ' value="' + esc(P.hp) + '"></label>' +
         '<label class="f"><span>보상 점수 (보여 주기만)</span><input type="number" inputmode="numeric" step="1" ' + pf("reward") + ' value="' + esc(P.reward) + '"></label></div>' +
+        '<div class="f"><label class="chk"><input type="checkbox" ' + pf("event") + (P.event ? " checked" : "") + "><span>돌발 이벤트 (룰렛)</span></label></div>" +
       '<div class="f"><span>판정 스탯 (공격력 = 고른 스탯의 합)</span><div class="checks">' + STATS.map((st) =>
         '<label class="chk"><input type="checkbox" ' + pf("stat." + st.key) + (P.stats.includes(st.key) ? " checked" : "") + '><span style="color:' + st.color + '">' + st.label + "</span></label>").join("") + "</div></div>" +
       '<label class="f"><span>힌트 (진행자가 "힌트 공개"를 누르면 보임)</span><input type="text" maxlength="200" ' + pf("hint") + ' value="' + esc(P.hint) + '"></label>' +
@@ -860,6 +861,7 @@ window.WCRaid = (function () {
       const P = d.practice[Number(path[1])];
       if (!P) return false;
       if (path[2] === "stat") P.stats = KEYS.filter((k) => (k === path[3] ? el.checked : P.stats.includes(k)));
+      else if (path[2] === "event") P.event = el.checked;
       else P[path[2]] = el.value;
     } else {
       const b = d.bosses[Number(path[1])];
@@ -926,7 +928,7 @@ window.WCRaid = (function () {
       if (!Number.isInteger(php)) { toast("연습 보스 " + (pi + 1) + ": HP에 정수를 적어 주세요"); return; }
       if (!Number.isInteger(prw)) { toast("연습 보스 " + (pi + 1) + ": 보상 점수에 정수를 적어 주세요"); return; }
       if (!P.stats.length) { toast("연습 보스 " + (pi + 1) + ": 판정 스탯을 1개 이상 골라 주세요"); return; }
-      cfg[pi ? "practiceBoss2" : "practiceBoss"] = { name: String(P.name).trim(), desc: String(P.desc).trim(), hp: php, reward: prw, stats: P.stats.slice(), hint: String(P.hint).trim(), reveal: String(P.reveal).trim() };
+      cfg[pi ? "practiceBoss2" : "practiceBoss"] = { name: String(P.name).trim(), desc: String(P.desc).trim(), hp: php, reward: prw, event: !!P.event, stats: P.stats.slice(), hint: String(P.hint).trim(), reveal: String(P.reveal).trim() };
     }
     const T = d.texts, lines = String(T.rulesLines).split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
     if (lines.length > 12) { toast("규칙은 12줄까지예요"); return; }
@@ -940,10 +942,10 @@ window.WCRaid = (function () {
       infoTitle: String(T.infoTitle).trim(), infoSections: info });
     const textChanged = ["joinShort", "lobbyTitle", "lobbySub", "rulesTitle", "infoTitle"].some((k) => cfg[k] !== (RULES[k] || "")) || JSON.stringify(lines) !== JSON.stringify(RULES.rulesLines || []) ||
       JSON.stringify(info) !== JSON.stringify(RULES.infoSections || []);
-    const pOut = (p) => { p = p || {}; return { name: p.name, desc: p.desc, hp: p.hp, reward: p.reward == null ? 3 : p.reward, stats: p.stats, hint: p.hint, reveal: p.reveal }; };
+    const pOut = (p, i) => { p = p || {}; return { name: p.name, desc: p.desc, hp: p.hp, reward: p.reward == null ? 3 : p.reward, event: p.event == null ? i === 1 : !!p.event, stats: p.stats, hint: p.hint, reveal: p.reveal }; };
     const cfgChanged = textChanged || CFG_FIELDS.some((f) => cfg[f.k] !== RULES[f.k]) ||
       JSON.stringify(cfg.roulette) !== JSON.stringify((RULES.roulette || []).map((x) => ({ kind: x.kind, value: x.value }))) ||
-      JSON.stringify([cfg.practiceBoss, cfg.practiceBoss2]) !== JSON.stringify([pOut(RULES.practiceBoss), pOut(RULES.practiceBoss2)]) ||
+      JSON.stringify([cfg.practiceBoss, cfg.practiceBoss2]) !== JSON.stringify([pOut(RULES.practiceBoss, 0), pOut(RULES.practiceBoss2, 1)]) ||
       JSON.stringify(pool) !== JSON.stringify((RULES.bossPool || []).map(bossOut));
     const bossChanged = JSON.stringify(bosses) !== JSON.stringify(BOSSES.map(bossOut));
     if (!cfgChanged && !bossChanged) { setDraft = null; toast("바뀐 내용이 없어요"); return; }

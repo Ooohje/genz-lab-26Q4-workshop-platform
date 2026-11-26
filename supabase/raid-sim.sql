@@ -12,7 +12,7 @@
 --   공격력 = 판정 스탯 합 (+돌발 이벤트 주사위). 보스 HP 이상이면 격파 → 보상 점수.
 --   돌발 이벤트 룰렛: 진행자가 정한 칸(config.roulette, 2~10칸) 중 하나. 칸 효과 kind: power(공격력 ±value) · clear(격파하면 +value점) · fail(실패 시 +value점) · none
 --   운: 운이 높을수록 아래쪽 칸이 잘 나옵니다. k번째 칸의 가중치 = r^(k-1), r = (1 + luckPower/100)^t, t = (운 − 스탯 최소) / (스탯 최대 − 스탯 최소).
---   연습 라운드: 0번 라운드. 연습 1 = config.practiceBoss, 연습 2 = config.practiceBoss2 (game.prac 1·2). 룰렛은 항상 터지고, 출전 기록과 총점에는 들어가지 않습니다.
+--   연습 라운드: 0번 라운드. 연습 1 = config.practiceBoss, 연습 2 = config.practiceBoss2 (game.prac 1·2). 룰렛은 연습 보스의 event 대로(기본: 연습 1 없음 · 연습 2 있음). 출전 기록과 총점에는 들어가지 않습니다.
 --     점수는 본게임처럼 계산해서 보여 줍니다(연습 보스의 reward, 없으면 3점). 연습 2를 시작할 때 연습 1 점수를 game.prac1 에 남겨 연습 합계를 보여 줍니다.
 --   타이머: 본게임 보스 회의(meetingSec)에만. 조 내 공유와 연습 라운드는 진행자가 눌러서 넘깁니다.
 --   config.bgm: 발표 화면 BGM 켜기/끄기 (관리 화면 버튼이 saveConfig 로 바꿈)
@@ -122,9 +122,9 @@ language sql immutable as $$
                         {"kind": "clear", "value": 1}, {"kind": "fail", "value": 1}, {"kind": "power", "value": 3}],
            "practiceBoss": {"name": "연습 보스: 월요일 아침 ''만원 지하철''",
                             "desc": "월요일 아침 8시, 지하철 문이 열리자 사람들이 밀려든다. 손잡이 하나 잡기도 힘든 이 전쟁을 버텨야 회사에 도착한다. 연습 판이니 부담 없이 붙어 보자!",
-                            "hp": 10, "reward": 3, "stats": ["hp", "luck"], "hint": "버티거나, 운 좋게 앉거나.",
+                            "hp": 10, "reward": 3, "event": false, "stats": ["hp", "luck"], "hint": "버티거나, 운 좋게 앉거나.",
                             "reveal": "만원 지하철을 이긴 건 끝까지 서서 버티는 체력, 그리고 마침 앞자리가 비는 운이었습니다. 머리를 써도 지하철은 빨리 오지 않아요."},
-           "practiceBoss2": {"name": "연습 보스: 점심 메뉴 ''아무거나요''", "desc": "점심시간 5분 전, 누군가 묻는다. \"오늘 뭐 먹을래요?\" 돌아오는 대답은 모두 \"아무거나요.\" 그런데 김치찌개는 어제 먹었고, 중식은 느끼하고, 샐러드는 배가 안 찬단다. 연습 판이니 부담 없이 붙어 보자!", "hp": 10, "reward": 3, "stats": ["intel", "social"], "hint": "''아무거나''에도 정답은 있다.", "reveal": "''아무거나''를 이긴 건 모두의 취향을 떠올려 메뉴를 두 개로 좁히는 지력, 그리고 \"그럼 여기 어때요?\" 하고 웃으며 묻는 친화력이었습니다. 체력으로 식당 앞까지 걸어가 봐도 메뉴는 정해지지 않아요."},
+           "practiceBoss2": {"name": "연습 보스: 점심 메뉴 ''아무거나요''", "desc": "점심시간 5분 전, 누군가 묻는다. \"오늘 뭐 먹을래요?\" 돌아오는 대답은 모두 \"아무거나요.\" 그런데 김치찌개는 어제 먹었고, 중식은 느끼하고, 샐러드는 배가 안 찬단다. 연습 판이니 부담 없이 붙어 보자!", "hp": 10, "reward": 3, "event": true, "stats": ["intel", "social"], "hint": "''아무거나''에도 정답은 있다.", "reveal": "''아무거나''를 이긴 건 모두의 취향을 떠올려 메뉴를 두 개로 좁히는 지력, 그리고 \"그럼 여기 어때요?\" 하고 웃으며 묻는 친화력이었습니다. 체력으로 식당 앞까지 걸어가 봐도 메뉴는 정해지지 않아요."},
            "joinShort": "", "lobbyTitle": "", "lobbySub": "", "rulesTitle": "", "rulesLines": [], "infoTitle": "", "infoSections": []}'::jsonb
     || jsonb_build_object('bossPool', public.raid_sim_default_bosses() || '[
     {"name":"무한 회의 루프 ''리:미팅''","desc":"회의가 끝나면 ''방금 회의를 정리하는 회의''가 소환된다. 벌써 세 번째 회의, 의자는 딱딱하고 결론은 또 다음 회의로 미뤄진다. 이 보스는 쓰러뜨리는 게 아니라 끝날 때까지 버텨야 사라진다.","hp":11,"reward":1,"event":false,"diceLow":-2,"diceHigh":3,"stats":["hp","mental"],"hint":"끝까지 남는 사람이 이긴다.","reveal":"끝없는 회의를 이긴 건 말솜씨가 아니라 버티는 힘이었습니다. 몇 시간째 이어지는 회의를 견딜 체력, 결론 없는 말들에 지치지 않을 멘탈이 필요했어요. 지력으로 정리해 보려 해도 회의는 또 다른 회의를 낳을 뿐이었습니다."},
@@ -189,9 +189,15 @@ begin
     return '보스 목록 ' || public.raid_sim_check_bosses(c->'bossPool', 30);
   end if;
   if jsonb_typeof(c->'practiceBoss') is distinct from 'object' or jsonb_typeof(c->'practiceBoss2') is distinct from 'object' then return '연습 보스 형식이 잘못됐어요'; end if;
-  return coalesce(replace(public.raid_sim_check_bosses(jsonb_build_array('{"reward": 3}'::jsonb || (c->'practiceBoss') || '{"event": true, "diceLow": 0, "diceHigh": 0}'::jsonb)), '1번 보스: ', '연습 보스 1: '),
-                  replace(public.raid_sim_check_bosses(jsonb_build_array('{"reward": 3}'::jsonb || (c->'practiceBoss2') || '{"event": true, "diceLow": 0, "diceHigh": 0}'::jsonb)), '1번 보스: ', '연습 보스 2: '));
+  return coalesce(replace(public.raid_sim_check_bosses(jsonb_build_array('{"reward": 3, "event": false}'::jsonb || (c->'practiceBoss') || '{"diceLow": 0, "diceHigh": 0}'::jsonb)), '1번 보스: ', '연습 보스 1: '),
+                  replace(public.raid_sim_check_bosses(jsonb_build_array('{"reward": 3, "event": true}'::jsonb || (c->'practiceBoss2') || '{"diceLow": 0, "diceHigh": 0}'::jsonb)), '1번 보스: ', '연습 보스 2: '));
 end $$;
+
+-- 연습 보스에 룰렛이 있는지 (event 가 없으면 연습 1 없음 · 연습 2 있음)
+create or replace function public.raid_sim_prac_event(cfg jsonb, p_prac text) returns boolean
+language sql immutable as $$
+  select coalesce((cfg->(case when p_prac = '2' then 'practiceBoss2' else 'practiceBoss' end)->>'event')::boolean, coalesce(p_prac, '1') = '2')
+$$;
 
 -- 보스 목록 확인. 문제가 없으면 null, 있으면 이유.
 drop function if exists public.raid_sim_check_bosses(jsonb);
@@ -387,7 +393,7 @@ begin
     into v_bosses from public.raid_sim_bosses b;
 
   -- 연습 보스 (0번 라운드, game.prac 번째)
-  v_practice := jsonb_build_object('name', v_pb->'name', 'desc', v_pb->'desc', 'hp', v_pb->'hp', 'reward', coalesce(v_pb->'reward', '3'::jsonb), 'event', true, 'nStats', jsonb_array_length(v_pb->'stats'))
+  v_practice := jsonb_build_object('name', v_pb->'name', 'desc', v_pb->'desc', 'hp', v_pb->'hp', 'reward', coalesce(v_pb->'reward', '3'::jsonb), 'event', public.raid_sim_prac_event(v_cfg, g->>'prac'), 'nStats', jsonb_array_length(v_pb->'stats'))
     || case when p_host or v_round > 0 or v_open_cur then jsonb_build_object('stats', v_pb->'stats', 'hint', v_pb->'hint', 'reveal', v_pb->'reveal')
             when coalesce((g->>'hint')::boolean, false) then jsonb_build_object('hint', v_pb->'hint')
             else '{}'::jsonb end;
@@ -498,8 +504,8 @@ declare
   v_rows jsonb := '[]'::jsonb; v_max integer; v_dr jsonb;
 begin
   if r = 0 then
-    -- 연습 보스: 룰렛 항상, 보상 없음
-    b.round := 0; b.name := cfg->v_pk->>'name'; b.hp := (cfg->v_pk->>'hp')::integer; b.reward := coalesce((cfg->v_pk->>'reward')::integer, 3); b.has_event := true;
+    -- 연습 보스: 룰렛은 event 대로, 점수는 보여 주기만
+    b.round := 0; b.name := cfg->v_pk->>'name'; b.hp := (cfg->v_pk->>'hp')::integer; b.reward := coalesce((cfg->v_pk->>'reward')::integer, 3); b.has_event := public.raid_sim_prac_event(cfg, s#>>'{game,prac}');
     b.stats := array(select jsonb_array_elements_text(cfg->v_pk->'stats'));
   else
     select * into b from public.raid_sim_bosses where round = r;
@@ -571,7 +577,7 @@ declare
   s jsonb; g jsonb; k text; err text := null;
   v_stage text; v_phase text; v_round integer; v_n integer;
   v_now bigint := public.raid_sim_ms();
-  v_cfg jsonb; v_new jsonb;
+  v_cfg jsonb; v_new jsonb; v_event boolean;
 begin
   select state into s from public.raid_sim_state where id = 1 for update;
   if s is null then
@@ -582,6 +588,9 @@ begin
   v_cfg := public.raid_sim_cfg();
   g := s->'game';
   v_stage := g->>'stage'; v_phase := g->>'phase'; v_round := coalesce((g->>'round')::integer, 0);
+  -- 이번 라운드에 돌발 이벤트(룰렛)가 있는지
+  v_event := case when v_round = 0 then public.raid_sim_prac_event(v_cfg, g->>'prac')
+                  else coalesce((select has_event from public.raid_sim_bosses where round = v_round), false) end;
 
   case p_op
     when 'state' then return jsonb_build_object('ok', true, 'view', public.raid_sim_view(s, true));
@@ -645,7 +654,7 @@ begin
       else s := public.raid_sim_close(s); end if;
     when 'roll' then
       if v_phase <> 'closed' then err := '마감한 뒤에 룰렛을 돌릴 수 있어요';
-      elsif v_round > 0 and not coalesce((select has_event from public.raid_sim_bosses where round = v_round), false) then err := '이번 보스는 돌발 이벤트가 없어요';
+      elsif not v_event then err := '이번 보스는 돌발 이벤트가 없어요';
       else s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'rolled', 'rollAt', v_now)); end if;
     when 'reveal' then
       -- p_arg 가 있으면(결과 공개 뒤): 발표 화면 결과 장 바꾸기 0 공격력 · 1 점수표 · 2 중간 집계 (연습은 0 · 1만)
@@ -653,7 +662,7 @@ begin
         if v_phase <> 'revealed' then err := '결과 공개 뒤에 넘길 수 있어요';
         elsif p_arg not between 0 and 2 or (p_arg = 2 and v_round = 0) then err := '그 화면은 없어요';
         else s := jsonb_set(s, '{game,view}', to_jsonb(p_arg)); end if;
-      elsif v_phase = 'closed' and (v_round = 0 or coalesce((select has_event from public.raid_sim_bosses where round = v_round), false)) then
+      elsif v_phase = 'closed' and v_event then
         err := '돌발 이벤트 라운드예요. 먼저 "룰렛 돌리기"를 눌러 주세요';
       elsif v_phase not in ('closed', 'rolled') then err := '마감한 뒤에 공개할 수 있어요';
       else s := jsonb_set(s, '{game}', s->'game' || '{"phase": "revealed", "view": 0}'::jsonb); end if;
@@ -713,8 +722,7 @@ begin
       elsif v_phase = 'rolled' then s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'closed', 'rollAt', null));
       elsif v_phase = 'revealed' and coalesce((g->>'view')::integer, 0) > 0 then s := jsonb_set(s, '{game,view}', '0');
       elsif v_phase = 'revealed' then
-        s := jsonb_set(s, '{game,phase}', (case when v_round = 0 or coalesce((select has_event from public.raid_sim_bosses where round = v_round), false)
-                                                then '"rolled"' else '"closed"' end)::jsonb);
+        s := jsonb_set(s, '{game,phase}', (case when v_event then '"rolled"' else '"closed"' end)::jsonb);
       elsif v_phase = 'final' then s := jsonb_set(s, '{game,phase}', '"revealed"');
       else err := '돌아갈 수 없어요'; end if;
     when 'reset' then
