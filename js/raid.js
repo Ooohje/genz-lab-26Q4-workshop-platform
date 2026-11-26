@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126k";
+  const V = "20261126l";
   // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
   const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
@@ -498,12 +498,12 @@ window.WCRaid = (function () {
       // 2장: 이번 라운드 점수표 (격파 몇 조 · 실패 몇 조 · 조마다 얻은 점수와 내역)
       if (view === 1) {
         const win = rows.filter((x) => x.cleared).length;
-        return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + " · " + rlabel() + '</div><div class="h score-h">이번 라운드 점수</div>' +
-          '<div class="tally"><span class="tw">격파 성공 <b>' + win + '</b>조</span><span class="tl">실패 <b>' + (rows.length - win) + "</b>조</span><span>" + "보상 " + b.reward + "점 · MVP " + sign(RULES.mvpBonus) + "점" + "</span>" + (game.round === 0 ? '<span class="prac-note">연습이라 실제 점수에는 안 들어가요</span>' : "") +
+        return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + " · " + (game.round === 0 ? "연습 " + pracNo() + " / 2" : rlabel()) + '</div><div class="h score-h">이번 라운드 점수</div>' +
+          '<div class="tally"><span class="tw">격파 성공 <b>' + win + '</b>조</span><span class="tl">실패 <b>' + (rows.length - win) + "</b>조</span><span>" + "보상 " + b.reward + "점 · MVP " + sign(RULES.mvpBonus) + "점" + "</span>" +
           (rows.some((x) => x.effect && (x.effect.kind === "clear" || x.effect.kind === "fail")) ? '<span class="roul-key"><b></b>룰렛 결과</span>' : "") + "</div></div>" +
           '<div class="score-grid glass' + (rows.length > 6 ? " cols" : "") + '" style="--rows:' + (rows.length > 6 ? Math.ceil(rows.length / 2) : rows.length) + '">' +
           sorted.map((x) => '<div class="sc-row' + (x.cleared ? " win" : "") + '"><b class="sc-team">' + TEAMS[x.team] + '</b><span class="sc-name">' + esc(x.name) + "</span>" +
-            '<span class="sc-out">' + (x.cleared ? "격파" : "실패") + '</span><span class="sc-parts">' + scoreParts(x, b) + '</span><b class="sc-pt">+' + x.points + "점" + pracSum(x) + "</b></div>").join("") + "</div></div>";
+            '<span class="sc-out">' + (x.cleared ? "격파" : "실패") + '</span><span class="sc-parts">' + scoreParts(x, b) + '</span><b class="sc-pt">+' + x.points + "점" + "</b></div>").join("") + "</div></div>";
       }
       // 3장: 중간 집계 (지금까지의 조별 총점)
       if (view === 2) return standingsHtml("중간 집계 · " + game.round + "라운드까지", "이번 라운드에 얻은 점수는 오른쪽에 따로 보여요. 최종 순위는 마지막에 공개돼요.");
@@ -525,12 +525,6 @@ window.WCRaid = (function () {
       scoreboard().slice().sort((a, c) => (a.rank === 1 ? 1 : 0) - (c.rank === 1 ? 1 : 0) || c.rank - a.rank).map((x) => '<div class="r' + x.rank + '"><b>' + TEAMS[x.team] + "</b><span>" + x.total + "점 · 격파 " + x.cleared + '회</span><div class="block glass">' + x.rank + "위</div></div>").join("") + "</div></div>";
   }
 
-  // 연습 2 점수표: 연습 1 + 연습 2 합계 (실제 점수에는 안 들어감)
-  function pracSum(x) {
-    if (game.round !== 0 || pracNo() !== 2 || !Array.isArray(game.prac1)) return "";
-    const p1 = game.prac1.find((y) => y.team === x.team);
-    return p1 ? '<small class="prac-sum">연습 합계 ' + ((p1.points || 0) + (x.points || 0)) + "점</small>" : "";
-  }
   // 점수표 한 줄의 내역: 격파 보상 · MVP · 룰렛(다른 색)
   function scoreParts(x, b) {
     const out = [x.cleared ? "격파 +" + b.reward : "격파 0"];
@@ -673,8 +667,7 @@ window.WCRaid = (function () {
         '<div class="php-t">' + (x.cleared ? "보스 HP " + b.hp + " → 0 · 격파!" : "보스 HP " + b.hp + " → " + (b.hp - x.power) + " 남음 · " + (b.hp - x.power) + "점만 더 있었으면!") + "</div>" +
         '<div class="muted"><b>' + esc(x.name) + "</b> 님 공격력 <b>" + x.power + "</b> / 보스 HP " + b.hp + "</div>" +
         '<div class="muted">판정 스탯 <b>' + esc(statLine(x, b)) + " = " + x.base + "</b>" + (x.effect ? " · " + esc(diceText(x)) : "") + "</div>" +
-        '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + (game.round === 0 ? ' <span class="muted">(연습)</span>' : "") + "</div>" +
-        (game.round === 0 && pracNo() === 2 && Array.isArray(game.prac1) && game.prac1.find((y) => y.team === x.team) ? '<div class="muted">연습 합계 <b>' + ((game.prac1.find((y) => y.team === x.team).points || 0) + x.points) + "점</b></div>" : "") + storyBox(x) + '<div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
+        '<div class="t">+' + x.points + "점" + (x.mvp ? " · MVP" : "") + "</div>" + storyBox(x) + '<div class="muted"><b>' + esc(myResultLine(x, b)) + "</b></div></div>" +
         (game.round && game.view === 2 ? "<h3>중간 집계 · " + game.round + "라운드까지</h3>" + rankHtml(p) : '<div class="muted">누적 점수와 순위는 중간 집계와 마지막에 공개돼요.</div>');
     }
     return "<h3>최종 순위</h3>" + rankHtml(p);
@@ -787,7 +780,7 @@ window.WCRaid = (function () {
       '<label class="f"><span>창 제목</span><input type="text" maxlength="60" ' + tf("infoTitle") + ' placeholder="' + esc(DEFAULT_INFO_TITLE) + '" value="' + esc(T.infoTitle) + '"></label>' +
       '<label class="f"><span>내용</span><textarea rows="12" ' + tf("infoText") + ' placeholder="' + esc(infoToText(defaultInfoSections())) + '">' + esc(T.infoText) + "</textarea></label>" +
       '<div class="row left"><button type="button" class="btn sm" data-set="infoFill">기본 i 창 문구를 불러와서 고치기</button></div></section>';
-    h += '<section class="panel"><h2>연습 보스</h2><p class="small">규칙 설명 다음에 진행자가 "연습 보스 1 시작" → "연습 보스 2 시작" 순서로 두 판 연습해요(건너뛰고 본게임으로 가도 돼요). 타이머 없이 진행자가 "마감하기"를 눌러 넘겨요. 룰렛은 아래 체크대로예요(기본: 연습 1 없음, 연습 2 있음). 점수는 본게임처럼 계산해서 보여 주지만(연습 2 뒤에는 연습 합계도), 실제 총점과 출전 기록에는 들어가지 않아요.</p>';
+    h += '<section class="panel"><h2>연습 보스</h2><p class="small">규칙 설명 다음에 진행자가 "연습 보스 1 시작" → "연습 보스 2 시작" 순서로 두 판 연습해요(건너뛰고 본게임으로 가도 돼요). 타이머 없이 진행자가 "마감하기"를 눌러 넘겨요. 룰렛은 아래 체크대로예요(기본: 연습 1 없음, 연습 2 있음). 점수표는 본게임과 똑같이 보여 주지만 실제 총점과 출전 기록에는 들어가지 않아요.</p>';
     d.practice.forEach((P, pi) => { const pf = (k) => 'data-f="p.' + pi + "." + k + '"';
     h += '<div class="bcard"><div class="small"><b>연습 보스 ' + (pi + 1) + "</b></div>" +
       '<label class="f"><span>이름</span><input type="text" maxlength="60" ' + pf("name") + ' value="' + esc(P.name) + '"></label>' +
