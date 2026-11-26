@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126m";
+  const V = "20261126o";
   // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
   const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
@@ -993,12 +993,42 @@ window.WCRaid = (function () {
   // 켜기/끄기는 관리 화면 버튼 → config.bgm. 브라우저 정책상 발표 화면을 한 번은 클릭해야 소리가 나요(그 전에는 안내 표시)
   const bgmBlocked = () => !!(window.RaidSimBgm && window.RaidSimBgm.blocked);
   if (window.RaidSimBgm) window.RaidSimBgm.onState = () => invalidate();
+  // 발표 화면이 여러 개(탭 · 다른 컴퓨터) 열려 있으면 가장 마지막에 클릭한 발표 화면 하나만 소리를 냄.
+  // Supabase Realtime presence 로 발표 화면끼리 "마지막 클릭 시각"을 나눔 (서버에 저장하지 않음). 연결이 안 되면 예전처럼 각자 냄
+  const bgmMe = Math.random().toString(36).slice(2, 10);
+  let bgmCh = null, bgmClaim = 0, bgmOwner = null;
+  function bgmPresence() {
+    if (bgmCh || !SB || !SB.channel) return;
+    try {
+      bgmCh = SB.channel("raid-bgm-screens", { config: { presence: { key: bgmMe } } });
+      bgmCh.on("presence", { event: "sync" }, () => {
+        let best = null;
+        Object.entries(bgmCh.presenceState() || {}).forEach(([id, list]) => (list || []).forEach((p) => {
+          const at = Number(p && p.at) || 0;
+          if (at > 0 && (!best || at > best.at || (at === best.at && id > best.id))) best = { id, at };
+        }));
+        const owner = best ? best.id : null;
+        if (owner !== bgmOwner) { bgmOwner = owner; invalidate(); }
+      }).subscribe((st) => { if (st === "SUBSCRIBED") bgmCh.track({ at: bgmClaim }); });
+    } catch (e) { bgmCh = null; }
+  }
+  // 이 발표 화면을 클릭(또는 키 입력)하면 소리를 가져옴
+  ["pointerdown", "keydown"].forEach((ev) => window.addEventListener(ev, () => {
+    if (!mounts.some((m) => m.kind === "screen")) return;
+    bgmClaim = Date.now() + clockOffset; bgmOwner = bgmMe;
+    if (bgmCh) bgmCh.track({ at: bgmClaim });
+    invalidate();
+  }, true));
+  const bgmHere = () => !bgmOwner || bgmOwner === bgmMe;   // 이 화면이 소리 낼 차례인지
+  const bgmElsewhere = () => !!RULES.bgm && !bgmHere();
   let sfxKey = "", afterTrack = "", afterAt = 0;
   const curSfxKey = () => !game ? "" : game.phase === "revealed" ? "r" + game.round : game.phase === "rolled" ? "d" + game.round : "";
   function syncBgm() {
     const B = window.RaidSimBgm, g = game;
     if (!B || !mounts.some((m) => m.kind === "screen")) return;
-    if (B.enabled !== !!RULES.bgm) { B.setEnabled(!!RULES.bgm); sfxKey = curSfxKey(); }   // 켠 순간 지난 효과음은 다시 안 냄
+    bgmPresence();
+    const on = !!RULES.bgm && bgmHere();
+    if (B.enabled !== on) { B.setEnabled(on); sfxKey = curSfxKey(); }   // 켠 순간 지난 효과음은 다시 안 냄
     const key = curSfxKey();
     if (key && key !== sfxKey) {
       if (key[0] === "d") { if (rolling()) B.sfx("land", (g.rollAt + ROLL_MS - now()) / 1000); }   // 룰렛이 멈추는 순간에 맞춰
@@ -1044,7 +1074,8 @@ window.WCRaid = (function () {
   // 발표 화면: 메인 관제가 '보스 레이드'일 때 워드클라우드 대신
   function screenMountHtml() {
     return '<div class="screen-only"><div class="proj-box"><div class="proj">' + (ready.state ? projHtml() : '<div class="pv pv-center"><div class="sub">' + esc(setupError || "불러오는 중…") + "</div></div>") + "</div></div>" +
-      (bgmBlocked() ? '<div class="bgm-float">♪ 화면을 한 번 클릭하면 BGM이 나와요</div>' : "") + "</div>";
+      (bgmElsewhere() ? '<div class="bgm-float">♪ BGM은 다른 발표 화면에서 나오는 중 · 여기서 들으려면 화면을 클릭</div>'
+        : bgmBlocked() ? '<div class="bgm-float">♪ 화면을 한 번 클릭하면 BGM이 나와요</div>' : "") + "</div>";
   }
   // 참여 화면: 내 휴대폰 (Knox ID 로 자동 입장)
   function phoneMountHtml() {
@@ -1279,6 +1310,8 @@ window.WCRaid = (function () {
     },
     // 발표 화면
     mountScreen(el) { mount(el, "screen"); render(); start(false); },
+    // 확인용: 발표 화면 BGM 담당 (owner = 지금 소리 내는 발표 화면)
+    get bgmState() { return { me: bgmMe, owner: bgmOwner, here: bgmHere(), connected: !!bgmCh }; },
     // 참여 화면: knoxId = 워크샵에 입장한 Knox ID
     mountPhone(el, opts) {
       myKnox = opts && opts.knoxId ? String(opts.knoxId).toLowerCase() : null;
