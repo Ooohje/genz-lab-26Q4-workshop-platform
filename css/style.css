@@ -474,6 +474,8 @@ body.screen { overflow: hidden; }
 .admin .board-team.full { border-color: #2E9E6B; }
 .admin .board-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 13px; }
 .admin .board-head b { font-size: 14px; font-weight: 700; }
+.admin .board-head span { margin-left: auto; }
+.admin .board-cc { padding: 1px 7px; border-radius: 999px; background: rgba(91, 127, 214, 0.18); color: #1F2540; font-style: normal; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .admin .board-names { display: flex; flex-wrap: wrap; gap: 5px; }
 .admin .who { display: inline-flex; flex-direction: column; align-items: flex-start; padding: 4px 8px; border: none; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 700; line-height: 1.25; color: #fff; cursor: pointer; }
 .admin .who small { font-size: 10px; font-weight: 500; opacity: 0.92; }

@@ -209,6 +209,8 @@
 
   // 출석 한눈에 보기: 조마다 작은 칸 하나, 이름 칩이 초록(참석)·빨강(미참석). 운영진 조는 뺍니다.
   // 이름을 누르면 Knox ID 를 복사합니다. 이름이 같은 사람은 Knox ID 를 함께 적습니다.
+  // 조 번호 → 담당 CC(Chief Crew). 담당이 바뀌면 여기만 고치면 됩니다.
+  const TEAM_CC = { 1: "민영", 2: "민영", 3: "수연", 4: "수연", 5: "영석", 6: "영석", 7: "용임", 8: "용임", 9: "제석", 10: "제석", 11: "수민", 12: "수민" };
   function renderBoard(people, staffTeams, total, joined, absent) {
     const board = $("board");
     if (!board) return;
@@ -229,9 +231,17 @@
       head.className = "board-head";
       const title = document.createElement("b");
       title.textContent = box.title;
+      head.appendChild(title);
+      if (TEAM_CC[box.no]) {
+        const cc = document.createElement("em");
+        cc.className = "board-cc";
+        cc.textContent = TEAM_CC[box.no] + "님";
+        cc.title = "담당 CC";
+        head.appendChild(cc);
+      }
       const count = document.createElement("span");
       count.textContent = here + "/" + members.length;
-      head.append(title, count);
+      head.appendChild(count);
       const names = document.createElement("div");
       names.className = "board-names";
       members.forEach((p) => {
