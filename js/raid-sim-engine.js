@@ -14,7 +14,7 @@
   const TEAMS = ["A조", "B조"];   // 명단이 없을 때 (6자리 연습판)
   const DEFAULT_NAMES = ["참여자 1", "참여자 2", "참여자 3", "참여자 4", "참여자 5", "참여자 6"];
   const SEATS = DEFAULT_NAMES.length;
-  const DEFAULT_CONFIG = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, mvpBonus: 1, luckPower: 35, bgm: false,
+  const DEFAULT_CONFIG = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, practiceMeetingSec: 60, mvpBonus: 1, luckPower: 35, bgm: false,
     roulette: [{ kind: "power", value: -2 }, { kind: "power", value: -1 }, { kind: "power", value: 1 }, { kind: "clear", value: 1 }, { kind: "fail", value: 1 }, { kind: "power", value: 3 }],
     practiceBoss: { name: "연습 보스: 월요일 아침 '만원 지하철'", desc: "월요일 아침 8시, 지하철 문이 열리자 사람들이 밀려든다. 손잡이 하나 잡기도 힘든 이 전쟁을 버텨야 회사에 도착한다. 연습 판이니 부담 없이 붙어 보자!",
       hp: 10, reward: 3, event: false, stats: ["hp", "luck"], hint: "버티거나, 운 좋게 앉거나.", reveal: "만원 지하철을 이긴 건 끝까지 서서 버티는 체력, 그리고 마침 앞자리가 비는 운이었습니다. 머리를 써도 지하철은 빨리 오지 않아요." },
@@ -90,6 +90,7 @@
     if (!isInt(c.statTotal, n * c.statMin, n * c.statMax)) return "스탯 합계는 " + n * c.statMin + "~" + n * c.statMax + "점이어야 해요 (스탯 " + n + "개 × 최소~최대)";
     if (!isInt(c.rerolls, 0, 10)) return "외형 랜덤 뽑기는 0~10번이에요";
     if (!isInt(c.meetingSec, 30, 1800)) return "회의 시간은 30~1800초예요";
+    if (!isInt(c.practiceMeetingSec, 10, 1800)) return "연습 보스 회의 시간은 10~1800초예요";
     if (typeof c.bgm !== "boolean") return "BGM 설정이 잘못됐어요";
     if (!isInt(c.mvpBonus, 0, 20)) return "MVP 점수는 0~20점이에요";
     if (!isInt(c.luckPower, 0, 100)) return "운 효과 세기는 0~100이에요 (0이면 운과 상관없이 모든 칸이 같은 확률)";
@@ -176,8 +177,8 @@
   // 0번 라운드 = 연습 보스 (점수는 보여 주기만). game.prac 2 이면 연습 보스 2. 룰렛은 event 대로 (없으면 연습 1 없음 · 연습 2 있음)
   const bossAt = (S, r) => { if (r) return S.bosses[r - 1]; const two = !!S.game && S.game.prac === 2;
     return Object.assign({ reward: 3, event: two }, two ? S.config.practiceBoss2 : S.config.practiceBoss, { diceLow: 0, diceHigh: 0 }); };
-  // 회의 타이머: 본게임 보스만 (연습은 진행자가 마감)
-  const deadlineOf = (S, r) => (r === 0 ? null : Date.now() + S.config.meetingSec * 1000);
+  // 회의 타이머: 연습 라운드(0)는 따로
+  const deadlineOf = (S, r) => Date.now() + (r === 0 ? S.config.practiceMeetingSec : S.config.meetingSec) * 1000;
   const editable = (g) => !g.locked && (g.stage === "make" || g.stage === "share");
 
   function lockCharacters(S) {

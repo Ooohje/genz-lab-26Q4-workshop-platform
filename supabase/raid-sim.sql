@@ -14,7 +14,7 @@
 --   운: 운이 높을수록 아래쪽 칸이 잘 나옵니다. k번째 칸의 가중치 = r^(k-1), r = (1 + luckPower/100)^t, t = (운 − 스탯 최소) / (스탯 최대 − 스탯 최소).
 --   연습 라운드: 0번 라운드. 연습 1 = config.practiceBoss, 연습 2 = config.practiceBoss2 (game.prac 1·2). 룰렛은 연습 보스의 event 대로(기본: 연습 1 없음 · 연습 2 있음). 출전 기록과 총점에는 들어가지 않습니다.
 --     점수는 본게임처럼 계산해서 보여 줍니다(연습 보스의 reward, 없으면 3점). 연습 2를 시작할 때 연습 1 점수를 game.prac1 에 남겨 연습 합계를 보여 줍니다.
---   타이머: 본게임 보스 회의(meetingSec)에만. 조 내 공유와 연습 라운드는 진행자가 눌러서 넘깁니다.
+--   타이머: 보스 회의에만 (본게임 meetingSec · 연습 practiceMeetingSec). 조 내 공유는 타이머 없이 진행자가 넘깁니다.
 --   config.bgm: 발표 화면 BGM 켜기/끄기 (관리 화면 버튼이 saveConfig 로 바꿈)
 --   출전: 라운드마다 조에서 1명. 한 사람 최대 2번 (조원 6명 미만인 조는 3번), 입장한 조원이 모두 다 썼으면 가장 적게 나간 사람.
 --   라운드 공격력 1위 조는 MVP 점수(mvpBonus). 순위는 총점, 같으면 격파 횟수, 그것도 같으면 같은 등수 (js/raid.js scoreboard).
@@ -117,7 +117,7 @@ $$;
 -- 기본 규칙. bossPool = 보스 목록 (기본 9명 + 예전 기본 보스 5명). 진행자가 이 중에서 출전 보스를 고릅니다.
 create or replace function public.raid_sim_default_config() returns jsonb
 language sql immutable as $$
-  select '{"statTotal": 25, "statMin": 1, "statMax": 10, "rerolls": 2, "meetingSec": 180, "mvpBonus": 1, "luckPower": 35, "bgm": false,
+  select '{"statTotal": 25, "statMin": 1, "statMax": 10, "rerolls": 2, "meetingSec": 180, "practiceMeetingSec": 60, "mvpBonus": 1, "luckPower": 35, "bgm": false,
            "roulette": [{"kind": "power", "value": -2}, {"kind": "power", "value": -1}, {"kind": "power", "value": 1},
                         {"kind": "clear", "value": 1}, {"kind": "fail", "value": 1}, {"kind": "power", "value": 3}],
            "practiceBoss": {"name": "연습 보스: 월요일 아침 ''만원 지하철''",
@@ -160,6 +160,7 @@ begin
   end if;
   if not public.raid_sim_is_int(c->'rerolls', 0, 10) then return '외형 랜덤 뽑기는 0~10번이에요'; end if;
   if not public.raid_sim_is_int(c->'meetingSec', 30, 1800) then return '회의 시간은 30~1800초예요'; end if;
+  if not public.raid_sim_is_int(c->'practiceMeetingSec', 10, 1800) then return '연습 보스 회의 시간은 10~1800초예요'; end if;
   if jsonb_typeof(c->'bgm') is distinct from 'boolean' then return 'BGM 설정이 잘못됐어요'; end if;
   if not public.raid_sim_is_int(c->'mvpBonus', 0, 20) then return 'MVP 점수는 0~20점이에요'; end if;
   if not public.raid_sim_is_int(c->'luckPower', 0, 100) then return '운 효과 세기는 0~100이에요 (0이면 운과 상관없이 모든 칸이 같은 확률)'; end if;
@@ -635,9 +636,9 @@ begin
         s := jsonb_set(s, '{game,results}', coalesce((select jsonb_object_agg(key, value) from jsonb_each(s#>'{game,results}')
                                                       where key::integer < p_arg), '{}'::jsonb));
         s := jsonb_set(s, '{storyDrafts}', coalesce(s->'storyDrafts', '{}'::jsonb) - ('r' || p_arg));
-        -- 연습(0)은 타이머 없음. p_data {"prac": 2} 이면 연습 보스 2
+        -- 회의 타이머: 연습(0)은 practiceMeetingSec. p_data {"prac": 2} 이면 연습 보스 2
         s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('round', p_arg, 'phase', 'meeting', 'hint', false, 'view', 0, 'locked', true,
-                                                                    'deadline', case when p_arg = 0 then null else v_now + (v_cfg->>'meetingSec')::integer * 1000 end)
+                                                                    'deadline', v_now + (v_cfg->>(case when p_arg = 0 then 'practiceMeetingSec' else 'meetingSec' end))::integer * 1000)
                                               || case when p_arg = 0 then jsonb_build_object('prac', case when p_data->>'prac' = '2' then 2 else 1 end,
                                                    -- 연습 합계용: 연습 1 끝나고 연습 2로 갈 때 연습 1 점수를 남김 (연습 2 다시면 그대로, 연습 1이면 지움)
                                                    'prac1', case when p_data->>'prac' is distinct from '2' then null
@@ -718,7 +719,7 @@ begin
         s := jsonb_set(s, '{picks}', coalesce((select jsonb_object_agg(key, value) from jsonb_each(s->'picks')
                                                where not ((substring(key from '^r(\d+)t\d+$'))::integer = v_round and coalesce((value->>'auto')::boolean, false))), '{}'::jsonb));
         s := jsonb_set(s, '{game,results}', coalesce(s#>'{game,results}', '{}'::jsonb) - v_round::text);
-        s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'meeting', 'deadline', case when v_round = 0 then null else v_now + (v_cfg->>'meetingSec')::integer * 1000 end));
+        s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'meeting', 'deadline', v_now + (v_cfg->>(case when v_round = 0 then 'practiceMeetingSec' else 'meetingSec' end))::integer * 1000));
       elsif v_phase = 'rolled' then s := jsonb_set(s, '{game}', s->'game' || jsonb_build_object('phase', 'closed', 'rollAt', null));
       elsif v_phase = 'revealed' and coalesce((g->>'view')::integer, 0) > 0 then s := jsonb_set(s, '{game,view}', '0');
       elsif v_phase = 'revealed' then

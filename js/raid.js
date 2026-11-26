@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126l";
+  const V = "20261126m";
   // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
   const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
@@ -24,7 +24,7 @@ window.WCRaid = (function () {
     { key: "luck", label: "운", desc: "예상 못 한 변수가 내 편이 되는 힘", color: "#C98A1B" },
   ];
   // 게임 규칙 (진행자가 "보스·규칙 설정" 탭에서 바꿈). Supabase(또는 js/raid-sim-engine.js)가 보내 줍니다.
-  const DEFAULT_RULES = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, mvpBonus: 1, luckPower: 35 };
+  const DEFAULT_RULES = { statTotal: 25, statMin: 1, statMax: 10, rerolls: 2, meetingSec: 180, practiceMeetingSec: 60, mvpBonus: 1, luckPower: 35 };
   let RULES = Object.assign({}, DEFAULT_RULES);
   const KEYS = STATS.map((s) => s.key);
   const LABEL = Object.fromEntries(STATS.map((s) => [s.key, s.label]));
@@ -723,7 +723,8 @@ window.WCRaid = (function () {
     { k: "statMin", label: "스탯 최소", unit: "점", rule: true },
     { k: "statMax", label: "스탯 최대", unit: "점", rule: true },
     { k: "rerolls", label: "외형 랜덤 뽑기", unit: "번", note: "캐릭터 만들 때 외형(머리·피부·액세서리)을 랜덤으로 다시 뽑을 수 있는 횟수" },
-    { k: "meetingSec", label: "보스 회의 시간", unit: "초", note: "본게임 보스 회의에만 타이머가 떠요. 조 내 공유와 연습 라운드는 진행자가 눌러서 넘겨요" },
+    { k: "meetingSec", label: "보스 회의 시간", unit: "초" },
+    { k: "practiceMeetingSec", label: "연습 보스 회의 시간", unit: "초", note: "연습 라운드에만 쓰는 회의 시간 (조 내 공유는 타이머 없이 진행자가 넘겨요)" },
     { k: "mvpBonus", label: "MVP 점수", unit: "점", note: "라운드 공격력 1위 조가 받는 점수" },
     { k: "luckPower", label: "운 효과 세기", unit: "", note: "운이 높을수록 룰렛의 아래쪽 칸이 잘 나오는 정도 (0~100). 0이면 운과 상관없이 모든 칸이 같은 확률" },
   ];
@@ -780,7 +781,7 @@ window.WCRaid = (function () {
       '<label class="f"><span>창 제목</span><input type="text" maxlength="60" ' + tf("infoTitle") + ' placeholder="' + esc(DEFAULT_INFO_TITLE) + '" value="' + esc(T.infoTitle) + '"></label>' +
       '<label class="f"><span>내용</span><textarea rows="12" ' + tf("infoText") + ' placeholder="' + esc(infoToText(defaultInfoSections())) + '">' + esc(T.infoText) + "</textarea></label>" +
       '<div class="row left"><button type="button" class="btn sm" data-set="infoFill">기본 i 창 문구를 불러와서 고치기</button></div></section>';
-    h += '<section class="panel"><h2>연습 보스</h2><p class="small">규칙 설명 다음에 진행자가 "연습 보스 1 시작" → "연습 보스 2 시작" 순서로 두 판 연습해요(건너뛰고 본게임으로 가도 돼요). 타이머 없이 진행자가 "마감하기"를 눌러 넘겨요. 룰렛은 아래 체크대로예요(기본: 연습 1 없음, 연습 2 있음). 점수표는 본게임과 똑같이 보여 주지만 실제 총점과 출전 기록에는 들어가지 않아요.</p>';
+    h += '<section class="panel"><h2>연습 보스</h2><p class="small">규칙 설명 다음에 진행자가 "연습 보스 1 시작" → "연습 보스 2 시작" 순서로 두 판 연습해요(건너뛰고 본게임으로 가도 돼요). 회의 타이머는 위의 "연습 보스 회의 시간"이에요. 룰렛은 아래 체크대로예요(기본: 연습 1 없음, 연습 2 있음). 점수표는 본게임과 똑같이 보여 주지만 실제 총점과 출전 기록에는 들어가지 않아요.</p>';
     d.practice.forEach((P, pi) => { const pf = (k) => 'data-f="p.' + pi + "." + k + '"';
     h += '<div class="bcard"><div class="small"><b>연습 보스 ' + (pi + 1) + "</b></div>" +
       '<label class="f"><span>이름</span><input type="text" maxlength="60" ' + pf("name") + ' value="' + esc(P.name) + '"></label>' +
