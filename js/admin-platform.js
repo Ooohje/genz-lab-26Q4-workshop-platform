@@ -107,6 +107,7 @@
 
     // 참가자 목록: 조마다 박스 하나 (조 번호 순, 미배정은 맨 끝). 박스 안은 이름 순.
     $("roster-note").textContent = "전체 " + counted.length + "명 중 참석 " + joined + "명 · 미참석 " + absent + "명" + (staffCount ? " (Chief Crew " + staffCount + "명 제외)" : "");
+    renderBoard(people, staffTeams, counted.length, joined, absent);
     const list = $("roster-list");
     // 추가 칸에 적는 중이면 목록을 다시 그리지 않습니다(15초마다 새로 읽을 때 글자가 지워지지 않게).
     const typing = document.activeElement;
@@ -190,6 +191,75 @@
       else { drafts[key] = { knox: row.knox_id, name: row.name }; render(); }
     });
     return form;
+  }
+
+  // 출석 한눈에 보기: 조마다 작은 칸 하나, 이름 칩이 초록(참석)·빨강(미참석). 운영진 조는 뺍니다.
+  // 이름을 누르면 Knox ID 를 복사합니다. 이름이 같은 사람은 Knox ID 를 함께 적습니다.
+  function renderBoard(people, staffTeams, total, joined, absent) {
+    const board = $("board");
+    if (!board) return;
+    $("board-note").textContent = "전체 " + total + "명 중 참석 " + joined + "명 · 미참석 " + absent + "명";
+    const nameCount = {};
+    people.forEach((p) => { nameCount[p.name] = (nameCount[p.name] || 0) + 1; });
+    board.innerHTML = "";
+    const boxes = roster.teams.filter((t) => !staffTeams.has(t.team_no)).map((t) => ({ no: t.team_no, title: t.name }));
+    if (people.some((p) => p.team_no == null)) boxes.push({ no: null, title: "미배정" });
+    boxes.forEach((box) => {
+      const members = people.filter((p) => p.team_no === box.no)
+        .sort((a, b) => (a.joined_at ? 0 : 1) - (b.joined_at ? 0 : 1) || a.name.localeCompare(b.name, "ko"));
+      if (!members.length) return;
+      const here = members.filter((p) => p.joined_at).length;
+      const cell = document.createElement("div");
+      cell.className = "board-team" + (here === members.length ? " full" : "");
+      const head = document.createElement("div");
+      head.className = "board-head";
+      const title = document.createElement("b");
+      title.textContent = box.title;
+      const count = document.createElement("span");
+      count.textContent = here + "/" + members.length;
+      head.append(title, count);
+      const names = document.createElement("div");
+      names.className = "board-names";
+      members.forEach((p) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "who " + (p.joined_at ? "in" : "out");
+        b.textContent = p.name;
+        if (nameCount[p.name] > 1) {
+          const id = document.createElement("small");
+          id.textContent = p.knox_id;
+          b.appendChild(id);
+        }
+        b.title = p.knox_id + " · " + (p.joined_at ? "참석" : "미참석") + " (누르면 Knox ID 복사)";
+        b.addEventListener("click", () => copyText(p.knox_id, p.name));
+        names.appendChild(b);
+      });
+      cell.append(head, names);
+      board.appendChild(cell);
+    });
+    if (!board.children.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "아직 명단이 없어요.";
+      board.appendChild(empty);
+    }
+  }
+
+  async function copyText(text, name) {
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { /* 아래 방법으로 다시 */ }
+    if (!ok) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      ta.remove();
+    }
+    if (ok) return ctx.toast(name + " 님의 Knox ID를 복사했어요 · " + text);
+    // 복사가 막힌 브라우저에서는 글자를 골라 둔 창을 띄워 직접 복사하게 합니다.
+    window.WC.askText(name + " 님의 Knox ID (자동 복사가 막혀 있어요. 아래 글자를 복사해 주세요)", text, 60);
   }
 
   // staff: 운영진 조(Chief Crew)는 출석을 세지 않으므로 색을 칠하지 않습니다.
