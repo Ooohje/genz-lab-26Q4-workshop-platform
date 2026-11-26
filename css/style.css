@@ -443,7 +443,10 @@ body.screen { overflow: hidden; }
 .admin .teambox { border-radius: 20px; overflow: hidden; background: rgba(255, 255, 255, 0.72); border: 1.5px solid var(--team, rgba(31, 37, 64, 0.2)); }
 .admin .teambox-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--team-bg, rgba(31, 37, 64, 0.08)); }
 .admin .teambox-head b { font-size: 18px; font-weight: 700; }
-.admin .teambox-head span { font-size: 14px; }
+.admin .teambox-head span { font-size: 14px; margin-left: auto; text-align: right; }
+.admin .team-del { flex: 0 0 auto; align-self: center; height: 28px; padding: 0 10px; border: 1.5px solid rgba(31, 37, 64, 0.25); border-radius: 999px; background: rgba(255, 255, 255, 0.7); color: #1F2540; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.admin .team-del:hover { border-color: #D64545; color: #D64545; }
+.admin .team-del:disabled { opacity: 0.5; cursor: default; }
 .admin .teambox .tr:first-of-type { border-top: none; }
 .admin .teambox .empty { padding: 16px; }
 .admin .teambox.c0 { --team: #5B7FD6; --team-bg: #DCE5F8; }
