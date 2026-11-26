@@ -372,6 +372,19 @@ Deno.serve(async (req) => {
         return json({ ok: true, session: next, ...(await loadRoster(db)) });
       }
 
+      // 조를 지웁니다. 조원은 명단에 남고 '미배정'이 되며(participants.team_no → null), 그 조가 받은 우수팀 표도 지워집니다.
+      // 표는 team_votes 의 외래 키(on delete cascade)가 지웁니다. 조원은 먼저 직접 미배정으로 옮깁니다.
+      case "team_delete": {
+        const team_no = Number.parseInt(String(body.team_no), 10);
+        if (!(team_no >= 1 && team_no <= 99)) return json({ error: "조 번호를 확인해 주세요" }, 400);
+        const moved = await db.from("participants").update({ team_no: null }).eq("team_no", team_no);
+        if (moved.error) throw new Error(moved.error.message);
+        const { error } = await db.from("teams").delete().eq("team_no", team_no);
+        if (error) throw new Error(error.message);
+        const next = await update({ roster_rev: (session.roster_rev ?? 0) + 1 });
+        return json({ ok: true, session: next, ...(await loadRoster(db)) });
+      }
+
       // ───────────── 플랫폼: 석식 투표 ─────────────
 
       case "dinner_reset": {

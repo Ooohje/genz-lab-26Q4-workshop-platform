@@ -137,6 +137,20 @@
         ? members.length + "명 · 출석 집계에서 제외"
         : members.length + "명 · 참석 " + here + " · 미참석 " + (members.length - here);
       head.append(title, count);
+      // 조 삭제: 조원은 명단에 남고 미배정이 됩니다. (미배정 칸에는 없음)
+      if (box.no != null) {
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "team-del";
+        del.textContent = "조 삭제";
+        del.addEventListener("click", async () => {
+          const msg = box.title + "를 삭제할까요?\n"
+            + (members.length ? "조원 " + members.length + "명은 명단에 남고 '미배정'으로 옮겨집니다.\n" : "")
+            + "이 조가 받은 우수팀 투표 표도 함께 지워집니다.";
+          if (await window.WC.ask(msg)) call("team_delete", { team_no: box.no }, del);
+        });
+        head.appendChild(del);
+      }
       el.appendChild(head);
       if (!members.length) {
         const none = document.createElement("div");
@@ -195,6 +209,8 @@
 
   // 출석 한눈에 보기: 조마다 작은 칸 하나, 이름 칩이 초록(참석)·빨강(미참석). 운영진 조는 뺍니다.
   // 이름을 누르면 Knox ID 를 복사합니다. 이름이 같은 사람은 Knox ID 를 함께 적습니다.
+  // 조 번호 → 담당 CC(Chief Crew). 담당이 바뀌면 여기만 고치면 됩니다.
+  const TEAM_CC = { 1: "민영", 2: "민영", 3: "수연", 4: "수연", 5: "영석", 6: "영석", 7: "용임", 8: "용임", 9: "제석", 10: "제석", 11: "수민", 12: "수민" };
   function renderBoard(people, staffTeams, total, joined, absent) {
     const board = $("board");
     if (!board) return;
@@ -215,9 +231,17 @@
       head.className = "board-head";
       const title = document.createElement("b");
       title.textContent = box.title;
+      head.appendChild(title);
+      if (TEAM_CC[box.no]) {
+        const cc = document.createElement("em");
+        cc.className = "board-cc";
+        cc.textContent = TEAM_CC[box.no] + "님";
+        cc.title = "담당 CC";
+        head.appendChild(cc);
+      }
       const count = document.createElement("span");
       count.textContent = here + "/" + members.length;
-      head.append(title, count);
+      head.appendChild(count);
       const names = document.createElement("div");
       names.className = "board-names";
       members.forEach((p) => {
@@ -524,6 +548,13 @@
       else if (action === "participant_update") person(extra.knox_id).team_no = extra.team_no;
       else if (action === "participant_delete") d.participants = d.participants.filter((p) => p.knox_id !== extra.knox_id);
       else if (action === "team_rename") d.teams.find((t) => t.team_no === extra.team_no).name = extra.name;
+      else if (action === "team_delete") {
+        d.teams = d.teams.filter((t) => t.team_no !== extra.team_no);
+        d.participants.forEach((p) => {
+          if (p.team_no === extra.team_no) p.team_no = null;
+          if (p.vote === extra.team_no) p.vote = null;
+        });
+      }
       else if (action === "dinner_reset") d.participants.forEach((p) => { p.dinner = null; });
       else if (action === "attendance_reset") d.participants.forEach((p) => { p.joined_at = null; });
       else if (action === "teamvote_reset") d.participants.forEach((p) => { p.vote = null; });

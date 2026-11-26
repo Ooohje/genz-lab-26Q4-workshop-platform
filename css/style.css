@@ -443,7 +443,10 @@ body.screen { overflow: hidden; }
 .admin .teambox { border-radius: 20px; overflow: hidden; background: rgba(255, 255, 255, 0.72); border: 1.5px solid var(--team, rgba(31, 37, 64, 0.2)); }
 .admin .teambox-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--team-bg, rgba(31, 37, 64, 0.08)); }
 .admin .teambox-head b { font-size: 18px; font-weight: 700; }
-.admin .teambox-head span { font-size: 14px; }
+.admin .teambox-head span { font-size: 14px; margin-left: auto; text-align: right; }
+.admin .team-del { flex: 0 0 auto; align-self: center; height: 28px; padding: 0 10px; border: 1.5px solid rgba(31, 37, 64, 0.25); border-radius: 999px; background: rgba(255, 255, 255, 0.7); color: #1F2540; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.admin .team-del:hover { border-color: #D64545; color: #D64545; }
+.admin .team-del:disabled { opacity: 0.5; cursor: default; }
 .admin .teambox .tr:first-of-type { border-top: none; }
 .admin .teambox .empty { padding: 16px; }
 .admin .teambox.c0 { --team: #5B7FD6; --team-bg: #DCE5F8; }
@@ -471,6 +474,8 @@ body.screen { overflow: hidden; }
 .admin .board-team.full { border-color: #2E9E6B; }
 .admin .board-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 13px; }
 .admin .board-head b { font-size: 14px; font-weight: 700; }
+.admin .board-head span { margin-left: auto; }
+.admin .board-cc { padding: 1px 7px; border-radius: 999px; background: rgba(91, 127, 214, 0.18); color: #1F2540; font-style: normal; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .admin .board-names { display: flex; flex-wrap: wrap; gap: 5px; }
 .admin .who { display: inline-flex; flex-direction: column; align-items: flex-start; padding: 4px 8px; border: none; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 700; line-height: 1.25; color: #fff; cursor: pointer; }
 .admin .who small { font-size: 10px; font-weight: 500; opacity: 0.92; }
