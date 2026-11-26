@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126g";
+  const V = "20261126h";
   // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
   const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
@@ -37,8 +37,8 @@ window.WCRaid = (function () {
   let PRACTICE = null;
   let STORY_DRAFTS = {};   // 회의 중에 미리 쓴 AI 서술 (진행자에게만 옴)   // 연습 보스 (0번 라운드)
   // 돌발 이벤트 룰렛: 칸마다 효과(kind, value), 문구는 효과대로 자동 (판정은 js/raid-sim-engine.js · supabase/raid-sim.sql)
-  const SPIN_KINDS = [["power", "공격력 ±N"], ["clear", "격파하면 +N점"], ["fail", "실패해도 +N점"], ["none", "효과 없음"]];
-  const effLabel = (e) => !e ? "" : e.kind === "power" ? "공격력 " + sign(e.value) : e.kind === "clear" ? "격파하면 " + sign(e.value) + "점" : e.kind === "fail" ? "실패해도 " + sign(e.value) + "점" : "효과 없음";
+  const SPIN_KINDS = [["power", "공격력 ±N"], ["clear", "격파하면 +N점"], ["fail", "실패 시 +N점"], ["none", "효과 없음"]];
+  const effLabel = (e) => !e ? "" : e.kind === "power" ? "공격력 " + sign(e.value) : e.kind === "clear" ? "격파하면 " + sign(e.value) + "점" : e.kind === "fail" ? "실패 시 " + sign(e.value) + "점" : "효과 없음";
   const effGood = (e) => !!e && e.kind !== "none" && e.value > 0;
   const spinRules = () => (RULES.roulette || []).map(effLabel).join(" · ");
 
@@ -526,7 +526,7 @@ window.WCRaid = (function () {
     const out = game.round === 0 ? [] : [x.cleared ? "격파 +" + b.reward : "격파 0"];
     if (x.mvp) out.push(game.round === 0 ? "공격력 1위" : "MVP " + sign(RULES.mvpBonus));
     let h = out.map((t) => "<span>" + t + "</span>").join("");
-    // 룰렛: 점수 효과(격파하면·실패해도)만 점수표에. 공격력 효과는 1장(공격력 화면)에만
+    // 룰렛: 점수 효과(격파하면·실패 시)만 점수표에. 공격력 효과는 1장(공격력 화면)에만
     if (x.effect && (x.effect.kind === "clear" || x.effect.kind === "fail")) {
       const pts = x.extra ? " → " + sign(x.extra) + "점" : " → 해당 없음";
       h += '<span class="roul">' + esc(effLabel(x.effect)) + pts + "</span>";
@@ -632,7 +632,7 @@ window.WCRaid = (function () {
       h += '<div class="card"><div class="t">우리 조 캐릭터</div>' + team.filter((m) => m.id !== pid).map((m) => pcard(m)).join("") + "</div>";
       return h;
     }
-    if (game.phase === "idle") return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">먼저 연습 보스와 한 판 (점수 없음)<br>보스 ' + BOSSES.length + '판 · 라운드마다 조에서 1명 출전<br>한 사람은 최대 ' + capOf(p.team) + '번까지<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 HP 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
+    if (game.phase === "idle") return "<h3>보스 레이드가<br>곧 시작돼요</h3>" + '<div class="card"><div class="muted">먼저 연습 보스와 한 판 (점수 없음)<br>보스 ' + BOSSES.length + '판 · 라운드마다 조에서 1명 출전<br>한 사람은 최대 ' + MAX_PLAYS + '번까지<br>판정 스탯은 비공개, 보스 설명을 보고 조원과 추리<br>판정 스탯 합이 보스 HP 이상이면 격파</div></div>' + team.map((m) => pcard(m, { tag: m.id === pid ? "나" : "" })).join("");
     const b = boss();
     let h = '<div class="card"><div class="boss-mini">' + bossSprite(game.round) + '<div><div class="muted">' + rlabel() + '</div><div class="t">' + esc(b.name) + '</div></div></div>' + fold("d" + game.round, b.desc) +
       '<div class="phone-chips"><span class="hpc">HP ' + b.hp + "</span>" + (game.round === 0 ? "<span>연습</span>" : "<span>보상 " + b.reward + "점</span>") + (b.nStats > 2 ? "<span>판정 스탯 " + b.nStats + "개</span>" : "") + "</div>" +
