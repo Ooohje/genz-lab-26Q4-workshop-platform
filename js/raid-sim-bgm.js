@@ -80,6 +80,7 @@
   };
 
   let ctx = null, master = null, noise = null;
+  const VOLUME = 0.28;   // 전체 음량 (예전 0.14의 두 배). 겹쳐도 찢어지지 않게 리미터(compressor)를 거쳐 나감
   let enabled = false, want = null, wantT0 = null, cur = null, step = 0, next = 0, timer = null;
   // 소리가 스피커에서 실제로 나오기까지의 지연(초). 이만큼 일찍 예약해서 화면과 맞춤
   const lat = () => (ctx ? Math.min(0.5, ctx.outputLatency || ctx.baseLatency || 0) : 0);
@@ -89,7 +90,10 @@
     const AC = root.AudioContext || root.webkitAudioContext;
     if (!AC) return;
     ctx = new AC();
-    master = ctx.createGain(); master.gain.value = 0.14; master.connect(ctx.destination);
+    master = ctx.createGain(); master.gain.value = VOLUME;
+    const lim = ctx.createDynamicsCompressor ? ctx.createDynamicsCompressor() : null;
+    if (lim) { lim.threshold.value = -6; lim.knee.value = 6; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.15; master.connect(lim); lim.connect(ctx.destination); }
+    else master.connect(ctx.destination);
     ctx.onstatechange = () => { if (api.onState) api.onState(); };
     noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noise.getChannelData(0);
@@ -156,7 +160,7 @@
       if (!ctx) return false;
       enabled = !enabled;
       if (enabled) { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); if (want) start(want); if (!timer) timer = setInterval(tick, 25); }
-      else { cur = null; master.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.05); setTimeout(() => { if (!enabled && master) master.gain.value = 0.14; }, 300); }
+      else { cur = null; master.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.05); setTimeout(() => { if (!enabled && master) master.gain.value = VOLUME; }, 300); }
       return enabled;
     },
     // 지금 단계에 맞는 곡 (같은 곡이면 이어서)
