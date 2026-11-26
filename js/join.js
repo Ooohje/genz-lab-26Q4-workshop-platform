@@ -2,7 +2,7 @@
 // 화면 전환과 세션 구독은 js/app.js 가 맡고, 여기서는 window.WCJoin 으로 불려 그리기만 합니다.
 (function () {
   const { db, getSession, toast } = window.WC;
-  const MAX_LEN = 15;
+  const MAX_LEN = 30;
   const $ = (id) => document.getElementById(id);
 
   // 브라우저마다 임의 번호 하나(익명). 참여 인원을 세고 "내가 보낸 답변"을 찾는 데만 씁니다.

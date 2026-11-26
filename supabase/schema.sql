@@ -22,7 +22,7 @@ create table if not exists public.sessions (
 create table if not exists public.words (
   id         uuid primary key default gen_random_uuid(),
   session_id uuid not null references public.sessions (id) on delete cascade,
-  word       text not null check (char_length(btrim(word)) between 1 and 15),
+  word       text not null check (char_length(btrim(word)) between 1 and 30),
   -- 정규화된 단어: 공백 제거 + 소문자. 같은 단어를 합칠 때 기준이 됩니다.
   normalized text generated always as (lower(regexp_replace(word, '\s+', '', 'g'))) stored,
   hidden     boolean not null default false,
