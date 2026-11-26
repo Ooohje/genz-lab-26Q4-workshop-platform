@@ -196,8 +196,8 @@
     if (needsName) { needsName = false; render(); }
   });
 
-  $("user").addEventListener("click", () => {
-    if (confirm("다른 Knox ID로 다시 입장할까요?")) $("logout").click();
+  $("user").addEventListener("click", async () => {
+    if (await window.WC.ask("로그아웃하고 다른 Knox ID로 다시 출석할까요?")) $("logout").click();
   });
   $("logout").addEventListener("click", () => {
     // 로그아웃하면 입장도 취소합니다(관리 화면의 입장 인원에서 빠짐). 투표한 내용은 남습니다.

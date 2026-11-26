@@ -8,7 +8,9 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126b";
+  const V = "20261126d";
+  // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
+  const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
   // 발표 화면에 크게 보여 줄 주소: 설정의 "짧은 참여 주소"가 있으면 그것, 없으면 실제 주소에서 https:// 를 뗀 것
@@ -362,8 +364,8 @@ window.WCRaid = (function () {
     else if (a === "pick") {
       const m = people[extra], k = pickOf(game.round, p.team), cur = k ? people[k.pid] : null;
       if (!m || (cur && cur.id === m.id)) return;
-      if (!confirm(cur ? "출전자를 " + cur.name + " 님에서 " + m.name + " 님으로 바꿀까요?" : m.name + " 님을 이번 라운드 출전자로 정할까요?")) return;
-      backend.act(pid, "pick", { m: extra });
+      ask(cur ? "출전자를 " + cur.name + " 님에서 " + m.name + " 님으로 바꿀까요?" : m.name + " 님을 이번 라운드 출전자로 정할까요?")
+        .then((ok) => { if (ok) backend.act(pid, "pick", { m: extra }); });
     }
   }
   // 참여 화면: 워크샵에 입장한 Knox ID 로 보스 레이드 자리를 찾습니다 (명단은 관리 화면 '명단 · 조' 그대로).
@@ -938,7 +940,7 @@ window.WCRaid = (function () {
     if (what === "save") { await saveSettings(); return; }
     if (what === "revert") { setDraft = null; return; }
     if (what === "defaults") {
-      if (!confirm("보스 목록과 출전 보스를 기본값(직장 빌런 9명 출전)으로 되돌릴까요? 고치거나 새로 만든 보스가 모두 사라져요.")) return;
+      if (!(await ask("보스 목록과 출전 보스를 기본값(직장 빌런 9명 출전)으로 되돌릴까요? 고치거나 새로 만든 보스가 모두 사라져요."))) return;
       if (await backend.host("resetBosses")) { setDraft = null; toast("보스를 기본값으로 되돌렸어요"); }
       return;
     }
@@ -967,7 +969,7 @@ window.WCRaid = (function () {
     if (!L) return;
     if (what === "open" && L[i]) { L[i].open = !L[i].open; const n = String(L[i].name).trim(); if (L[i].open) openBoss.add(n); else openBoss.delete(n); return; }   // 펼치기는 저장할 내용이 아님
     if (what === "add" && L.length < POOL_MAX) L.push(newBoss());
-    else if (what === "del" && L.length > 1) { if (!confirm("보스 '" + L[i].name + "'를 목록에서 지울까요? 다시 고를 수 없어요. 출전만 빼려면 체크를 풀어 주세요. (저장해야 반영돼요)")) return; L.splice(i, 1); }
+    else if (what === "del" && L.length > 1) { if (!(await ask("보스 '" + L[i].name + "'를 목록에서 지울까요? 다시 고를 수 없어요. 출전만 빼려면 체크를 풀어 주세요. (저장해야 반영돼요)"))) return; L.splice(i, 1); }
     else if (what === "up" && i > 0) L.splice(i - 1, 0, L.splice(i, 1)[0]);
     else if (what === "down" && i < L.length - 1) L.splice(i + 1, 0, L.splice(i, 1)[0]);
     else return;
@@ -1159,8 +1161,8 @@ window.WCRaid = (function () {
     const hb = e.target.closest("[data-host]");
     if (hb) {
       const [fn, arg] = hb.dataset.host.split(":");
-      if (fn === "back" && !confirm(game && game.phase === "closed" ? "마감을 취소하고 회의로 돌아갈까요? 이번 라운드 판정은 마감할 때 다시 해요." : "한 단계 전으로 돌아갈까요?")) return;
-      if (fn === "reset" && !confirm("처음부터 다시 할까요? 캐릭터와 결과가 모두 지워져요.")) return;
+      if (fn === "back" && !(await ask(game && game.phase === "closed" ? "마감을 취소하고 회의로 돌아갈까요? 이번 라운드 판정은 마감할 때 다시 해요." : "한 단계 전으로 돌아갈까요?"))) return;
+      if (fn === "reset" && !(await ask("처음부터 다시 할까요? 캐릭터와 결과가 모두 지워져요."))) return;
       if (!hostBusy) {
         hostBusy = true; hb.disabled = true;
         let ok = false;

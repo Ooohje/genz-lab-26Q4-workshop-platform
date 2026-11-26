@@ -108,5 +108,63 @@
     toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
   }
 
-  window.WC = { cfg, code, db, normalize, getSession, getWords, aggregate, subscribe, joinUrl, qrSvg, toast };
+  // 확인창·입력창. 브라우저 기본 confirm()/prompt() 는 앱 안 브라우저 등에서 창을 띄우지 않고 바로 "취소"를 돌려주는 경우가 있어
+  // 화면 안에 직접 그립니다. ask → true/false, askText → 적은 글자 또는 null (Promise).
+  function dialog(message, opts) {
+    return new Promise((resolve) => {
+      const back = document.createElement("div");
+      back.setAttribute("role", "dialog");
+      back.setAttribute("aria-modal", "true");
+      back.style.cssText = "position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(31,37,64,.45);font-family:inherit";
+      const box = document.createElement("div");
+      box.style.cssText = "width:min(420px,100%);padding:24px;border-radius:24px;background:#fff;color:#1F2540;box-shadow:0 20px 60px rgba(31,37,64,.35);display:flex;flex-direction:column;gap:16px";
+      const text = document.createElement("div");
+      text.style.cssText = "font-size:16px;line-height:1.55;font-weight:600;white-space:pre-line;overflow-wrap:anywhere";
+      text.textContent = message;
+      box.appendChild(text);
+      let input = null;
+      if (opts && opts.input) {
+        input = document.createElement("input");
+        input.type = "text";
+        input.value = opts.value || "";
+        input.maxLength = opts.maxLength || 40;
+        input.style.cssText = "height:48px;padding:0 14px;border-radius:14px;border:1.5px solid rgba(31,37,64,.25);font:inherit;font-size:16px;color:#1F2540;background:#fff;outline:none";
+        box.appendChild(input);
+      }
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;gap:10px;justify-content:flex-end";
+      const mk = (label, bg, fg) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = label;
+        b.style.cssText = "height:44px;padding:0 20px;border-radius:999px;border:none;cursor:pointer;font:inherit;font-size:15px;font-weight:700;background:" + bg + ";color:" + fg;
+        return b;
+      };
+      const no = mk("취소", "rgba(31,37,64,.1)", "#1F2540");
+      const yes = mk("확인", "#F4775C", "#1F2540");
+      row.append(no, yes);
+      box.appendChild(row);
+      back.appendChild(box);
+      const done = (ok) => {
+        document.removeEventListener("keydown", onKey, true);
+        back.remove();
+        resolve(input ? (ok ? input.value : null) : ok);
+      };
+      const onKey = (e) => {
+        if (e.key === "Escape") { e.preventDefault(); done(false); }
+        else if (e.key === "Enter") { e.preventDefault(); done(true); }
+      };
+      no.addEventListener("click", () => done(false));
+      yes.addEventListener("click", () => done(true));
+      back.addEventListener("click", (e) => { if (e.target === back) done(false); });
+      document.addEventListener("keydown", onKey, true);
+      document.body.appendChild(back);
+      (input || yes).focus();
+      if (input) input.select();
+    });
+  }
+  const ask = (message) => dialog(message);
+  const askText = (message, value, maxLength) => dialog(message, { input: true, value, maxLength });
+
+  window.WC = { cfg, code, db, normalize, getSession, getWords, aggregate, subscribe, joinUrl, qrSvg, toast, ask, askText };
 })();

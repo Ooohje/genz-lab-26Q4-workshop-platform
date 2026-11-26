@@ -281,7 +281,7 @@
   });
 
   $("reset").addEventListener("click", async (e) => {
-    if (!confirm("받은 단어와 AI 정리 결과를 모두 지울까요?\n되돌릴 수 없어요.")) return;
+    if (!(await window.WC.ask("받은 단어와 AI 정리 결과를 모두 지울까요?\n되돌릴 수 없어요."))) return;
     const out = await act("reset", {}, e.currentTarget);
     if (out) toast("모두 지웠어요");
   });

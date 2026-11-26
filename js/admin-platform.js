@@ -97,8 +97,8 @@
       const n = people.filter((p) => p.team_no === t.team_no).length;
       b.textContent = t.name + " · " + n + "명";
       b.title = t.team_no + "조 이름 바꾸기";
-      b.addEventListener("click", () => {
-        const name = prompt(t.team_no + "조의 이름", t.name);
+      b.addEventListener("click", async () => {
+        const name = await window.WC.askText(t.team_no + "조의 이름", t.name, 20);
         if (name && name.trim() && name.trim() !== t.name) call("team_rename", { team_no: t.team_no, name: name.trim() }, b);
       });
       chips.appendChild(b);
@@ -182,7 +182,7 @@
       const row = { knox_id: knox.value.trim().toLowerCase(), name: name.value.trim(), team_no: box.no == null ? null : String(box.no) };
       if (!row.name || !row.knox_id) return ctx.toast("이름과 Knox ID를 모두 적어 주세요");
       const cur = roster.participants.find((p) => p.knox_id === row.knox_id);
-      if (cur && !confirm(row.knox_id + " 은(는) 이미 명단에 있어요 (" + cur.name + " · " + teamName(cur.team_no) + ").\n" + box.title + "(으)로 옮기고 이름을 " + row.name + "(으)로 바꿀까요?")) return;
+      if (cur && !(await window.WC.ask(row.knox_id + " 은(는) 이미 명단에 있어요 (" + cur.name + " · " + teamName(cur.team_no) + ").\n" + box.title + "(으)로 옮기고 이름을 " + row.name + "(으)로 바꿀까요?"))) return;
       drafts[key] = { knox: "", name: "" };
       if (document.activeElement) document.activeElement.blur();
       const out = await call("roster_import", { rows: [row], replace: false }, add);
@@ -224,8 +224,8 @@
       del.type = "button";
       del.className = "btn ghost";
       del.textContent = "삭제";
-      del.addEventListener("click", () => {
-        if (confirm(p.name + " (" + p.knox_id + ") 님을 명단에서 지울까요?")) call("participant_delete", { knox_id: p.knox_id }, del);
+      del.addEventListener("click", async () => {
+        if (await window.WC.ask(p.name + " (" + p.knox_id + ") 님을 명단에서 지울까요?")) call("participant_delete", { knox_id: p.knox_id }, del);
       });
       tr.append(name, knox, state, select, del);
       return tr;
@@ -301,8 +301,8 @@
       out.type = "button";
       out.className = "btn ghost";
       out.textContent = "후보에서 빼기";
-      out.addEventListener("click", () => {
-        if (r.n && !confirm(r.t.name + "을(를) 후보에서 빼면 받은 " + r.n + "표도 지워져요. 뺄까요?")) return;
+      out.addEventListener("click", async () => {
+        if (r.n && !(await window.WC.ask(r.t.name + "을(를) 후보에서 빼면 받은 " + r.n + "표도 지워져요. 뺄까요?"))) return;
         call("team_votable", { team_no: r.t.team_no, votable: false }, out);
       });
       row.append(name, bar, n, out);
@@ -331,7 +331,7 @@
 
   $("v-refresh").addEventListener("click", loadRoster);
   $("v-reset").addEventListener("click", async (e) => {
-    if (!confirm("우수팀 투표를 모두 지울까요?\n되돌릴 수 없어요.")) return;
+    if (!(await window.WC.ask("우수팀 투표를 모두 지울까요?\n되돌릴 수 없어요."))) return;
     const out = await call("teamvote_reset", {}, e.currentTarget);
     if (out) ctx.toast("우수팀 투표를 지웠어요");
   });
@@ -362,7 +362,7 @@
     const rows = parseRows($("csv").value);
     if (!rows.length) return ctx.toast("읽을 줄이 없어요. 'Knox ID, 이름, 조' 형식인지 확인해 주세요");
     const replace = $("csv-replace").checked;
-    if (replace && !confirm("기존 명단과 석식 투표를 모두 지우고 " + rows.length + "명을 새로 올릴까요?")) return;
+    if (replace && !(await window.WC.ask("기존 명단과 석식 투표를 모두 지우고 " + rows.length + "명을 새로 올릴까요?"))) return;
     const out = await call("roster_import", { rows, replace }, e.currentTarget);
     if (out) {
       ctx.toast(out.imported + "명을 올렸어요");
@@ -373,13 +373,13 @@
 
   $("d-refresh").addEventListener("click", loadRoster);
   $("att-reset").addEventListener("click", async (e) => {
-    if (!confirm("출석을 모두 초기화할까요?\n모든 참여자가 로그아웃되어 첫 화면(출석)으로 돌아갑니다. 명단·조·투표는 그대로 둡니다.")) return;
+    if (!(await window.WC.ask("출석을 모두 초기화할까요?\n모든 참여자가 로그아웃되어 첫 화면(출석)으로 돌아갑니다. 명단·조·투표는 그대로 둡니다."))) return;
     const out = await call("attendance_reset", {}, e.currentTarget);
     if (out) ctx.toast("출석을 초기화했어요");
   });
 
   $("d-reset").addEventListener("click", async (e) => {
-    if (!confirm("석식 투표를 모두 지울까요?\n되돌릴 수 없어요.")) return;
+    if (!(await window.WC.ask("석식 투표를 모두 지울까요?\n되돌릴 수 없어요."))) return;
     const out = await call("dinner_reset", {}, e.currentTarget);
     if (out) ctx.toast("석식 투표를 지웠어요");
   });
