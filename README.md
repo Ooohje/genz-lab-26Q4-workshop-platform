@@ -156,7 +156,7 @@
 ### 미리 해 보기와 새로 올릴 때
 
 - **미리 해 보기**: `admin.html?demo=1`의 보스 레이드 탭은 서버 없이 그 브라우저 안에서 6명으로 끝까지 해 볼 수 있습니다(아래쪽에 휴대폰 6대 미리보기).
-- **새로 올릴 때**: `js/raid.js` 맨 위 `V`와 index · admin · screen.html의 `?v=` 숫자를 같이 바꾸면, 이미 열려 있던 브라우저도 캐시 대신 새 파일을 받습니다(GitHub Pages는 10분 캐시).
+- **새로 올릴 때**: 플랫폼 파일(css/style.css, js/app.js 등)을 고쳤으면 index · admin · screen.html의 `?p=` 숫자를 바꿉니다. 보스 레이드는 `js/raid.js` 맨 위 `V`와 index · admin · screen.html의 `?v=` 숫자를 같이 바꾸면, 이미 열려 있던 브라우저도 캐시 대신 새 파일을 받습니다(GitHub Pages는 10분 캐시).
 
 ## 워드클라우드
 
