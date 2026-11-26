@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261125k";
+  const V = "20261126a";
   // 참여 주소 (발표 화면 첫 페이지 QR)
   const JOIN_URL = window.WC && window.WC.joinUrl ? window.WC.joinUrl() : new URL("./", location.href).href;
   // 발표 화면에 크게 보여 줄 주소: 설정의 "짧은 참여 주소"가 있으면 그것, 없으면 실제 주소에서 https:// 를 뗀 것
@@ -502,10 +502,11 @@ window.WCRaid = (function () {
       // 1장: 공격력과 승패. 모든 조의 게이지가 동시에 올라가고(0.8초 뒤부터 2.6초), 다 찬 뒤 실패한 캐릭터가 자기 칸 안에서 쓰러집니다 (CSS)
       const max = Math.max(b.hp + 4, ...rows.map((x) => x.power));
       return '<div class="pv' + (rows.length > 4 ? " many" : "") + '"><div class="reveal-head"><div class="eyebrow">' + esc(b.name) + ' · 판정 스탯' + (game.round === 0 ? ' <span class="practice-tag">연습</span>' : "") + '</div><div class="reveal-stats">' + statsText(b.stats) + '</div><div class="sub">' + esc(b.reveal) + "</div></div>" +
-        '<div class="bars glass' + (rows.length > 6 ? " cols" + (rows.length > 14 ? " dense" : "") : rows.length > 4 ? " many" : "") + '" style="--hp:' + (b.hp / max * 100) + "%;--rows:" + Math.ceil(rows.length / 2) + '"><div class="hp-note"><i></i>보스 HP ' + b.hp + " · 점선을 넘으면 격파</div>" +
+        '<div class="bars glass' + (rows.length > 6 ? " cols" + (rows.length > 14 ? " dense" : "") : rows.length > 4 ? " many" : "") + '" style="--hp:' + (b.hp / max * 100) + "%;--rows:" + Math.ceil(rows.length / 2) + '"><div class="hp-note"><i></i>보스 HP ' + b.hp + " · 점선을 넘으면 격파" +
+        (rows.some((x) => x.effect && x.effect.kind === "power") ? '<span class="roul-key"><b></b>룰렛 결과</span>' : "") + "</div>" +
         sorted.map((x) => '<div class="bar-row' + (x.cleared ? " win" : " lose") + '"><div class="art">' + sprite(charOf(people[x.pid] || {})) + '</div><div class="nm"><b>' + TEAMS[x.team] + "</b><span>" + esc(x.name) + "</span></div>" +
           '<div class="mid"><div class="track"><i style="width:' + (Math.max(0, x.power) / max * 100) + '%"></i><em class="spark" style="left:' + (Math.max(0, x.power) / max * 100) + '%"></em></div>' +
-          '<em class="stv">' + esc(statLine(x, b)) + (x.effect && x.effect.kind === "power" ? ' <span class="roul">룰렛 ' + esc(effLabel(x.effect)) + "</span>" : "") + "</em></div>" +
+          '<em class="stv">' + esc(statLine(x, b)) + (x.effect && x.effect.kind === "power" ? ' <span class="roul">' + esc(effLabel(x.effect)) + "</span>" : "") + "</em></div>" +
           '<div class="res"><b>' + x.power + "</b><span>" + (x.cleared ? "격파" : "실패") + (x.mvp && game.round !== 0 ? ' <span class="star">MVP</span>' : "") + "</span></div></div>").join("") + "</div></div>";
     }
     if (TEAMS.length > 3) {

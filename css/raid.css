@@ -606,3 +606,6 @@ a { color: var(--blue); }
 .tbl-scroll { overflow-x: auto; }
 .score-now .res-table td.n, .score-now .res-table th.n { min-width: 2.2rem; }
 .score-now .between { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+/* 결과 1장 범례: 보라색 = 룰렛 결과 */
+.hp-note .roul-key { display: inline-flex; align-items: center; gap: 0.6cqw; margin-left: 2cqw; color: #8A3FD1; font-weight: 800; }
+.hp-note .roul-key b { display: inline-block; width: 1.1cqw; height: 1.1cqw; border-radius: 0.3cqw; background: #8A3FD1; }
