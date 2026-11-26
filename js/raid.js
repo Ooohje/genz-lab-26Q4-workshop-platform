@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126f";
+  const V = "20261126g";
   // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
   const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
@@ -618,7 +618,7 @@ window.WCRaid = (function () {
       return "<h3>나만의 픽셀 캐릭터</h3>" +
         '<div class="card"><div class="remain' + (remain === 0 ? " done" : "") + '">남은 점수 ' + remain + " / " + RULES.statTotal + "</div>" +
         STATS.map((s) => '<div class="stepper"><span style="color:' + s.color + '">' + s.label + '</span><button type="button" data-p="' + pid + '" data-a="dec" data-k="' + s.key + '" aria-label="' + s.label + ' 1점 빼기"' + (d[s.key] <= RULES.statMin ? " disabled" : "") + '>−</button><div class="bar"><b style="width:' + Math.min(100, d[s.key] / RULES.statMax * 100) + "%;background:" + s.color + '"></b></div><span>' + d[s.key] + '</span><button type="button" data-p="' + pid + '" data-a="inc" data-k="' + s.key + '" aria-label="' + s.label + ' 1점 더하기"' + (d[s.key] >= RULES.statMax || remain <= 0 ? " disabled" : "") + ">+</button></div>").join("") +
-        '<div class="muted">스탯 하나는 ' + RULES.statMin + "~" + RULES.statMax + "점, 합계 " + RULES.statTotal + "점. 외형은 스탯에 따라 자동으로 정해져요." + (RULES.luckPower > 0 ? " <b>운</b>이 높을수록 돌발 이벤트 룰렛에서 좋은 칸이 잘 나와요." : "") + "</div></div>" +
+        '<div class="muted">스탯 하나는 ' + RULES.statMin + "~" + RULES.statMax + "점, 합계 " + RULES.statTotal + "점. 외형은 스탯에 따라 자동으로 정해져요." + "</div></div>" +
         '<div class="card"><div class="t">미리보기</div>' + pcard({ name: p.name, char: Object.assign({ seed: p.seed }, d) }, { big: true }) + "</div>" +
         '<button type="button" class="pbtn" data-p="' + pid + '" data-a="save"' + (remain !== 0 ? " disabled" : "") + ">" + (remain !== 0 ? "점수를 " + remain + "점 더 나눠 주세요" : p.char ? "이대로 저장" : "캐릭터 생성") + "</button>" +
         '<button type="button" class="pbtn ghost" data-p="' + pid + '" data-a="randomDraft">랜덤으로 나눠 보기</button>' +
