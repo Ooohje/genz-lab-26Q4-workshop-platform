@@ -7,7 +7,7 @@
 <title>워드클라우드 진행자 관리 · Gen Z Lab.</title>
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?p=20261126b">
 </head>
 <body>
 <div class="bg" aria-hidden="true"></div>
@@ -78,9 +78,10 @@
         <div class="left" style="flex:1 1 360px">
           <section class="glass">
             <h2>출석 현황</h2>
-            <div class="stats">
-              <div>명단<b id="c-roster">0명</b></div>
-              <div>참석<b id="c-joined">0명</b></div>
+            <div class="stats three">
+              <div>전체<b id="c-roster">0명</b></div>
+              <div>참석<b id="c-joined" style="color:#2E9E6B">0명</b></div>
+              <div>미참석<b id="c-absent" style="color:#D64545">0명</b></div>
             </div>
             <div class="sub" id="c-note"></div>
           </section>
@@ -300,11 +301,11 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
-<script src="js/common.js"></script>
+<script src="config.js?p=20261126b"></script>
+<script src="js/common.js?p=20261126b"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="js/raid.js?v=20261126b"></script>
-<script src="js/admin-platform.js"></script>
-<script src="js/admin.js"></script>
+<script src="js/admin-platform.js?p=20261126b"></script>
+<script src="js/admin.js?p=20261126b"></script>
 </body>
 </html>

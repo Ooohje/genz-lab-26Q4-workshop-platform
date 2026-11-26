@@ -2,6 +2,7 @@
 // 워드클라우드 탭은 js/admin.js 가 맡고, 로그인·서버 호출(api)은 admin.js 에서 넘겨받습니다.
 (function () {
   const $ = (id) => document.getElementById(id);
+  const STAFF = /chief|치프/i;         // 운영진 조: 출석 집계에서 뺍니다
   let ctx = null;                     // { api, demo, toast, getSession, setSession }
   let roster = { teams: [], participants: [] };
   let rosterRev = null;
@@ -72,12 +73,19 @@
       b.disabled = !ready;
     });
     if (!noticeDirty) $("notice-text").value = session.notice || "";
-    const joined = people.filter((p) => p.joined_at).length;
-    $("c-roster").textContent = people.length + "명";
+    // 출석은 운영진 조(이름에 Chief·치프가 들어간 조)를 빼고 셉니다.
+    const staffTeams = new Set(roster.teams.filter((t) => STAFF.test(t.name)).map((t) => t.team_no));
+    const counted = people.filter((p) => !staffTeams.has(p.team_no));
+    const joined = counted.filter((p) => p.joined_at).length;
+    const absent = counted.length - joined;
+    $("c-roster").textContent = counted.length + "명";
     $("c-joined").textContent = joined + "명";
+    $("c-absent").textContent = absent + "명";
     const walkIns = people.filter((p) => !p.is_preregistered).length;
     const unassigned = people.filter((p) => p.team_no == null).length;
-    $("c-note").textContent = "명단에 없이 들어온 사람 " + walkIns + "명 · 조 미배정 " + unassigned + "명";
+    const staffCount = people.length - counted.length;
+    $("c-note").textContent = (staffCount ? "Chief Crew " + staffCount + "명은 세지 않습니다 · " : "")
+      + "명단에 없이 들어온 사람 " + walkIns + "명 · 조 미배정 " + unassigned + "명";
 
     // 조 이름
     const chips = $("team-chips");
@@ -98,7 +106,7 @@
     if (!roster.teams.length) chips.textContent = "아직 조가 없어요. 명단을 올리면 자동으로 만들어집니다.";
 
     // 참가자 목록: 조마다 박스 하나 (조 번호 순, 미배정은 맨 끝). 박스 안은 이름 순.
-    $("roster-note").textContent = "전체 " + people.length + "명 · 참석 " + joined + "명 · 미참석 " + (people.length - joined) + "명";
+    $("roster-note").textContent = "전체 " + counted.length + "명 중 참석 " + joined + "명 · 미참석 " + absent + "명" + (staffCount ? " (Chief Crew " + staffCount + "명 제외)" : "");
     const list = $("roster-list");
     // 추가 칸에 적는 중이면 목록을 다시 그리지 않습니다(15초마다 새로 읽을 때 글자가 지워지지 않게).
     const typing = document.activeElement;
@@ -124,7 +132,9 @@
       title.textContent = box.title;
       const count = document.createElement("span");
       const here = members.filter((p) => p.joined_at).length;
-      count.textContent = members.length + "명 · 참석 " + here + " · 미참석 " + (members.length - here);
+      count.textContent = staffTeams.has(box.no)
+        ? members.length + "명 · 출석 집계에서 제외"
+        : members.length + "명 · 참석 " + here + " · 미참석 " + (members.length - here);
       head.append(title, count);
       el.appendChild(head);
       if (!members.length) {
@@ -133,7 +143,7 @@
         none.textContent = "아직 아무도 없어요.";
         el.appendChild(none);
       }
-      members.forEach((p) => el.appendChild(personRow(p)));
+      members.forEach((p) => el.appendChild(personRow(p, staffTeams.has(box.no))));
       el.appendChild(addRow(box));
       list.appendChild(el);
     });
@@ -182,10 +192,11 @@
     return form;
   }
 
-  function personRow(p) {
+  // staff: 운영진 조(Chief Crew)는 출석을 세지 않으므로 색을 칠하지 않습니다.
+  function personRow(p, staff) {
     {
       const tr = document.createElement("div");
-      tr.className = "tr roster " + (p.joined_at ? "in" : "out");
+      tr.className = "tr roster " + (staff ? "staff" : p.joined_at ? "in" : "out");
       const name = document.createElement("span");
       name.className = "w";
       name.textContent = p.name;
@@ -194,7 +205,7 @@
       knox.textContent = p.knox_id;
       const state = document.createElement("span");
       state.className = "att";
-      state.textContent = p.joined_at ? "참석" : "미참석";
+      state.textContent = staff ? "관리자" : p.joined_at ? "참석" : "미참석";
       const select = document.createElement("select");
       select.className = "sel";
       select.setAttribute("aria-label", p.name + "의 조");
