@@ -61,8 +61,9 @@
       lead: seq(`D5 - - F5 - - A5 - | G5 - - F5 - - E5 - | F5 - - A5 - - D6 - | C6 - - - A5 - - -`), leadShift: -12,
       bass: seq(`D3 - D3 - A2 - A2 - | C3 - C3 - G2 - G2 - | F2 - F2 - C3 - C3 - | A2 - A2 - E3 - A2 -`),
       drum: seq(rep("k . h . s . h .", 3) + " k . h . s . s s") },
-    // 주사위 굴리기: 3초(= 16칸)에 딱 한 번 도는 스네어 연타. 눈이 나오는 순간 "land" 효과음과 함께 다음 곡으로
-    dice: { bpm: 160, gain: 0.75,
+    // 룰렛: 3초(= 16칸, 칸당 0.1875초) 동안 한 번만(once) 도는 스네어 연타. 룰렛이 멈추는 순간 "land" 효과음
+    // 진행자가 "룰렛 돌리기"를 누른 시각부터 맞춰 연주합니다 (setTrack 의 elapsed). js/raid.js 의 ROLL_MS 와 같아야 해요.
+    dice: { bpm: 160, gain: 0.75, once: true,
       lead: seq(`C5 D5 E5 F5 G5 A5 B5 C6 | D6 E6 F6 G6 A6 B6 C7 -`), leadShift: -24,
       bass: seq(`C3 C3 C3 C3 D3 D3 D3 D3 | E3 E3 E3 E3 G3 G3 G3 G3`),
       drum: seq(rep("s s s s s s s s", 2)) },
@@ -79,7 +80,9 @@
   };
 
   let ctx = null, master = null, noise = null;
-  let enabled = false, want = null, cur = null, step = 0, next = 0, timer = null;
+  let enabled = false, want = null, wantT0 = null, cur = null, step = 0, next = 0, timer = null;
+  // 소리가 스피커에서 실제로 나오기까지의 지연(초). 이만큼 일찍 예약해서 화면과 맞춤
+  const lat = () => (ctx ? Math.min(0.5, ctx.outputLatency || ctx.baseLatency || 0) : 0);
 
   function setup() {
     if (ctx) return;
@@ -121,11 +124,21 @@
   function tick() {
     if (!ctx || !enabled || !cur) return;
     const tr = TRACKS[cur], dur = 30 / tr.bpm;
-    while (next < ctx.currentTime + 0.15) { scheduleStep(tr, step, next, dur); step++; next += dur; }
+    while (next < ctx.currentTime + 0.15) {
+      if (tr.once && step >= tr.lead.length) return;   // 한 번만 도는 곡은 끝나면 조용히
+      scheduleStep(tr, step, next, dur); step++; next += dur;
+    }
   }
+  // 곡 시작. wantT0(벽시계 초)가 있으면 그 시각에 0번 칸이 울린 것처럼 이어서 (늦게 받아도 화면과 같은 자리)
   function start(name) {
     cur = TRACKS[name] ? name : null; step = 0;
-    if (ctx) next = ctx.currentTime + 0.06;
+    if (!ctx) return;
+    next = ctx.currentTime + 0.06;
+    if (cur && wantT0 != null) {
+      const dur = 30 / TRACKS[cur].bpm, t0 = ctx.currentTime - (Date.now() / 1000 - wantT0) - lat();
+      step = Math.max(0, Math.ceil((ctx.currentTime + 0.03 - t0) / dur));
+      next = t0 + step * dur;
+    }
   }
 
   const api = {
@@ -142,15 +155,16 @@
     },
     // 지금 단계에 맞는 곡 (같은 곡이면 이어서)
     // "none" 이면 곡을 멈춤 (효과음은 그대로)
-    setTrack(name) {
+    // elapsed: 이 곡이 이미 몇 초 전에 시작했어야 하는지 (룰렛은 "룰렛 돌리기"를 누른 뒤 지난 시간)
+    setTrack(name, elapsed) {
       if ((!TRACKS[name] && name !== "none") || want === name) return;
-      want = name;
+      want = name; wantT0 = elapsed != null && isFinite(elapsed) ? Date.now() / 1000 - Math.max(0, elapsed) : null;
       if (enabled && ctx) start(name);
     },
     // 효과음: hit(타격) · charge(게이지가 차는 동안) · ko(격파) · fail(실패) · land(룰렛이 멈춤). delay 초 뒤에
     sfx(name, delay) {
       if (!enabled || !ctx) return;
-      const t = ctx.currentTime + (delay || 0);
+      const t = Math.max(ctx.currentTime, ctx.currentTime + (delay || 0) - lat());
       if (name === "hit") { hiss(t, 0.09, 0.6, 1200, "lowpass"); tone("square", 220, t, 0.09, 0.25, 70); }
       else if (name === "ko") { [523, 659, 784, 1047].forEach((f, i) => tone("square", f, t + i * 0.08, 0.16, 0.22)); tone("triangle", 131, t, 0.5, 0.5); }
       else if (name === "charge") {

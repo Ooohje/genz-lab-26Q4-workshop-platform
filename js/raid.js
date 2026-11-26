@@ -8,7 +8,7 @@
 window.WCRaid = (function () {
   "use strict";
   // 이 파일의 버전 (index·admin·screen.html 의 js/raid.js?v= 와 같게). 새로 올릴 때마다 바꾸면 브라우저 캐시 대신 새 파일을 받습니다.
-  const V = "20261126e";
+  const V = "20261126f";
   // 확인창: 브라우저 기본 확인창이 막힌 환경(앱 안 브라우저)에서도 뜨도록 플랫폼의 화면 안 확인창을 씁니다.
   const ask = (msg) => (window.WC && window.WC.ask ? window.WC.ask(msg) : Promise.resolve(window.confirm(msg)));
   // 참여 주소 (발표 화면 첫 페이지 QR)
@@ -404,7 +404,8 @@ window.WCRaid = (function () {
   let rollTimer = null;
   function scheduleRollEnd() {
     clearTimeout(rollTimer);
-    if (rolling()) rollTimer = setTimeout(() => { invalidate(); }, Math.max(50, ROLL_MS - (now() - game.rollAt)) + 60);
+    // 멈춘 칸은 정확히 ROLL_MS 에 (효과음 "land"와 같은 순간)
+    if (rolling()) rollTimer = setTimeout(() => { invalidate(); }, Math.max(0, ROLL_MS - (now() - game.rollAt)) + 5);
   }
   // 휴대폰 결과 카드의 AI 서술: 오기 전에는 로딩 칸, 오면 같은 자리에 문장. 45초가 지나도 안 오면 칸을 거둠
   const storyWait = {};
@@ -995,10 +996,10 @@ window.WCRaid = (function () {
       }
     }
     sfxKey = key;
-    const st = !g ? "lobby" : g.stage;
+    const st = !g ? "lobby" : g.stage, dice = !!g && g.phase === "rolled" && rolling();
     B.setTrack(st === "lobby" ? "lobby" : st === "make" ? "make" : st === "share" ? "share" : g.phase === "idle" ? "rules"
       : g.phase === "meeting" ? (g.round === 0 ? "practice" : "meeting") : g.phase === "closed" ? "wait" : g.phase === "rolled" ? (rolling() ? "dice" : "wait")
-      : g.phase === "revealed" ? (afterTrack && Date.now() >= afterAt ? afterTrack : "none") : g.phase === "final" ? "victory" : "lobby");
+      : g.phase === "revealed" ? (afterTrack && Date.now() >= afterAt ? afterTrack : "none") : g.phase === "final" ? "victory" : "lobby", dice ? (now() - g.rollAt) / 1000 : undefined);
   }
 
   const lostNote = () => (MODE === "supabase" && !connected ? '<div class="notice">실시간 연결이 끊겼어요. 다시 연결하는 중…</div>' : "");
